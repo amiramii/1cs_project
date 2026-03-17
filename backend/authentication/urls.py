@@ -8,4 +8,7 @@ router.register(r"users", views.UserViewSet)
 urlpatterns = [
     path("", include(router.urls)),
     path('students/upload/', views.UploadCSVFile.as_view(), name='students_upload_csv'),
+    path('reset-password-request/', views.ResetPasswordRequest.as_view(), name='reset_password_request'),
+    path('reset-password/', views.ResetPassword.as_view(), name='reset_password'),
+
 ]
