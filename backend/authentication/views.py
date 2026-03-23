@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from django.db import transaction 
 import pandas as pd
 import secrets
-from django.contrib.auth.models import User
+from .models import User
 from rest_framework import permissions, viewsets
 from .serializers import UserSerializer
 from rest_framework.parsers import MultiPartParser
@@ -14,6 +14,7 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from rest_framework.permissions import AllowAny
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
+from django.contrib.auth.password_validation import validate_password
 
 # Create your views here.
 
@@ -39,28 +40,28 @@ class UploadCSVFile(APIView):
         errors = []
 
         for index, row in df.iterrows():
-            username = row.get('full_name')
+           # username = row.get('full_name')
             id = row.get('n_inscript')
             email = row.get('email')
             temp_password = secrets.token_urlsafe(8)  
-            if not username or not email:
+            if not email:
                 errors.append({"row": index + 2, "error": "Missing username or email"})
                 continue
 
-            if User.objects.filter(username=username).exists():
-                errors.append({"row": index + 2, "error": "Username already exists"})
+            if User.objects.filter(email=email).exists():
+                errors.append({"row": index + 2, "error": "Email already exists"})
                 continue
 
             try:
                 with transaction.atomic():
                     User.objects.create_user(
                         id=id,
-                        username=username,
+                        #username=username,
                         email=email,
                         password=temp_password
                     )
                     users_created += 1
-                    send_mail("Regarding authentication on the CheckIn platform",f"You can now log in using the following credentials:\nUsername:{email}\nTemporary Password: {temp_password}","nourimaram53@gmail.com", [email], )
+                    send_mail("Regarding authentication on the CheckIn platform",f"You can now log in using the following credentials:\nEmail:{email}\nTemporary Password: {temp_password}","nourimaram53@gmail.com", [email], )
             except Exception as e:
                 errors.append({"row": index + 2, "error": str(e)})
 
@@ -133,7 +134,7 @@ class ResetPassword(APIView):
         token_generator = PasswordResetTokenGenerator()
         if not token_generator.check_token(user, token):
             return Response({"error": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
-
+        validate_password(new_password, user)
         user.set_password(new_password)
         user.save()
 
