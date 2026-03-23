@@ -50,7 +50,9 @@ REST_FRAMEWORK = {
 }
 
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend' #django.core.mail.backends.console.EmailBackend'
+AUTH_USER_MODEL = 'authentication.User'
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' #django.core.mail.backends.console.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'  
 EMAIL_PORT = 587  
 EMAIL_USE_TLS = True  
@@ -116,6 +118,18 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+     {
+        'NAME': 'authentication.validators.NumberValidator',
+    },
+     {
+        'NAME': 'authentication.validators.UppercaseValidator',
+    },
+     {
+        'NAME': 'authentication.validators.LowercaseValidator',
+    },
+     {
+        'NAME': 'authentication.validators.SymbolValidator',
     },
 ]
 
