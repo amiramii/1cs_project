@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
 from pathlib import Path
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -58,12 +59,12 @@ REST_FRAMEWORK = {
 
 AUTH_USER_MODEL = 'authentication.User'
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend' #django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend' #django.core.mail.backends.console.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'  
 EMAIL_PORT = 587  
 EMAIL_USE_TLS = True  
 EMAIL_HOST_USER = 'nourimaram53@gmail.com'  
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_PASSWORD") 
+EMAIL_HOST_PASSWORD = config('EMAIL_PASSWORD') 
 EMAIL_USE_SSL = False  
 DEFAULT_FROM_EMAIL = 'CheckIn Platform <nourimaram53@gmail.com>' 
 
