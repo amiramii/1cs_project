@@ -41,7 +41,7 @@ export default function LoginForm() {
 
   const [touched, setTouched] = useState({ email: false, password: false })
 
-  const { theme } = useTheme()
+  const { resolvedTheme } = useTheme()
   const t = getLoginTexts(language)
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export default function LoginForm() {
   }
 
   const dir = language === "ar" ? "rtl" : "ltr"
-  const logoSrc = theme === "dark" ? "/logo.svg" : "/logo_light.svg"
+  const logoSrc = resolvedTheme === "dark" ? "/logo.svg" : "/logo_light.svg"
 
   const { validator, handleReset, handleSubmit: validatorHandleSubmit } =
     useValidator({
@@ -104,19 +104,20 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center w-full max-w-md mx-auto gap-6 mt-4 font-inter relative z-50 ">
-      <header className="z-10 w-full -translate-x-2 overflow-x-hidden px-4 flex items-center justify-center ">
+    <div className="flex flex-col items-center justify-center w-[min(92vw,26rem)] mx-auto gap-3 font-inter relative z-50">
+      <header className="z-10 w-full overflow-x-hidden px-1 flex items-center justify-center">
         <Image
           src={logoSrc}
           alt="Chekin"
           width={420}
           height={110}
-          className="object-contain size-3/4"
+          className="object-contain w-[68%] h-auto max-h-[10vh]"
+          priority
         />
       </header>
 
       <main
-        className="w-full bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-6 px-8 text-foreground"
+        className="w-full bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-4 px-5 md:px-6 text-foreground"
         dir={dir}
       >
         <div className="self-end mb-2">
@@ -125,7 +126,7 @@ export default function LoginForm() {
 
         <form
           id="login-form"
-          className="w-full flex flex-col gap-4"
+          className="w-full flex flex-col gap-3"
           noValidate
           onSubmit={validatorHandleSubmit((_values: any, _valid: boolean) => {
             const emailErr = getEmailError()
@@ -219,7 +220,7 @@ export default function LoginForm() {
                 type="button"
                 variant="link"
                 size="sm"
-                className="text-blue-secondary border-0 border-b"
+                className="text-blue-secondary border-0 border-b text-wrap"
                 onClick={() => router.push("/Forgot-password")}
               >
                 {t.forgot}

@@ -18,7 +18,7 @@ import LanguageMenu from "../../_components/login/LanguageMenu"
 import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
 
 function Page() {
-  const { theme } = useTheme()
+  const { resolvedTheme } = useTheme()
   const ready = useRedirectIfAuthenticated()
   const [language, setLanguage] = useState<"en" | "ar">(() => getStoredLanguage())
   const [email, setEmail] = useState("")
@@ -34,7 +34,7 @@ function Page() {
 
   if (!ready) return null
 
-  const bgSrc = theme === "dark" ? "/bgD3.svg" : "/bg2H.svg"
+  const bgSrc = resolvedTheme === "dark" ? "/bgD3.svg" : "/bg2H.svg"
   const emailError = !email
     ? t.emailRequired
     : EMAIL_REGEX.test(email)
@@ -76,7 +76,7 @@ function Page() {
   }
 
   return (
-    <div className="bg-background min-h-dvh overflow-hidden relative z-0 flex items-center justify-center p-4 w-full">
+    <div className="bg-background h-dvh overflow-hidden relative z-0 flex items-center justify-center p-4 w-full">
       <Image
         src={bgSrc}
         alt=""
