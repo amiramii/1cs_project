@@ -96,7 +96,7 @@ export default function LoginForm() {
       await login(values.email, values.password, rememberMe)
 
       const role = "admin"
-      router.push(`/Dashboard/${role}`)
+      router.push(`/Dashboard/${role}/Dashboard`)
     } catch (err) {
       console.error(err)
       setApiError(t.loginErrorGeneric)
@@ -234,4 +234,4 @@ export default function LoginForm() {
       </main>
     </div>
   )
-}
+} 
