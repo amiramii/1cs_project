@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from django.db import transaction 
 import pandas as pd
 import secrets
+import string
+import random
 from .models import User
 from rest_framework import permissions, viewsets
 from .serializers import UserSerializer
@@ -17,6 +19,30 @@ from django.utils.encoding import force_bytes, force_str
 from django.contrib.auth.password_validation import validate_password
 
 # Create your views here.
+
+
+
+
+def generate_strong_password(length=8):
+   
+    lower = string.ascii_lowercase
+    upper = string.ascii_uppercase
+    digits = string.digits
+    special = r"()[\]{}|\\`~!@#$%^&*_-+=;:'\",<>./?"
+
+    password_chars = [
+        secrets.choice(lower),
+        secrets.choice(upper),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+
+    all_chars = lower + upper + digits + special
+    password_chars += [secrets.choice(all_chars) for _ in range(length - 4)]
+
+    random.shuffle(password_chars)
+
+    return ''.join(password_chars)
 
 class UploadCSVFile(APIView):
     parser_classes = [MultiPartParser]
@@ -43,7 +69,7 @@ class UploadCSVFile(APIView):
            # username = row.get('full_name')
             id = row.get('n_inscript')
             email = row.get('email')
-            temp_password = secrets.token_urlsafe(8)  
+            temp_password = generate_strong_password()  
             if not email:
                 errors.append({"row": index + 2, "error": "Missing username or email"})
                 continue
