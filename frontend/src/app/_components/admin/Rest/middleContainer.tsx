@@ -10,7 +10,7 @@ export default function MiddleContainer() {
     return (
     <div className="flex flex-col justify-center h-[calc(100vh-64px)] p-8">
     <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-2xl bg-white shadow-sm max-w-fit">
-    <Button className="bg-[#74A7BD] hover:bg-blue-700 text-white font-bold py-2 px-4 border border-[#1B2065] rounded">
+    <Button className="bg-[#74A7BD] hover:bg-[#74A7BD] text-white font-bold py-2 px-4 border border-[#1B2065] rounded">
         Add Professor
     </Button>
 
