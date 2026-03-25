@@ -11,7 +11,7 @@ export default function DashboardLayout({
     <div className="flex min-h-screen bg-[#FEF9F9]">
       <Sidebar/>
       <div className="flex-1 flex flex-col">
-      <header className="w-full h-16 border-b border-gray-200 flex items-center justify-end px-8 bg-white/40">
+      <header className="w-full h-16 border-b border-[#1B2065] flex items-center justify-end px-8 bg-[#FEF9F9]">
         
         <div className="flex items-center gap-9 pr-4">
             <Sun className="text-[#1B2065F2] "/>
