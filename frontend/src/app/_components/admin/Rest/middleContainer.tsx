@@ -1,5 +1,5 @@
 import MyDropzone from "./DropBox";
-import { Upload } from "lucide-react";
+import { Upload, SquarePlus } from "lucide-react";
 import {Button, buttonVariants} from "@/components/ui/button";
 
 export default function MiddleContainer() {
@@ -9,22 +9,20 @@ export default function MiddleContainer() {
 
     return (
     <div className="flex flex-col justify-center h-[calc(100vh-64px)] p-8">
-    <div className="flex items-center gap-4 p-4 border border-gray-200 rounded-2xl bg-white shadow-sm max-w-fit">
-    <Button className="bg-[#74A7BD] hover:bg-[#74A7BD] text-white font-bold py-2 px-4 border border-[#1B2065] rounded">
+    <div className="flex items-center gap-4 py-7 px-5 border border-[#1B2065] rounded bg-[#FEF9F9] shadow-sm max-w-fit">
+    <Button className="w-60 h-14 bg-[#74A7BD] hover:bg-[#74A7BD] text-white font-bold py-2 px-4 border border-[#1B2065] rounded ">
         Add Professor
     </Button>
 
     <MyDropzone 
       onDrop={handleDrop}
-      className="group cursor-pointer flex flex-col items-center justify-center 
-                 w-full max-w-xl h-40 border-2 border-dashed border-gray-300 
-                 rounded-[2rem] bg-white hover:border-[#1B2065] hover:bg-blue-50/30 
+      className="group cursor-pointer flex items-center justify-center 
+                 px-6 w-60 h-14 bg-[#D9D9D917] border-2 border-dashed border-gray-300 
+                 rounded bg-white hover:border-[#1B2065] hover:bg-blue-50/30 
                  transition-all duration-300"
     >
-      <div className="flex flex-col items-center gap-2">
-         <div className="p-3 bg-gray-100 rounded-full group-hover:bg-[#1B2065] transition-colors">
-            <Upload size={24} className="text-gray-500 group-hover:text-white" />
-         </div>
+      <div className="flex flex-row items-center gap-2">
+            <SquarePlus size={24} className="text-gray-300 group-hover:text-[#1B2065F2]" />
          <p className="text-sm font-medium text-slate-600">
            Drop file
          </p>
