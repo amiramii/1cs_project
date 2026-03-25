@@ -3,10 +3,10 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAccessToken } from "@/lib/tokenStorage";
+import MiddleContainer from "@/app/_components/admin/Rest/middleContainer";
 
 export default function Page() {
   const router = useRouter();
-
   useEffect(() => {
     const token = getAccessToken();
 
@@ -16,7 +16,8 @@ export default function Page() {
   }, [router]);
 
   return (
-    <>
+  <>
+   <MiddleContainer/>
   </>
   );
 }
