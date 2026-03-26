@@ -2,16 +2,16 @@ import MyDropzone from "./DropBox";
 import { Upload, SquarePlus } from "lucide-react";
 import {Button, buttonVariants} from "@/components/ui/button";
 
-export default function MiddleContainer() {
+export default function SchedulsMiddleContainer() {
     const handleDrop = (files: File[]) => {
       console.log("Uploaded:", files);
     };
 
     return (
-    <div className="flex flex-col justify-center h-[calc(100vh-64px)] p-8">
+    <div className="flex flex-col justify-center items-end h-[calc(32vh-64px)] p-8">
     <div className="flex items-center gap-4 py-7 px-5 border border-[#1B2065] rounded-xl bg-[#FEF9F9] shadow-sm max-w-fit">
-    <Button className="w-60 h-14 bg-[#74A7BD] hover:bg-[#74A7BD] text-white font-bold py-2 px-4 border border-[#1B2065] rounded-xl ">
-        Add Professor
+    <Button className="w-60 h-14 bg-[#1B2065] hover:bg-[#1B2065] text-white font-bold py-2 px-4 border border-[#1B2065] rounded-xl ">
+        Add Schedule
     </Button>
 
     <MyDropzone 
