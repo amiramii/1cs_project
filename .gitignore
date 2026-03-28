@@ -2,6 +2,8 @@
 node_modules/
 venv/
 __pycache__/
+*.pyc
+.env
 
 # env files
 .env
@@ -13,7 +15,7 @@ __pycache__/
 out/
 
 # backend
-*.sqlite3
+
 
 # logs
 *.log

@@ -7,7 +7,7 @@ import pandas as pd
 import secrets
 import string
 import random
-from .models import User
+from .models import User, Student, Teacher, Schooling
 from rest_framework import permissions, viewsets
 from .serializers import UserSerializer
 from rest_framework.parsers import MultiPartParser
@@ -17,6 +17,7 @@ from rest_framework.permissions import AllowAny
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth import get_user_model
 
 # Create your views here.
 
@@ -44,15 +45,33 @@ def generate_strong_password(length=8):
 
     return ''.join(password_chars)
 
+User = get_user_model()
+def get_role_from_user_type(user_type: str):
+    """Map the string from CSV to your Roles enum"""
+    mapping = {
+        'student': User.Roles.STUDENT,
+        'teacher': User.Roles.TEACHER,
+        'schooling': User.Roles.SCHOOLING,
+    }
+    return mapping.get(user_type.lower().strip(), User.Roles.STUDENT) 
+
 class UploadCSVFile(APIView):
     parser_classes = [MultiPartParser]
     permission_classes = [IsAdminUser]
 
     def post(self, request):
+        user_type = request.POST.get('user_type')
         csv_file = request.FILES.get('file')
         if not csv_file:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+        if not user_type:
+            return Response({"error": "No user type provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        valid_types = ['student', 'teacher', 'schooling']
+        if user_type.lower().strip() not in valid_types:
+         return Response({"error": "Invalid user type. Allowed values are: student, teacher, schooling"}, status=status.HTTP_400_BAD_REQUEST)
+        
         if not csv_file.name.endswith('.csv'):
             return Response({"error": "File is not CSV type"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -80,12 +99,22 @@ class UploadCSVFile(APIView):
 
             try:
                 with transaction.atomic():
-                    User.objects.create_user(
+                    user = User.objects.create_user(
                         id=id,
+                        role=get_role_from_user_type(user_type),
                         #username=username,
                         email=email,
                         password=temp_password
                     )
+                    user.role = get_role_from_user_type(user_type)
+                    user.save()
+                    if user_type == 'student':
+                      Student.objects.create(user=user)
+                    elif user_type == 'teacher':
+                      Teacher.objects.create(user=user)
+                    elif user_type == 'schooling':
+                      Schooling.objects.create(user=user)
+
                     users_created += 1
                     send_mail("Regarding authentication on the CheckIn platform",f"You can now log in using the following credentials:\nEmail:{email}\nTemporary Password: {temp_password}","nourimaram53@gmail.com", [email], )
             except Exception as e:
