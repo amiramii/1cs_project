@@ -21,10 +21,22 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from authentication.views import MyTokenObtainPair
+from django.conf import settings
+from django.conf.urls.static import static
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/token/', MyTokenObtainPair.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/',include('authentication.urls'))
+    path('api/',include('authentication.urls')),path('api/', include('documents.urls')), path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+
+    # Swagger UI
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema")),
+
+    # Redoc UI (cleaner docs)
+    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema")),
 ]
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
