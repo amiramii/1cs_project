@@ -9,7 +9,7 @@ import string
 import random
 from .models import User, Student, Teacher, Schooling
 from rest_framework import permissions, viewsets
-from .serializers import UserSerializer
+from .serializers import UserSerializer, MyTokenObtainPairSerializer
 from rest_framework.parsers import MultiPartParser
 from django.core.mail import send_mail
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -18,6 +18,10 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 # Create your views here.
 
@@ -52,8 +56,15 @@ def get_role_from_user_type(user_type: str):
         'student': User.Roles.STUDENT,
         'teacher': User.Roles.TEACHER,
         'schooling': User.Roles.SCHOOLING,
+        'admin': User.Roles.ADMIN,
+
     }
-    return mapping.get(user_type.lower().strip(), User.Roles.STUDENT) 
+    return mapping.get(user_type.lower().strip(), User.Roles.ADMIN) 
+
+class MyTokenObtainPair(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
+
+
 
 class UploadCSVFile(APIView):
     parser_classes = [MultiPartParser]
