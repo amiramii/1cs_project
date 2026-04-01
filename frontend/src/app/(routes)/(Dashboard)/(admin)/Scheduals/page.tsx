@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
 import { getAccessToken } from "@/lib/tokenStorage";
-import SchedulsMiddleContainer from "@/app/_components/admin/Rest/SchedulsMiddleContainer";
+import SchedulsMiddleContainer from "@/app/_components/admin/schedules/SchedMidContainer";
+import ScheduleList from "@/app/_components/admin/schedules/ScheduleList";
 
 export default function Page() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function Page() {
   return (
   <>
   <SchedulsMiddleContainer/>
+  <ScheduleList/>
   </>
   );
 }

@@ -15,6 +15,9 @@
   html {
     color: hsl(var(--foreground));
   }
+  select {
+  background-image: none !important;
+  }
   :root {
     --background: 200 36% 95.1%;
     --foreground: 221 31.1% 46.1%;
