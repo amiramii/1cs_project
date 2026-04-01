@@ -22,12 +22,7 @@ function SubmitButton({
                   {loading ? loadingMessage : message}
                 </span>
 
-                <span
-                  className="absolute inset-0 z-0 scale-0 group-hover:scale-100
-                  origin-center transition-all duration-500 ease-out
-                  bg-blue-secondary dark:bg-white-primary rounded-full opacity-0 group-hover:opacity-100
-                  shadow-loginLight dark:shadow-loginDark"
-                />
+                <span className="absolute inset-0 z-0 scale-0 origin-center rounded-full opacity-0 shadow-loginLight transition-all duration-500 ease-out bg-blue-secondary group-hover:scale-100 group-hover:opacity-100 dark:bg-white-primary dark:shadow-loginDark" />
               </Button>
             </Field>
   )

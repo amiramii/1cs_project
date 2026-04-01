@@ -1,8 +1,7 @@
 "use client"
 import React, { useEffect, useState } from "react"
 import { ModeToggle } from "../../_components/ModeToggle"
-import Image from "next/image"
-import { useTheme } from "next-themes"
+import { AuthPageBackground } from "../../_components/login/AuthPageBackground"
 import { FieldError, FieldTitle } from "@/components/ui/field"
 import EmailInput from "../../_components/login/EmailInput"
 import api from "@/lib/api"
@@ -15,11 +14,10 @@ import {
 } from "../../../lib/constants"
 import SubmitButton from "@/app/_components/login/SubmitButton"
 import LanguageMenu from "../../_components/login/LanguageMenu"
-import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
+//import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
 
 function Page() {
-  const { resolvedTheme } = useTheme()
-  const ready = useRedirectIfAuthenticated()
+  //const ready = useRedirectIfAuthenticated()
   const [language, setLanguage] = useState<"en" | "ar">(() => getStoredLanguage())
   const [email, setEmail] = useState("")
   const [touched, setTouched] = useState(false)
@@ -32,9 +30,8 @@ function Page() {
     setStoredLanguage(language)
   }, [language])
 
-  if (!ready) return null
+  // if (!ready) return null
 
-  const bgSrc = resolvedTheme === "dark" ? "/bgD3.svg" : "/bg2H.svg"
   const emailError = !email
     ? t.emailRequired
     : EMAIL_REGEX.test(email)
@@ -77,13 +74,7 @@ function Page() {
 
   return (
     <div className="bg-background h-dvh overflow-hidden relative z-0 flex items-center justify-center p-4 w-full">
-      <Image
-        src={bgSrc}
-        alt=""
-        fill
-        priority
-        className="object-cover scale-x-[-1] -z-10"
-      />
+      <AuthPageBackground />
 
       <div className="absolute inset-0 bg-white-primary/0 -z-0" />
 

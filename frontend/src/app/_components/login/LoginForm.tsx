@@ -14,13 +14,14 @@ import {
   FieldContent,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { useTheme } from "next-themes"
 import { useRouter } from "next/navigation"
 import EmailInput from "./EmailInput"
 import login from "@/lib/auth"
 import {
+  DEFAULT_APP_ROLE,
   EMAIL_REGEX,
   PASSWORD_SYMBOL_REGEX,
+  getDashboardHomePath,
   getLoginTexts,
   getStoredLanguage,
   setStoredLanguage,
@@ -41,7 +42,6 @@ export default function LoginForm() {
 
   const [touched, setTouched] = useState({ email: false, password: false })
 
-  const { resolvedTheme } = useTheme()
   const t = getLoginTexts(language)
 
   useEffect(() => {
@@ -65,7 +65,6 @@ export default function LoginForm() {
   }
 
   const dir = language === "ar" ? "rtl" : "ltr"
-  const logoSrc = resolvedTheme === "dark" ? "/logo.svg" : "/logo_light.svg"
 
   const { validator, handleReset, handleSubmit: validatorHandleSubmit } =
     useValidator({
@@ -95,8 +94,8 @@ export default function LoginForm() {
     try {
       await login(values.email, values.password, rememberMe)
 
-      const role = "admin"
-      router.push(`/Dashboard/${role}/Dashboard`)
+      const role = DEFAULT_APP_ROLE
+      router.push(getDashboardHomePath(role))
     } catch (err) {
       console.error(err)
       setApiError(t.loginErrorGeneric)
@@ -107,11 +106,19 @@ export default function LoginForm() {
     <div className="flex flex-col items-center justify-center w-[min(92vw,26rem)] mx-auto gap-3 font-inter relative z-50">
       <header className="z-10 w-full overflow-x-hidden px-1 flex items-center justify-center">
         <Image
-          src={logoSrc}
+          src="/logo_light.svg"
           alt="Chekin"
           width={420}
           height={110}
-          className="object-contain w-[68%] h-auto max-h-[10vh]"
+          className="object-contain w-[68%] h-auto max-h-[10vh] dark:hidden"
+          priority
+        />
+        <Image
+          src="/logo.svg"
+          alt="Chekin"
+          width={420}
+          height={110}
+          className="hidden dark:block object-contain w-[68%] h-auto max-h-[10vh]"
           priority
         />
       </header>

@@ -5,15 +5,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, GraduationCap, CalendarDays, MoveRight} from "lucide-react";
-import { isDragActive } from "motion/react";
 
 export default function Sidebar() {
   const pathname = usePathname();
+  /** Route groups `(routes)/(Dashboard)/(admin)` do not appear in the URL. */
   const menuItems = [
-    { name: "Dashboard", href: "/Dashboard/admin/Dashboard", icon: <LayoutDashboard size={20} /> },
-    { name: "Professors", href: "/Dashboard/admin/Professors", icon: <Users size={20} /> },
-    { name: "Students", href: "/Dashboard/admin/Students", icon: <GraduationCap size={20} /> },
-    { name: "Schedules", href: "/Dashboard/admin/Scheduals", icon: <CalendarDays size={20} /> },
+    { name: "Dashboard", href: "/Dashboard", icon: <LayoutDashboard size={20} /> },
+    { name: "Professors", href: "/Professors", icon: <Users size={20} /> },
+    { name: "Students", href: "/Students", icon: <GraduationCap size={20} /> },
+    { name: "Schedules", href: "/Scheduals", icon: <CalendarDays size={20} /> },
   ];
 
   return (
@@ -49,7 +49,7 @@ export default function Sidebar() {
       {/* Optional: Bottom section for Sign Out */}
       <div className="mt-auto border-t border-gray-100 pt-4">
         <Link 
-          href="/login" 
+          href="/Login" 
           className="flex items-center gap-3 px-4 py-3 text-[#1B2065F2] hover:bg-red-50 rounded-xl transition-all"
         >
           <span>Logout</span>

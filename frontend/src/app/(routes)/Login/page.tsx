@@ -2,24 +2,16 @@
 import React from 'react'
 import LoginForm from '../../_components/login/LoginForm'
 import { ModeToggle } from '../../_components/ModeToggle'
-import Image from 'next/image'
-import { useTheme } from 'next-themes'
 import { useRedirectIfAuthenticated } from '@/lib/useRedirectIfAuthenticated'
+import { AuthPageBackground } from '../../_components/login/AuthPageBackground'
+
 function Page() {
-  const { resolvedTheme } = useTheme()
-  const ready = useRedirectIfAuthenticated()
-  if (!ready) return null
-  const bgSrc = resolvedTheme === "dark" ? "/bgD3.svg" : "/bg2H.svg"
+  useRedirectIfAuthenticated()
+  // When ENABLE_AUTH_REDIRECTS is true in lib/constants, use `ready` from the hook and `if (!ready) return null` to avoid a flash.
 
   return (
     <div className="bg-background min-h-dvh overflow-x-hidden overflow-y-auto relative z-0 flex items-center justify-center p-4 w-full">
-      <Image
-        src={bgSrc}
-        alt=""
-        fill
-        priority
-        className="object-cover scale-x-[-1]  -z-10 " 
-      />
+      <AuthPageBackground />
 
       <div className="absolute inset-0 bg-white-primary/0  -z-0" />
 

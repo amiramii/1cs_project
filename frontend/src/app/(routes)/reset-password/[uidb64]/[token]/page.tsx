@@ -2,8 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
-import { useTheme } from "next-themes"
+import { AuthPageBackground } from "@/app/_components/login/AuthPageBackground"
 import { ModeToggle } from "@/app/_components/ModeToggle"
 import { Button } from "@/components/ui/button"
 import { FieldError, FieldTitle } from "@/components/ui/field"
@@ -18,8 +17,6 @@ import {
   getStoredLanguage,
   setStoredLanguage,
 } from "@/lib/constants"
-import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
-
 type PageProps = {
   params: {
     uidb64: string
@@ -29,8 +26,6 @@ type PageProps = {
 
 export default function ResetPasswordPage({ params }: PageProps) {
   const router = useRouter()
-  const { resolvedTheme } = useTheme()
-  const ready = useRedirectIfAuthenticated()
   const [language, setLanguage] = useState<"en" | "ar">(() => getStoredLanguage())
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -42,8 +37,6 @@ export default function ResetPasswordPage({ params }: PageProps) {
   const t = getLoginTexts(language)
 
   useEffect(() => setStoredLanguage(language), [language])
-
-  const bgSrc = resolvedTheme === "dark" ? "/bgD3.svg" : "/bg2H.svg"
 
   const passwordError = useMemo(() => {
     if (!password) return t.passwordRequired
@@ -98,7 +91,7 @@ export default function ResetPasswordPage({ params }: PageProps) {
       try {
         await login(storedEmail, password)
         localStorage.removeItem(RESET_EMAIL_STORAGE_KEY)
-        router.push("/Dashboard/admin")
+        router.push("/Dashboard")
       } catch {
         setError(t.autoLoginFailed)
         router.push("/Login")
@@ -110,11 +103,9 @@ export default function ResetPasswordPage({ params }: PageProps) {
     }
   }
 
-  if (!ready) return null
-
   return (
     <div className="bg-background h-dvh overflow-hidden relative z-0 flex items-center justify-center p-4 w-full">
-      <Image src={bgSrc} alt="" fill priority className="object-cover scale-x-[-1] -z-10" />
+      <AuthPageBackground />
       <div className="absolute inset-0 bg-white-primary/0 -z-0" />
 
       <div className="z-20 absolute top-4 right-4">
