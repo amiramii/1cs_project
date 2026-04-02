@@ -20,15 +20,8 @@ const FullPdfViewer: React.FC<FullPdfViewerProps> = ({
   };
 
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100vh',
-        overflowY: 'scroll',
-        backgroundColor: '#f0f0f0',
-        padding: '1rem',
-      }}
-    >
+    <div className="flex justify-end w-full">
+    <div className="w-[80%] h-screen overflow-y-auto bg-[#f0f0f0] p-4 mt-8 mr-3">
       <Document file={fileUrl} onLoadSuccess={onDocumentLoadSuccess}>
         {Array.from(new Array(numPages), (_, index) => (
           <Page
@@ -40,6 +33,7 @@ const FullPdfViewer: React.FC<FullPdfViewerProps> = ({
           />
         ))}
       </Document>
+    </div>
     </div>
   );
 };
