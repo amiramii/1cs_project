@@ -1,41 +1,103 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import React, { useId, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
-// Set PDF worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+// --- Types ---
+import type { PDFDataRangeTransport } from 'pdfjs-dist';
+import type { TypedArray } from 'pdfjs-dist/types/src/display/api.js';
 
-interface FullPdfViewerProps {
-  fileUrl?: string; // URL of the PDF
-}
+type BinaryData = TypedArray | ArrayBuffer | number[] | string;
+export type Source = { data: BinaryData | undefined } | { range: PDFDataRangeTransport } | { url: string };
+export type FileSource = string | ArrayBuffer | Blob | Source | null;
 
-const FullPdfViewer: React.FC<FullPdfViewerProps> = ({
-  fileUrl = 'https://algeriainvest.com/storage/uploads/discover_algeria/documents/1627339255Law%20and%20legal%20system.pdf', // example URL
-}) => {
-  const [numPages, setNumPages] = useState<number>(0);
+export default function PdfView() {
+  const [file, setFile] = useState<FileSource>(null);
+  const [render, setRender] = useState(true);
 
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
+  // Input Refs
+  const urlRef = useRef<HTMLInputElement>(null);
+  const fetchRef = useRef<HTMLInputElement>(null);
+  
+  const fileId = useId();
+  const urlId = useId();
+  const fetchId = useId();
+
+  // Helper to convert File/Blob to a URL for the <iframe>
+  const getFileUrl = () => {
+    if (!file) return null;
+    if (typeof file === 'string') return file;
+    if (file instanceof Blob || file instanceof File) return URL.createObjectURL(file);
+    return null;
   };
 
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFile(e.target.files?.[0] || null);
+  };
+
+  const onURLChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (urlRef.current) setFile(urlRef.current.value);
+  };
+
+  const onFetchChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (fetchRef.current) {
+      fetch(fetchRef.current.value)
+        .then(res => res.blob())
+        .then(setFile);
+    }
+  };
+
+  const resetComponent = () => {
+    flushSync(() => setRender(false));
+    flushSync(() => setRender(true));
+  };
+
+  if (!render) return null;
+
   return (
-    <div className="flex justify-end w-full">
-    <div className="w-[80%] h-screen overflow-y-auto bg-[#f0f0f0] p-4 mt-8 mr-3">
-      <Document file={fileUrl} onLoadSuccess={onDocumentLoadSuccess}>
-        {Array.from(new Array(numPages), (_, index) => (
-          <Page
-            key={`page_${index + 1}`}
-            pageNumber={index + 1}
-            width={800} // adjust as needed
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
+    <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '12px' }}>
+      <fieldset style={{ marginBottom: '20px', border: '1px solid #eee' }}>
+        <legend>Load PDF</legend>
+        
+        <div style={{ marginBottom: '10px' }}>
+          <label htmlFor={fileId}>Upload: </label>
+          <input id={fileId} type="file" accept=".pdf" onChange={onFileChange} />
+        </div>
+
+        <form onSubmit={onURLChange} style={{ marginBottom: '10px' }}>
+          <label htmlFor={urlId}>URL: </label>
+          <input id={urlId} ref={urlRef} type="text" placeholder="https://..." />
+          <button type="submit">Load</button>
+        </form>
+
+        <form onSubmit={onFetchChange}>
+          <label htmlFor={fetchId}>Fetch: </label>
+          <input id={fetchId} ref={fetchRef} type="text" placeholder="API path..." />
+          <button type="submit">Fetch</button>
+        </form>
+
+        <div style={{ marginTop: '10px' }}>
+          <button onClick={() => setFile(null)}>Unload</button>
+          <button onClick={resetComponent} style={{ marginLeft: '10px' }}>Restart</button>
+        </div>
+      </fieldset>
+
+      {/* Basic PDF Viewer (using browser native viewer) */}
+      <div style={{ height: '600px', background: '#f4f4f4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {file ? (
+          <iframe
+            src={getFileUrl() || ''}
+            width="100%"
+            height="100%"
+            title="PDF Viewer"
+            style={{ border: 'none' }}
           />
-        ))}
-      </Document>
-    </div>
+        ) : (
+          <p>Select a file to preview it here</p>
+        )}
+      </div>
     </div>
   );
-};
-
-export default FullPdfViewer;
+}
