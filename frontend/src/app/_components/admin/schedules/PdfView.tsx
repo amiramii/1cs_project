@@ -1,102 +1,81 @@
 'use client';
 
-import React, { useId, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import React, { useState } from 'react';
 
-// --- Types ---
-import type { PDFDataRangeTransport } from 'pdfjs-dist';
-import type { TypedArray } from 'pdfjs-dist/types/src/display/api.js';
-
-type BinaryData = TypedArray | ArrayBuffer | number[] | string;
-export type Source = { data: BinaryData | undefined } | { range: PDFDataRangeTransport } | { url: string };
-export type FileSource = string | ArrayBuffer | Blob | Source | null;
+// Define the structure for your database files
+type DbFile = {
+  id: string;
+  url: string;
+  title: string;
+};
 
 export default function PdfView() {
-  const [file, setFile] = useState<FileSource>(null);
-  const [render, setRender] = useState(true);
+  // 1. Initial State: Starting with your public/test.pdf
+  // In a real app, 'dbFiles' would come from a standard fetch/props
+  const [dbFiles] = useState<DbFile[]>([
+    { id: 'initial', url: '/test.pdf', title: 'Default Document' },
+    { id: '1', url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', title: 'DB File 1' },
+    { id: '2', url: 'https://pdfobject.com/pdf/sample.pdf', title: 'DB File 2' },
+  ]);
 
-  // Input Refs
-  const urlRef = useRef<HTMLInputElement>(null);
-  const fetchRef = useRef<HTMLInputElement>(null);
-  
-  const fileId = useId();
-  const urlId = useId();
-  const fetchId = useId();
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Helper to convert File/Blob to a URL for the <iframe>
-  const getFileUrl = () => {
-    if (!file) return null;
-    if (typeof file === 'string') return file;
-    if (file instanceof Blob || file instanceof File) return URL.createObjectURL(file);
-    return null;
-  };
-
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFile(e.target.files?.[0] || null);
-  };
-
-  const onURLChange = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (urlRef.current) setFile(urlRef.current.value);
-  };
-
-  const onFetchChange = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (fetchRef.current) {
-      fetch(fetchRef.current.value)
-        .then(res => res.blob())
-        .then(setFile);
+  // Navigation Logic
+  const goToNext = () => {
+    if (currentIndex < dbFiles.length - 1) {
+      setCurrentIndex(prev => prev + 1);
     }
   };
 
-  const resetComponent = () => {
-    flushSync(() => setRender(false));
-    flushSync(() => setRender(true));
+  const goToPrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
   };
 
-  if (!render) return null;
+  const currentFile = dbFiles[currentIndex];
 
   return (
-    <div style={{ border: '1px solid #ccc', padding: '20px', borderRadius: '12px' }}>
-      <fieldset style={{ marginBottom: '20px', border: '1px solid #eee' }}>
-        <legend>Load PDF</legend>
-        
-        <div style={{ marginBottom: '10px' }}>
-          <label htmlFor={fileId}>Upload: </label>
-          <input id={fileId} type="file" accept=".pdf" onChange={onFileChange} />
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+      {/* Navigation Header */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        padding: '10px',
+        background: '#f8f9fa',
+        borderRadius: '8px'
+      }}>
+        <button 
+          onClick={goToPrevious} 
+          disabled={currentIndex === 0}
+          style={{ padding: '8px 16px', cursor: currentIndex === 0 ? 'not-allowed' : 'pointer' }}
+        >
+          ← Previous
+        </button>
 
-        <form onSubmit={onURLChange} style={{ marginBottom: '10px' }}>
-          <label htmlFor={urlId}>URL: </label>
-          <input id={urlId} ref={urlRef} type="text" placeholder="https://..." />
-          <button type="submit">Load</button>
-        </form>
+        <span style={{ fontWeight: 'bold' }}>
+          {currentFile.title} ({currentIndex + 1} of {dbFiles.length})
+        </span>
 
-        <form onSubmit={onFetchChange}>
-          <label htmlFor={fetchId}>Fetch: </label>
-          <input id={fetchId} ref={fetchRef} type="text" placeholder="API path..." />
-          <button type="submit">Fetch</button>
-        </form>
+        <button 
+          onClick={goToNext} 
+          disabled={currentIndex === dbFiles.length - 1}
+          style={{ padding: '8px 16px', cursor: currentIndex === dbFiles.length - 1 ? 'not-allowed' : 'pointer' }}
+        >
+          Next →
+        </button>
+      </div>
 
-        <div style={{ marginTop: '10px' }}>
-          <button onClick={() => setFile(null)}>Unload</button>
-          <button onClick={resetComponent} style={{ marginLeft: '10px' }}>Restart</button>
-        </div>
-      </fieldset>
-
-      {/* Basic PDF Viewer (using browser native viewer) */}
-      <div style={{ height: '600px', background: '#f4f4f4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {file ? (
-          <iframe
-            src={getFileUrl() || ''}
-            width="100%"
-            height="100%"
-            title="PDF Viewer"
-            style={{ border: 'none' }}
-          />
-        ) : (
-          <p>Select a file to preview it here</p>
-        )}
+      {/* Viewer Window */}
+      <div style={{ height: '75vh', border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
+        <iframe
+          key={currentFile.url} // Key forces iframe to reload when URL changes
+          src={`${currentFile.url}#toolbar=0`}
+          width="100%"
+          height="100%"
+          style={{ border: 'none' }}
+        />
       </div>
     </div>
   );
