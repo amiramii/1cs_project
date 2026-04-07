@@ -38,8 +38,16 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        "loginDark": "0px 0px 35px rgb(238 244 247) ",
-        "loginLight": "0 0px 35px rgb(116 167 189)",
+        loginDark: "0px 0px 35px rgb(238 244 247)",
+        loginLight: "0 0px 35px rgb(238 244 247)",
+        /** Filled auth buttons: glow matches blue base (light theme). */
+        "btn-fill-light-rest": "0 0 32px rgba(81, 104, 154, 0.4)",
+        /** Filled auth buttons: glow matches white hover fill (light theme). */
+        "btn-fill-light-hover": "0 0 32px rgba(238, 244, 247, 0.95)",
+        /** Filled auth buttons: glow matches blue-secondary base (dark theme). */
+        "btn-fill-dark-rest": "0 0 32px rgba(116, 167, 189, 0.45)",
+        /** Filled auth buttons: glow matches white-primary hover (dark theme). */
+        "btn-fill-dark-hover": "0 0 36px rgba(238, 244, 247, 0.55)",
       },
     },
   },

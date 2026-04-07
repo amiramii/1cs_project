@@ -1,10 +1,14 @@
 "use client"
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { ArrowLeft } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { ModeToggle } from "../../_components/ModeToggle"
 import { AuthPageBackground } from "../../_components/login/AuthPageBackground"
 import { FieldError, FieldTitle } from "@/components/ui/field"
 import EmailInput from "../../_components/login/EmailInput"
 import api from "@/lib/api"
+import { formatDrfError } from "@/lib/drfError"
 import {
   EMAIL_REGEX,
   RESET_EMAIL_STORAGE_KEY,
@@ -17,6 +21,9 @@ import LanguageMenu from "../../_components/login/LanguageMenu"
 //import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
 
 function Page() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const prevPathRef = useRef<string | undefined>(undefined)
   //const ready = useRedirectIfAuthenticated()
   const [language, setLanguage] = useState<"en" | "ar">(() => getStoredLanguage())
   const [email, setEmail] = useState("")
@@ -30,6 +37,30 @@ function Page() {
     setStoredLanguage(language)
   }, [language])
 
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setTouched(false)
+        setError("")
+        setSuccess("")
+        setEmail("")
+      }
+    }
+    window.addEventListener("pageshow", onPageShow)
+    return () => window.removeEventListener("pageshow", onPageShow)
+  }, [])
+
+  useEffect(() => {
+    const prev = prevPathRef.current
+    prevPathRef.current = pathname
+    if (pathname === "/Forgot-password" && prev === "/Login") {
+      setEmail("")
+      setTouched(false)
+      setError("")
+      setSuccess("")
+    }
+  }, [pathname])
+
   // if (!ready) return null
 
   const emailError = !email
@@ -42,7 +73,6 @@ function Page() {
     setTouched(true)
     setSuccess("")
     if (emailError) {
-      setError(emailError)
       return
     }
 
@@ -54,16 +84,19 @@ function Page() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ email: email.trim().toLowerCase() }),
         },
         { withAuth: false }
       )
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(body?.error ?? "Failed to send reset link")
+        setError(formatDrfError(body, "Failed to send reset link"))
         return
       }
-      localStorage.setItem(RESET_EMAIL_STORAGE_KEY, email)
+      localStorage.setItem(
+        RESET_EMAIL_STORAGE_KEY,
+        email.trim().toLowerCase()
+      )
       setSuccess(t.resetSuccess)
     } catch (e) {
       setError("Failed to send reset link")
@@ -73,7 +106,7 @@ function Page() {
   }
 
   return (
-    <div className="bg-background h-dvh overflow-hidden relative z-0 flex items-center justify-center p-4 w-full">
+    <div className="bg-background min-h-dvh overflow-hidden relative z-0 flex items-center justify-center p-4 w-full">
       <AuthPageBackground />
 
       <div className="absolute inset-0 bg-white-primary/0 -z-0" />
@@ -82,8 +115,24 @@ function Page() {
         <ModeToggle />
       </div>
 
-      <main className="w-full max-w-md bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-6 px-8 text-foreground z-20">
-        <div className="self-end mb-2">
+      <main className="w-full mt-10 max-w-md bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-6 px-8 text-foreground z-20">
+        <div className="mb-2 flex w-full items-center justify-between gap-3">
+          <Button
+            type="button"
+            variant="link"
+            className="inline-flex h-auto shrink-0 items-center gap-1.5 px-0 py-0 font-montserrat text-sm text-blue-primary dark:text-blue-secondary"
+            onMouseDown={(e) => e.preventDefault()}
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setTouched(false)
+              setError("")
+              setSuccess("")
+              router.push("/Login")
+            }}
+          >
+            <ArrowLeft className="size-4 shrink-0" aria-hidden />
+            {t.returnToLogin}
+          </Button>
           <LanguageMenu language={language} onChange={setLanguage} />
         </div>
 

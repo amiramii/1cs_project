@@ -30,12 +30,26 @@ export function hasValidAccessToken() {
 
 export function persistTokens(access: string, refresh: string, remember: boolean) {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(ACCESS_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-  sessionStorage.removeItem(ACCESS_KEY);
-  sessionStorage.removeItem(REFRESH_KEY);
+  clearTokens();
 
   const storage = remember ? localStorage : sessionStorage;
   storage.setItem(ACCESS_KEY, access);
   storage.setItem(REFRESH_KEY, refresh);
+}
+export function clearTokens(){
+  localStorage.removeItem(ACCESS_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+  sessionStorage.removeItem(ACCESS_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
+}
+
+export function getRefreshToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(REFRESH_KEY) ?? sessionStorage.getItem(REFRESH_KEY);
+}
+
+/** True when the refresh token lives in localStorage (login with "remember me"). */
+export function isRememberMeSession(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(REFRESH_KEY) !== null;
 }

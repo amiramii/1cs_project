@@ -73,6 +73,8 @@ export function getLoginTexts(language: Language) {
       language === "ar" ? "حفظ التغييرات" : "Save Changes",
     cancel:
       language === "ar" ? "إلغاء" : "Cancel",
+    returnToLogin:
+      language === "ar" ? "العودة إلى تسجيل الدخول" : "Back to login",
     resetFailed:
       language === "ar"
         ? "تعذر إعادة تعيين كلمة المرور"
@@ -81,6 +83,16 @@ export function getLoginTexts(language: Language) {
       language === "ar"
         ? "تم تغيير كلمة المرور. قم بتسجيل الدخول يدويا."
         : "Password changed. Please log in manually.",
+    invalidLink:
+      language === "ar"
+        ? "رابط إعادة التعيين غير صالح أو منتهي الصلاحية."
+        : "This reset link is invalid or expired.",
+    invalidLinkHint:
+      language === "ar"
+        ? "إذا كنت تستخدم الرسالة في الطرفية، تأكد من نسخ الرابط كاملاً (السطرين مع حذف علامة = بين السطرين)."
+        : "If you copied from the terminal, make sure you joined both lines of the URL and removed the = between them.",
+    requestNewLink:
+      language === "ar" ? "طلب رابط جديد" : "Request a new link",
   }
 }
 

@@ -9,14 +9,14 @@ export function AuthPageBackground() {
         alt=""
         fill
         priority
-        className="object-cover scale-x-[-1] -z-10 dark:hidden"
+        className="object-cover scale-x-[-1] -z-10 dark:hidden blur-xl"
       />
       <Image
         src="/bgD3.svg"
         alt=""
         fill
         priority
-        className="object-cover scale-x-[-1] -z-10 hidden dark:block"
+        className="object-cover scale-x-[-1] -z-10 hidden dark:block blur-xl"
       />
     </>
   )
