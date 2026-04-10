@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
 import { getAccessToken } from "@/lib/tokenStorage";
 import MiddleContainer from "@/app/_components/admin/professors/ProfMidContainer";
-
+import ProfTotals from "@/app/_components/admin/professors/ProfTotals";
 export default function Page() {
   const router = useRouter();
 
@@ -19,7 +19,8 @@ export default function Page() {
 
   return (
   <>
-   <MiddleContainer/>
+    <ProfTotals/>
+    <MiddleContainer/>
   </>
   );
 }

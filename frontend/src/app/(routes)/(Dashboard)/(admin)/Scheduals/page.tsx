@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
 import { getAccessToken } from "@/lib/tokenStorage";
 import SchedulsMiddleContainer from "@/app/_components/admin/schedules/SchedMidContainer";
-import ScheduleList from "@/app/_components/admin/schedules/ScheduleList";
+import ScheduleList from "@/app/_components/admin/schedules/ProfScheduleList";
 import PdfView from "@/app/_components/admin/schedules/PdfView";
 export default function Page() {
   const router = useRouter();
@@ -21,8 +21,6 @@ export default function Page() {
   return (
   <>
   <SchedulsMiddleContainer/>
-  <ScheduleList/>
-  <PdfView/>
   </>
   );
 }

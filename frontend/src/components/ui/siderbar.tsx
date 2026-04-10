@@ -17,7 +17,13 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-60 h-screen sticky top-0 bg-[#FEF9F9] border-r-4 border-[#1B2065] flex flex-col p-4 shadow-sm rounded-2xl">
+    <aside className="w-60 h-screen sticky top-0 border-r-4 border-[#1B2065] flex flex-col p-4 shadow-sm rounded-r-2xl"
+      style={{
+        backgroundImage: "url('/bg2H.svg')", // path relative to public folder
+        backgroundSize: "700%",       // zoom in a little
+        backgroundPosition: "top", // keeps it centered
+        backgroundRepeat: "no-repeat"
+      }}>
         <Image 
         src="/logo_dark.svg" 
         alt="Logo"
@@ -47,7 +53,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Optional: Bottom section for Sign Out */}
-      <div className="mt-auto border-t border-gray-100 pt-4">
+      <div className="mt-auto  pt-4">
         <Link 
           href="/Login" 
           className="flex items-center gap-3 px-4 py-3 text-[#1B2065F2] hover:bg-red-50 rounded-xl transition-all"
