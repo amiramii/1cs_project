@@ -13,7 +13,7 @@ export default function SchedulsMiddleContainer() {
   const [professorName, setProfessorName] = useState("");
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-
+  const [successMsg, setSuccessMsg] = useState(false);
   const router = useRouter();
   const ProfessorSchedulesPath = () => {
     router.push("/Scheduals/Professor-Schedules"); 
@@ -45,18 +45,19 @@ const handleUpload = async () => {
     formData.append("pdf", droppedFile);
     formData.append("audience", activeTab);
 
-    const token = getAccessToken(); // 👈 import this from your tokenStorage
+    const token = getAccessToken(); 
     const res = await fetch("http://127.0.0.1:8000/api/documents/", {
       method: "POST",
       headers: {
-        ...(token && { Authorization: `Bearer ${token}` }), // 👈 auth still works
-        // 👈 NO Content-Type, browser sets it automatically for FormData
+        ...(token && { Authorization: `Bearer ${token}` }), 
       },
       body: formData,
     });
 
     if (res.ok) {
       console.log("Schedule uploaded successfully");
+      setSuccessMsg(true);
+      setTimeout(() => setSuccessMsg(false), 1000);
     } else {
       const error = await res.json();
       console.error("Upload failed:", error);
@@ -172,6 +173,9 @@ const handleUpload = async () => {
           <Upload size={18} className="text-white"/>
           {isUploading ? "Uploading..." : "Upload Schedule"}
         </button>
+        {successMsg && (
+          <p className="text-green-600 text-sm">Schedule uploaded successfully!</p>
+        )}
       </div>
     </div>
     <div className="flex flex-row items-center gap-40">
