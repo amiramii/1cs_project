@@ -1,23 +1,35 @@
 import api from "./api";
 import { persistTokens } from "./tokenStorage";
+import { formatDrfError } from "./drfError";
 
 async function login(email: string, password: string, remember = false) {
-  const res = await api("api/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const res = await api(
+    "api/token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        password,
+        remember_me: remember,
+      }),
     },
-    body: JSON.stringify({
-      email: email,
-      password: password,
-    }),
-  }, { withAuth: false });
+    { withAuth: false }
+  );
+
+  const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new Error("Invalid credentials");
+    throw new Error(
+      formatDrfError(data, "Invalid credentials")
+    );
   }
 
-  const data = await res.json();
+  if (typeof data.access !== "string" || typeof data.refresh !== "string") {
+    throw new Error("Invalid response from server");
+  }
 
   persistTokens(data.access, data.refresh, remember);
 

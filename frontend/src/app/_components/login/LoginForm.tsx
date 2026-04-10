@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useValidator } from "@validator.tool/hook"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,7 @@ import {
   FieldContent,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import EmailInput from "./EmailInput"
 import login from "@/lib/auth"
 import {
@@ -32,6 +32,7 @@ import PasswordInput from "./PasswordInput"
 
 export default function LoginForm() {
   const router = useRouter()
+  const pathname = usePathname()
 
   const [language, setLanguage] = useState<"en" | "ar">(() => getStoredLanguage())
   const [showPassword, setShowPassword] = useState(false)
@@ -39,14 +40,36 @@ export default function LoginForm() {
 
   const [data, setData] = useState({ email: "", password: "" })
   const [apiError, setApiError] = useState("")
+  const [loginLoading, setLoginLoading] = useState(false)
 
   const [touched, setTouched] = useState({ email: false, password: false })
+  const prevPathRef = useRef<string | undefined>(undefined)
 
   const t = getLoginTexts(language)
 
   useEffect(() => {
     setStoredLanguage(language)
   }, [language])
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setTouched({ email: false, password: false })
+        setApiError("")
+      }
+    }
+    window.addEventListener("pageshow", onPageShow)
+    return () => window.removeEventListener("pageshow", onPageShow)
+  }, [])
+
+  useEffect(() => {
+    const prev = prevPathRef.current
+    prevPathRef.current = pathname
+    if (pathname === "/Login" && prev !== undefined && prev !== "/Login") {
+      setTouched({ email: false, password: false })
+      setApiError("")
+    }
+  }, [pathname])
 
   const getEmailError = () => {
     if (!data.email) return t.emailRequired
@@ -91,14 +114,19 @@ export default function LoginForm() {
 
   async function onSubmit(values: { email: string; password: string }) {
     setApiError("")
+    setLoginLoading(true)
     try {
       await login(values.email, values.password, rememberMe)
 
       const role = DEFAULT_APP_ROLE
       router.push(getDashboardHomePath(role))
     } catch (err) {
-      console.error(err)
-      setApiError(t.loginErrorGeneric)
+      setApiError(
+        err instanceof Error && err.message
+          ? err.message
+          : t.loginErrorGeneric
+      )
+      setLoginLoading(false)
     }
   }
 
@@ -227,15 +255,30 @@ export default function LoginForm() {
                 type="button"
                 variant="link"
                 size="sm"
-                className="text-blue-secondary border-0 border-b text-wrap"
-                onClick={() => router.push("/Forgot-password")}
+                className="dark:text-blue-secondary text-white-primary border-0 border-b text-wrap"
+                onMouseDown={(e) => e.preventDefault()}
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setTouched({ email: false, password: false })
+                  setApiError("")
+                  router.push("/Forgot-password")
+                }}
               >
                 {t.forgot}
               </Button>
             </div>
 
             {/* LOGIN */}
-            <SubmitButton message={t.login} />
+            <SubmitButton
+              message={t.login}
+              variant="login"
+              loading={loginLoading}
+              loadingMessage={
+                language === "ar"
+                  ? "جارٍ تسجيل الدخول..."
+                  : "Signing in..."
+              }
+            />
           </FieldGroup>
         </form>
       </main>
