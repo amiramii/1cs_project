@@ -1,15 +1,19 @@
 import MyDropzone from "../DropBox";
 import { Upload, SquarePlus , GraduationCap , UserRoundPen , ChevronDown , CalendarCheck} from "lucide-react";
 import {Button, buttonVariants} from "@/components/ui/button";
-import SearchBar from "./SearchBar";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getAccessToken } from "@/lib/tokenStorage";
 
 export default function SchedulsMiddleContainer() {
   const [selectedValue, setSelectedValue] = useState("default");
-  const handleDrop = (files: File[]) => {
-    console.log("Uploaded:", files);
-  };
+  const [activeTab, setActiveTab] = useState("professor");
+  const [year, setYear] = useState("default");
+  const [title, setTitle] = useState("");
+  const [professorName, setProfessorName] = useState("");
+  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   const router = useRouter();
   const ProfessorSchedulesPath = () => {
     router.push("/Scheduals/Professor-Schedules"); 
@@ -17,6 +21,52 @@ export default function SchedulsMiddleContainer() {
   const StudentSchedulesPath = () => {
     router.push("/Scheduals/Student-Schedules"); 
   };
+  const toBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+  });
+  const handleDrop = useCallback((acceptedFiles: File[]) => {
+  console.log("Files received:", acceptedFiles);
+  if (acceptedFiles.length > 0) {
+    setDroppedFile(acceptedFiles[0]);
+    console.log("File set:", acceptedFiles[0].name); // verify in console
+  }
+}, []);
+const handleUpload = async () => {
+  if (!droppedFile || !title) return;
+
+  setIsUploading(true);
+  try {
+    const formData = new FormData();
+    formData.append("title", title);
+    formData.append("pdf", droppedFile);
+    formData.append("audience", activeTab);
+
+    const token = getAccessToken(); // 👈 import this from your tokenStorage
+    const res = await fetch("http://127.0.0.1:8000/api/documents/", {
+      method: "POST",
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }), // 👈 auth still works
+        // 👈 NO Content-Type, browser sets it automatically for FormData
+      },
+      body: formData,
+    });
+
+    if (res.ok) {
+      console.log("Schedule uploaded successfully");
+    } else {
+      const error = await res.json();
+      console.error("Upload failed:", error);
+    }
+  } catch (err) {
+    console.error("Error uploading:", err);
+  } finally {
+    setIsUploading(false);
+  }
+};
   return (
   <div className="flex flex-col gap-20 items-center justify-center">
     <div className="flex flex-col items-center gap-2 py-7 px-5 border border-[#1B2065] rounded-md bg-[#FEF9F9] shadow-[0px_4px_8px_rgba(0,0,0,0.4)] w-[50vw]">
@@ -28,8 +78,9 @@ export default function SchedulsMiddleContainer() {
         {/* ROW 2 - Student-Prof Radio buttons*/}
         <div className="flex flex-row gap-44">
           {[
-            { label: "Professor", value: "professor", icon: <UserRoundPen size={18} /> },
+           
             { label: "Student", value: "student", icon: <GraduationCap size={18} /> },
+            { label: "Professor", value: "professor", icon: <UserRoundPen size={18} /> },
           ].map((option) => (
             <label key={option.value} className="cursor-pointer">
             <input
@@ -37,7 +88,8 @@ export default function SchedulsMiddleContainer() {
               name="audiance"
               value={option.value}
               className="peer hidden"
-              defaultChecked={option.value === "Professor"}
+              checked={activeTab === option.value} 
+              onChange={() => setActiveTab(option.value)}
             />
             {/* The Styled Button Container */}
             <div className="
@@ -56,16 +108,17 @@ export default function SchedulsMiddleContainer() {
         {/*ROW 3 - Year and Professor name*/}
         <div className="flex flex-row gap-20">
           <div className="relative w-60 h-10">
-            {selectedValue === "default" && (
+            {year === "default" && 
               <ChevronDown
                 className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#1B2065F2]"
                 size={18}
               />
-            )}
+            }
     
             <select
-              value={selectedValue}
-              onChange={(e) => setSelectedValue(e.target.value)}
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              disabled={activeTab === "professor"}
               className="w-full h-full bg-white text-[#1B2065F2] py-2 px-4 border border-[#1B2065] rounded-md text-left shadow-md appearance-none cursor-pointer"
             >
               <option value="default" disabled hidden>Year</option>
@@ -82,18 +135,22 @@ export default function SchedulsMiddleContainer() {
             type="text" 
             placeholder="Professor Name..." 
             className="w-60 h-10 bg-white text-black py-2 px-4 border border-[#1B2065] rounded-md text-left shadow-md"
+            disabled={activeTab === "student"}
           />
         </div>
         {/* ROW 4 - Shedule Title */}
         <input
           type="text"
           placeholder="Schedule Title..."
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           className="w-60 h-9 bg-white text-black py-2 px-4 border border-[#1B2065] rounded-md text-left shadow-md"
         />
         {/* ROW 5 -  Dropzone */}
         <div className="">
           <MyDropzone
             onDrop={handleDrop}
+            accept={{ "application/pdf": [".pdf"] }}
             className="group cursor-pointer flex items-center justify-center 
                        px-6 w-[40vw] h-[18vh] bg-[#D9D9D917] border-2 border-dashed border-gray-300 
                        rounded-xl bg-white hover:border-[#1B2065] hover:bg-blue-50/30 
@@ -101,14 +158,19 @@ export default function SchedulsMiddleContainer() {
           >
             <div className="flex flex-row items-center gap-2">
               <SquarePlus size={24} className="text-gray-300 group-hover:text-[#1B2065F2]" />
-              <p className="text-sm font-medium text-slate-600">Drop file</p>
+              <p className="text-sm font-medium text-slate-600">
+                {droppedFile ? droppedFile.name : "Drop file"}
+              </p>
             </div>
           </MyDropzone>
         </div>
         {/* ROW 6 - Upload File button */}
-        <button className="flex justify-center items-center gap-2 px-5 py-2 rounded-md h-9 w-[32vw] border border-[#1B2065F2] bg-[#1B2065F2] text-white font-semibold hover:bg-[#51689A] transition-all">
+        <button 
+        onClick={handleUpload}
+        disabled={isUploading || !droppedFile || !title}
+        className="flex justify-center items-center gap-2 px-5 py-2 rounded-md h-9 w-[32vw] border border-[#1B2065F2] bg-[#1B2065F2] text-white font-semibold hover:bg-[#51689A] transition-all">
           <Upload size={18} className="text-white"/>
-          Upload Schedule
+          {isUploading ? "Uploading..." : "Upload Schedule"}
         </button>
       </div>
     </div>
