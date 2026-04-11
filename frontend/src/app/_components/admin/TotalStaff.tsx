@@ -1,24 +1,32 @@
+"use client";
 import Link from 'next/link'; 
 
 interface NavItemProps {
   label: string;  // The text to display
 //   route: string;  // The URL path
   icon?: React.ReactNode;
+  count?: number | string;
+  details: string;
 }
 
-export default function TotalStaff({ label, icon}: NavItemProps) {
+export default function TotalStaff({ label, icon, count, details}: NavItemProps) {
   return (
-    <div className="bg-[#F6F7FEF2] border border-[#1B2065F2] rounded-2xl h-[calc(20vh-64px)] max-w-fit">
-        <p className="text-[#1B2065F2] font-bold">{label}</p>
-        {icon && <span className="mr-2">{icon}</span>}
+    <div className="flex flex-col items-left bg-[#FEF9F9] border border-[#51689A] rounded-md max-w-fit p-3">
+      <div className="flex flex-row items-center justify-center gap-24 h-full">
+        <p className="text-[#51689A]">{label}</p>
+        {icon && <span className="mr-2 text-[#1B2065F2]">{icon}</span>}
+      </div>
+      <p className="text-[#1B2065F2] font-semibold text-2xl px-2">{count}</p>
+      <div>
+        <p className="text-[#74A7BD] text-xs px-2 pt-2">{details}</p>
+      </div>
     </div>
+  );
+}
     // <Link href={route} className="flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors">
     //   {icon && <span className="mr-2">{icon}</span>}
     //   <span className="font-medium text-gray-700">{label}</span>
     // </Link>
-  );
-}
-
 // 'use client';
 
 // import React, { useState, useEffect } from 'react';

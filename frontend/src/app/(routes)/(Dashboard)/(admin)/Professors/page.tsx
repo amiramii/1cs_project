@@ -20,7 +20,8 @@ export default function Page() {
   return (
   <>
     <ProfTotals/>
-    <MiddleContainer/>
+    <div className="flex justify-center p-4"><MiddleContainer/></div>
+    
   </>
   );
 }

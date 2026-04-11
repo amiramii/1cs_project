@@ -1,11 +1,15 @@
 "use client";
 
 import TotalStaff from "../TotalStaff";
-import {Users}   from "lucide-react";
+import {Users , BookMarked , Activity}   from "lucide-react";
 
 export default function ProfTotals() {
     return (
-        <TotalStaff label="Total Professors" icon={<Users />} />
+        <div className="flex flex-row gap-8 justify-center">
+        <TotalStaff label="Total Professors" icon={<Users />} count={1900} details={"Active"}/>
+        <TotalStaff label="Total Modules" icon={<BookMarked />} count={50} details={"Available"}/>
+        <TotalStaff label="Average Absence" icon={<Activity />} count="15%" details={"Low"}/>
+        </div>
     );
 }
 
