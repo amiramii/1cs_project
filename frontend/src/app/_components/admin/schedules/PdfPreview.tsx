@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {Trash2} from "lucide-react";
+import { getAccessToken } from "@/lib/tokenStorage";
 
 type PdfPreviewProps = {
   url: string;
@@ -24,6 +25,7 @@ export default function PdfPreview({
   const [isOpen, setIsOpen] = useState(false);
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +56,25 @@ export default function PdfPreview({
     document.body.style.overflow = isOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
+  useEffect(() => {
+  if (!isOpen || blobUrl) return;
+  const fetchBlob = async () => {
+    try {
+      const token = getAccessToken(); // import from your tokenStorage
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const blob = await res.blob();
+      setBlobUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      console.error("Failed to load PDF blob:", err);
+    }
+  };
+  fetchBlob();
+}, [isOpen, url]);
+useEffect(() => {
+  return () => { if (blobUrl) URL.revokeObjectURL(blobUrl); };
+}, [blobUrl]);
 
   const modal = isOpen ? (
     <div
@@ -99,7 +120,12 @@ export default function PdfPreview({
         </div>
     
         <div className="flex-1 bg-gray-100">
-          <iframe src={`${url}#toolbar=1`} width="100%" height="100%" className="border-none" />
+          {blobUrl
+  ? <iframe src={`${blobUrl}#toolbar=1`} width="100%" height="100%" className="border-none" />
+  : <div className="w-full h-full flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-gray-300 border-t-[#1B2065F2] rounded-full animate-spin" />
+    </div>
+}
         </div>
     
         {/* Footer */}

@@ -81,7 +81,7 @@ const handleUpload = async () => {
           {[
            
             { label: "Student", value: "student", icon: <GraduationCap size={18} /> },
-            { label: "Professor", value: "professor", icon: <UserRoundPen size={18} /> },
+            { label: "Professor", value: "teacher", icon: <UserRoundPen size={18} /> },
           ].map((option) => (
             <label key={option.value} className="cursor-pointer">
             <input

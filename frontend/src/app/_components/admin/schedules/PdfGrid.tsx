@@ -17,7 +17,10 @@ type ApiResponse = {
   previous: string | null;
   results: Schedule[];
 };
-export default function PdfGrid() {
+type PdfGridProps = {
+  link: string;
+};
+export default function PdfGrid({ link }: PdfGridProps) {
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -25,7 +28,7 @@ export default function PdfGrid() {
       const fetchSchedules = async () => {
         try {
           const token = getAccessToken();
-          const res = await fetch("http://127.0.0.1:8000/api/documents/", {
+          const res = await fetch(link , {
             method: "GET",
             headers: {
               "Content-Type": "application/json",
