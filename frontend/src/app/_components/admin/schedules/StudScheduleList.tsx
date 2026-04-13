@@ -1,20 +1,53 @@
 "use client"
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
-import React , {useState} from 'react'
+import React , {useEffect, useState} from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Funnel , Users , MoveRight , MoveLeft } from "lucide-react";
 import SearchBar from "./SearchBar";
 import { useRouter } from 'next/navigation';
+import { getAccessToken } from "@/lib/tokenStorage";
+
+type Schedule = {
+  id: number;
+  title: string;
+  pdf: string;
+  audience: "student" | "professor";
+  uploaded_at: string;
+};
 
 function ScheduleList() {
-        const [search, setSearch] = useState("");
+    const [search, setSearch] = useState("");
+    const [schedules, setSchedules] = useState<Schedule[]>([]);
+    const [loading, setLoading] = useState(false);
 
-  // Example data for demonstration
-        const schedules = ["Meeting with Ahmed", "Lunch with Sara", "Call ghada", "Review Lina"];
-        const filteredSchedules = schedules.filter(item =>
-        item.toLowerCase().includes(search.toLowerCase())
-    );
+     useEffect(() => {
+    const fetchSchedules = async () => {
+      setLoading(true);
+      try {
+        const token = getAccessToken();
+        const res = await fetch(
+          `http://127.0.0.1:8000/api/documents/?search=${encodeURIComponent(search)}`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              ...(token && { Authorization: `Bearer ${token}` }),
+            },
+          }
+        );
+        if (!res.ok) throw new Error("Failed to fetch");
+        const data = await res.json();
+        setSchedules(data.results);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const debounce = setTimeout(fetchSchedules, 300); // wait 300ms after typing stops
+    return () => clearTimeout(debounce);
+    }, [search]);
     const router = useRouter();
     const ProfessorSchedulesPath = () => {
       router.push("/Scheduals/Professor-Schedules"); 
