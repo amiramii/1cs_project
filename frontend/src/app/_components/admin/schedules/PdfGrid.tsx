@@ -18,38 +18,45 @@ type ApiResponse = {
   results: Schedule[];
 };
 type PdfGridProps = {
-  link: string;
+  link?: string;
+  schedules?: Schedule[];
 };
-export default function PdfGrid({ link }: PdfGridProps) {
-    const [schedules, setSchedules] = useState<Schedule[]>([]);
-    const [loading, setLoading] = useState(true);
+export default function PdfGrid({ link, schedules: schedulesProp }: PdfGridProps) {
+    const [schedules, setSchedules] = useState<Schedule[]>(schedulesProp ?? []);
+    const [loading, setLoading] = useState(!schedulesProp);
     const [error, setError] = useState<string | null>(null);
+    
     useEffect(() => {
-      const fetchSchedules = async () => {
-        try {
-          const token = getAccessToken();
-          const res = await fetch(link , {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token && { Authorization: `Bearer ${token}` }),
-            },
-          });
-  
-          if (!res.ok) throw new Error("Failed to fetch schedules");
-  
-          const data: ApiResponse = await res.json();
-          setSchedules(data.results);
-        } catch (err) {
-          setError("Failed to load schedules");
-          console.error(err);
-        } finally {
-          setLoading(false);
-        }
-      };
-  
-      fetchSchedules();
-    }, []);
+  if (schedulesProp !== undefined) {
+    setSchedules(schedulesProp);
+    setLoading(false);
+    return;
+  }
+  if (!link) return;
+
+  const fetchSchedules = async () => {
+    try {
+      const token = getAccessToken();
+      const res = await fetch(link, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+      if (!res.ok) throw new Error("Failed to fetch schedules");
+      const data: ApiResponse = await res.json();
+      setSchedules(data.results);
+    } catch (err) {
+      setError("Failed to load schedules");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchSchedules();
+}, [link, schedulesProp]);
   
     if (loading) return <p className="text-center text-[#1B2065]">Loading schedules...</p>;
     if (error) return <p className="text-center text-red-500">{error}</p>;

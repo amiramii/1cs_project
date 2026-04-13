@@ -7,6 +7,7 @@ import { Funnel , Users , MoveRight , MoveLeft } from "lucide-react";
 import SearchBar from "./SearchBar";
 import { useRouter } from 'next/navigation';
 import { getAccessToken } from "@/lib/tokenStorage";
+import PdfGrid from "./PdfGrid";
 
 type Schedule = {
   id: number;
@@ -27,7 +28,7 @@ function ScheduleList() {
       try {
         const token = getAccessToken();
         const res = await fetch(
-          `http://127.0.0.1:8000/api/documents/?search=${encodeURIComponent(search)}`,
+          `http://127.0.0.1:8000/api/documents/?search=${encodeURIComponent(search)}&audience=student`,
           {
             headers: {
               "Content-Type": "application/json",
@@ -94,6 +95,9 @@ function ScheduleList() {
                     </div>
                 </div>
             </div>
+        
+            {loading && <p className="text-center text-[#1B2065]">Searching...</p>}
+            <PdfGrid schedules={schedules} />
         </div>
     );
 }

@@ -7,6 +7,7 @@ import { Funnel , Users , MoveRight , MoveLeft } from "lucide-react";
 import SearchBar from "./SearchBar";
 import { useRouter } from 'next/navigation';
 import { getAccessToken } from "@/lib/tokenStorage";
+import PdfGrid from './PdfGrid'
 
 type Schedule = {
   id: number;
@@ -100,6 +101,8 @@ function ScheduleList() {
                     </div>
                 </div>
             </div>
+            {loading && <p className="text-center text-[#1B2065]">Searching...</p>}
+            <PdfGrid schedules={schedules} />
         </div>
     );
 }
