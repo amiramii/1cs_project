@@ -6,6 +6,7 @@ import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
 import { getAccessToken } from "@/lib/tokenStorage";
 import MiddleContainer from "@/app/_components/admin/professors/ProfMidContainer";
 import ProfTotals from "@/app/_components/admin/professors/ProfTotals";
+import BasicTable from "@/app/_components/admin/professors/ProfTable";
 export default function Page() {
   const router = useRouter();
 
@@ -21,6 +22,7 @@ export default function Page() {
   <>
     <ProfTotals/>
     <div className="flex justify-center p-4"><MiddleContainer/></div>
+    <BasicTable/>
     
   </>
   );

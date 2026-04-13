@@ -4,7 +4,7 @@ import { Field } from '@/components/ui/field'
 import React , {useEffect, useState} from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Funnel , Users , MoveRight , MoveLeft } from "lucide-react";
-import SearchBar from "./SearchBar";
+import SearchBar from "../SearchBar";
 import { useRouter } from 'next/navigation';
 import { getAccessToken } from "@/lib/tokenStorage";
 import PdfGrid from './PdfGrid'
