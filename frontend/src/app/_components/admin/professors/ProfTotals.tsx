@@ -2,14 +2,32 @@
 
 import TotalStaff from "../TotalStaff";
 import {Users , BookMarked , Activity}   from "lucide-react";
+import { useLanguage } from "@/app/_components/language-provider";
 
 export default function ProfTotals() {
+    const { language } = useLanguage();
+    const isArabic = language === "ar";
     return (
-        <div className="flex flex-row gap-8 justify-center">
-        <TotalStaff label="Total Professors" icon={<Users />} count={1900} details={"Active"}/>
-        <TotalStaff label="Total Modules" icon={<BookMarked />} count={50} details={"Available"}/>
-        <TotalStaff label="Average Absence" icon={<Activity />} count="15%" details={"Low"}/>
-        </div>
+        <section className="mx-auto grid w-full min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2 md:w-11/12 lg:w-9/12 xl:w-8/12 xl:grid-cols-3">
+        <TotalStaff
+          label={isArabic ? "إجمالي الأساتذة" : "Total Professors"}
+          icon={<Users />}
+          count={1900}
+          details={isArabic ? "نشط" : "Active"}
+        />
+        <TotalStaff
+          label={isArabic ? "إجمالي المواد" : "Total Modules"}
+          icon={<BookMarked />}
+          count={50}
+          details={isArabic ? "متاح" : "Available"}
+        />
+        <TotalStaff
+          label={isArabic ? "متوسط الغياب" : "Average Absence"}
+          icon={<Activity />}
+          count="15%"
+          details={isArabic ? "منخفض" : "Low"}
+        />
+        </section>
     );
 }
 

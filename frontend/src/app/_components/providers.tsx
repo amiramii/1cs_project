@@ -1,7 +1,7 @@
 "use client"
 
 import { ThemeProvider } from "../_components/theme-provider"
-import { DirectionProvider } from "@/components/ui/direction"
+import { LanguageProvider } from "./language-provider"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -11,9 +11,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
-      <DirectionProvider dir="ltr">
-        {children}
-      </DirectionProvider>
+      <LanguageProvider>{children}</LanguageProvider>
     </ThemeProvider>
   )
 }

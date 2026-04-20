@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback } from 'react';
+import React from 'react';
 import { useDropzone, DropzoneOptions } from 'react-dropzone';
 
 interface Props extends DropzoneOptions {
@@ -8,7 +8,7 @@ interface Props extends DropzoneOptions {
 }
 
 export default function MyDropzone({ onDrop, className, children, ...props }: Props) {
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+  const { getRootProps, getInputProps } = useDropzone({ 
     onDrop, 
     ...props 
   });

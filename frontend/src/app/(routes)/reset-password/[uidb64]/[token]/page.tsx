@@ -15,9 +15,8 @@ import {
   PASSWORD_SYMBOL_REGEX,
   RESET_EMAIL_STORAGE_KEY,
   getLoginTexts,
-  getStoredLanguage,
-  setStoredLanguage,
 } from "@/lib/constants"
+import { useLanguage } from "@/app/_components/language-provider"
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -29,7 +28,7 @@ export default function ResetPasswordPage() {
   const routeParams = useParams()
   const uidb64 = (typeof routeParams?.uidb64 === "string" ? routeParams.uidb64 : "").replace(/=/g, "")
   const token  = (typeof routeParams?.token  === "string" ? routeParams.token  : "").replace(/=/g, "")
-  const [language, setLanguage] = useState<"en" | "ar">(() => getStoredLanguage())
+  const { language, setLanguage } = useLanguage()
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -40,8 +39,6 @@ export default function ResetPasswordPage() {
   const [cancelLoading, setCancelLoading] = useState(false)
   const submitLockRef = useRef(false)
   const t = getLoginTexts(language)
-
-  useEffect(() => setStoredLanguage(language), [language])
 
   const passwordError = useMemo(() => {
     if (!password) return t.passwordRequired
@@ -134,7 +131,7 @@ export default function ResetPasswordPage() {
         <ModeToggle />
       </div>
 
-      <main className="w-full max-w-md  bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-6 px-8 text-foreground z-20">
+      <main className="w-full max-w-md rounded-3xl border border-border bg-card/80 px-5 py-5 text-foreground backdrop-blur-3xl z-20 sm:px-8 sm:py-6">
         <div className="self-end mb-2">
           <LanguageMenu language={language} onChange={setLanguage} />
         </div>
@@ -145,7 +142,6 @@ export default function ResetPasswordPage() {
 
         <form
           className="w-full flex flex-col gap-4"
-          dir={language === "ar" ? "rtl" : "ltr"}
           onSubmit={(e) => {
             e.preventDefault()
             void handleSave()
@@ -198,8 +194,6 @@ export default function ResetPasswordPage() {
                 language === "ar" ? "جارٍ العودة..." : "Leaving..."
               }
               disabled={loading}
-              onMouseDown={(e) => e.preventDefault()}
-              onPointerDown={(e) => e.preventDefault()}
               onClick={() => {
                 setTouched({ password: false, confirmPassword: false })
                 setError("")

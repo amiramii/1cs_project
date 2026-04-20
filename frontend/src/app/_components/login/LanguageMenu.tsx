@@ -22,13 +22,19 @@ export default function LanguageMenu({ language, onChange }: LanguageMenuProps) 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild className="rounded-md">
-        <Button size="sm" className="font-light">
+        <Button
+          size="sm"
+          className=" justify-between font-light"
+        >
           {language === "en" ? "English" : "العربية"}
           {open ? <ChevronUp /> : <ChevronDown />}
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="p-0 backdrop-blur-md">
+      <DropdownMenuContent
+        align="end"
+        className="min-w-[min(100vw-2rem,7rem)] p-0 "
+      >
         <DropdownMenuItem onClick={() => onChange("en")}>English</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onChange("ar")}>العربية</DropdownMenuItem>
       </DropdownMenuContent>

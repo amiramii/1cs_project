@@ -106,3 +106,135 @@ export function setStoredLanguage(language: Language) {
   if (typeof window === "undefined") return
   window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language)
 }
+
+/** Keys mapped to `lucide-react` icons in the sidebar (see `sidebarMenuIcon`). */
+export type SidebarIconId =
+  | "dashboard"
+  | "professors"
+  | "sessions"
+  | "students"
+  | "schedules"
+  | "justifications"
+
+export type SidebarNavItem = {
+  iconId: SidebarIconId
+  label: string
+  href: string
+}
+
+export type AppSidebarRole = "admin" | "prof" | "student" | "schooling"
+
+const tx =
+  (language: Language) =>
+  (en: string, ar: string): string =>
+    language === "ar" ? ar : en
+
+/**
+ * Sidebar entries: `iconId` matches Lucide icons in the UI layer.
+ * Arabic copy uses common app / education wording (MSA-friendly).
+ */
+export function getSideBarItems(
+  language: Language,
+  role: AppSidebarRole = DEFAULT_APP_ROLE as AppSidebarRole
+): SidebarNavItem[] {
+  const t = tx(language)
+
+  const admin: SidebarNavItem[] = [
+    {
+      iconId: "dashboard",
+      label: t("Dashboard", "لوحة التحكم"),
+      href: "/Dashboard",
+    },
+    {
+      iconId: "professors",
+      label: t("Professors", "الأساتذة"),
+      href: "/Professors",
+    },
+    {
+      iconId: "schedules",
+      label: t("Schedules", "الجداول"),
+      href: "/Scheduals",
+    },
+    {
+      iconId: "students",
+      label: t("Students", "الطلاب"),
+      href: "/Students",
+    },
+  ]
+
+  const prof: SidebarNavItem[] = [
+    {
+      iconId: "dashboard",
+      label: t("Dashboard", "لوحة التحكم"),
+      href: "/Dashboard",
+    },
+    {
+      iconId: "schedules",
+      label: t("Schedules", "الجداول"),
+      href: "/Scheduals",
+    },
+    {
+      iconId: "sessions",
+      label: t("Sessions", "الحصص"),
+      href: "/Sessions",
+    },
+    {
+      iconId: "students",
+      label: t("Students", "الطلاب"),
+      href: "/Students",
+    },
+  ]
+
+  const student: SidebarNavItem[] = [
+    {
+      iconId: "dashboard",
+      label: t("Dashboard", "لوحة التحكم"),
+      href: "/Dashboard",
+    },
+    {
+      iconId: "justifications",
+      label: t("Justifications", "مبررات الغياب"),
+      href: "/Justifications",
+    },
+    {
+      iconId: "schedules",
+      label: t("Schedules", "الجداول"),
+      href: "/Scheduals",
+    },
+    {
+      iconId: "sessions",
+      label: t("Sessions", "الحصص"),
+      href: "/Sessions",
+    },
+  ]
+
+  /** Academic office: home is intentionally empty; primary workflow is justifications */
+  const schooling: SidebarNavItem[] = [
+    {
+      iconId: "dashboard",
+      label: t("Dashboard", "لوحة التحكم"),
+      href: "/Dashboard",
+    },
+    {
+      iconId: "justifications",
+      label: t("Justifications", "مبررات الغياب"),
+      href: "/Justifications",
+    },
+  ]
+
+  const byRole: Record<AppSidebarRole, SidebarNavItem[]> = {
+    admin,
+    prof,
+    student,
+    schooling,
+  }
+
+  return byRole[role] ?? admin
+}
+
+export function getSidebarChromeTexts(language: Language) {
+  const t = tx(language)
+  return {
+    logout: t("Logout", "تسجيل الخروج"),
+  }
+}

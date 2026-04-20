@@ -13,9 +13,8 @@ import {
   EMAIL_REGEX,
   RESET_EMAIL_STORAGE_KEY,
   getLoginTexts,
-  getStoredLanguage,
-  setStoredLanguage,
 } from "../../../lib/constants"
+import { useLanguage } from "@/app/_components/language-provider"
 import SubmitButton from "@/app/_components/login/SubmitButton"
 import LanguageMenu from "../../_components/login/LanguageMenu"
 //import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
@@ -25,17 +24,13 @@ function Page() {
   const pathname = usePathname()
   const prevPathRef = useRef<string | undefined>(undefined)
   //const ready = useRedirectIfAuthenticated()
-  const [language, setLanguage] = useState<"en" | "ar">(() => getStoredLanguage())
+  const { language, setLanguage } = useLanguage()
   const [email, setEmail] = useState("")
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [loading, setLoading] = useState(false)
   const t = getLoginTexts(language)
-
-  useEffect(() => {
-    setStoredLanguage(language)
-  }, [language])
 
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
@@ -115,7 +110,7 @@ function Page() {
         <ModeToggle />
       </div>
 
-      <main className="w-full mt-10 max-w-md bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-6 px-8 text-foreground z-20">
+      <main className="mt-8 w-full max-w-md rounded-3xl border border-border bg-card/80 px-5 py-5 text-foreground backdrop-blur-3xl z-20 sm:mt-10 sm:px-8 sm:py-6">
         <div className="mb-2 flex w-full items-center justify-between gap-3">
           <Button
             type="button"
@@ -143,7 +138,6 @@ function Page() {
 
         <form
           className="w-full flex flex-col gap-6"
-          dir={language === "ar" ? "rtl" : "ltr"}
           noValidate
           onSubmit={(e) => {
             e.preventDefault()

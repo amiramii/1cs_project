@@ -1,3 +1,10 @@
+/**
+ * Root layout for the entire Next.js app.
+ * - Loads global Tailwind/CSS variables (`globals.css`).
+ * - Registers font CSS variables (Latin + Arabic) used across pages.
+ * - Wraps all routes in `Providers` (theme, language, direction, etc.).
+ * Child route groups (e.g. `(Dashboard)`) add their own nested layouts.
+ */
 import type { Metadata } from "next"
 import "./globals.css"
 

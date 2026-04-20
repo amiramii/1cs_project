@@ -1,17 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
-import { getAccessToken } from "@/lib/tokenStorage";
-import MiddleContainer from "@/app/_components/admin/students/StudMidContainer";
-import StudTotals from "@/app/_components/admin/students/StudTotals";
+import StudentsByRole from "@/app/_components/role-pages/StudentsByRole";
+import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole";
 
 export default function Page() {
-  return (
-    <div>
-      <StudTotals/>
-      <div className="flex justify-center p-4"><MiddleContainer/></div>
-    </div>
-  );
+  const role = useEffectiveAppRole("admin");
+  const studentsRole = role === "prof" ? "prof" : "admin";
+  return <StudentsByRole role={studentsRole} />;
 }

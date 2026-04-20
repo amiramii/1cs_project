@@ -1,183 +1,253 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import {Trash2} from "lucide-react";
-import { getAccessToken } from "@/lib/tokenStorage";
+import React, { useEffect, useState } from 'react'
+import { getAccessToken } from "@/lib/tokenStorage"
+import { useLanguage } from "@/app/_components/language-provider"
+import { Download, FileSpreadsheet, FileText } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 type PdfPreviewProps = {
-  url: string;
-  title?: string;
-  date?: string;
-  professor?: string;
-  width?: number;  // new
-  height?: number; // new
-};
-
-export default function PdfPreview({ 
-  url, 
-  title = 'Schedule Title', 
-  date = '01/01/2026', 
-  professor = 'Prof Moh',
-  width = 192,  // default keeps existing behavior (w-48)
-  height = 160, // default keeps existing behavior (h-40)
-}: PdfPreviewProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [thumbnail, setThumbnail] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const renderThumbnail = async () => {
-      try {
-        const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-        const pdf = await pdfjsLib.getDocument(url).promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1 });
-        const scale = width / viewport.width;
-        const scaledViewport = page.getViewport({ scale });
-        const canvas = document.createElement('canvas');
-        canvas.width = scaledViewport.width;
-        canvas.height = scaledViewport.height;
-        const ctx = canvas.getContext('2d')!;
-        await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
-        if (!cancelled) setThumbnail(canvas.toDataURL('image/png'));
-      } catch (err) {
-        console.error('PDF thumbnail error:', err);
-      }
-    };
-    renderThumbnail();
-    return () => { cancelled = true; };
-  }, [url, width]);
-
-  useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
-  useEffect(() => {
-  if (!isOpen || blobUrl) return;
-  const fetchBlob = async () => {
-    try {
-      const token = getAccessToken(); // import from your tokenStorage
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const blob = await res.blob();
-      setBlobUrl(URL.createObjectURL(blob));
-    } catch (err) {
-      console.error("Failed to load PDF blob:", err);
-    }
-  };
-  fetchBlob();
-}, [isOpen, url]);
-useEffect(() => {
-  return () => { if (blobUrl) URL.revokeObjectURL(blobUrl); };
-}, [blobUrl]);
-
-  const modal = isOpen ? (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}
-    >
-      <div
-        className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ width: 'min(860px, 92vw)', height: '90vh' }}
-      >
-        {/* Confirmation overlay */}
-        {confirmDelete && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-2xl">
-            <div className="bg-white rounded-xl shadow-xl px-8 py-6 flex flex-col items-center gap-8 max-w-xs w-full mx-4">
-              <Trash2 size={32} className="text-[#1B2065F2]" />
-              <p className="text-md font-bold text-[#1B2065F2] text-center">Confirm deleting this schedule?</p>
-              <div className="flex gap-8 w-full">
-                <button
-                  onClick={() => {
-                    setConfirmDelete(false);
-                    setIsOpen(false);
-                    // call your onDelete prop here
-                  }}
-                  className="flex-1 px-4 py-2 text-sm rounded-lg bg-[#1B2065F2] text-white hover:bg-red-600 transition-colors"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="flex-1 px-4 py-2 text-sm rounded-lg bg-[#1B2065F2] text-white hover:bg-gray-50 hover:border hover:border-[#1B2065F2] hover:text-[#1B2065F2] transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-    
-        {/* Header */}
-        <div className="flex items-center justify-end px-5 py-3 border-b border-gray-100 bg-white">
-          <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl">✕</button>
-        </div>
-    
-        <div className="flex-1 bg-gray-100">
-          {blobUrl
-  ? <iframe src={`${blobUrl}#toolbar=1`} width="100%" height="100%" className="border-none" />
-  : <div className="w-full h-full flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-gray-300 border-t-[#1B2065F2] rounded-full animate-spin" />
-    </div>
+  url: string
+  title?: string
+  date?: string
+  professor?: string
+  width?: number | string
+  thumbnailWidth?: number
+  height?: number
 }
-        </div>
-    
-        {/* Footer */}
-        <div className="relative flex items-center px-5 py-3 border-t border-gray-100 bg-white">
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-xl font-semibold text-[#1B2065F2]">{title} - {professor}</span>
-          </div>
-          <div>
-            <button
-              onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-1 bg-[#51689A] border border-[#1B2065F2] text-white shadow-sm rounded-md px-3 py-1.5"
-            >
-              <Trash2 size={16} />
-              <span className="text-sm">Delete</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>   
-  ) : null;
+
+function fileKindFromUrl(url: string): "pdf" | "spreadsheet" {
+  const path = url.split("?")[0].split("#")[0].toLowerCase()
+  if (path.endsWith(".pdf")) return "pdf"
+  if (/\.(xlsx|xls|csv|ods)$/.test(path)) return "spreadsheet"
+  return "pdf"
+}
+
+function extensionForDownload(url: string, kind: "pdf" | "spreadsheet"): string {
+  const path = url.split("?")[0].split("#")[0].toLowerCase()
+  const m = path.match(/(\.[a-z0-9]+)$/)
+  if (m) return m[1]
+  return kind === "pdf" ? ".pdf" : ".xlsx"
+}
+
+export default function PdfPreview({
+  url,
+  title = "Schedule Title",
+  date = "01/01/2026",
+  professor = "Prof Moh",
+  width = "100%",
+  height = 160,
+}: PdfPreviewProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [loadingDoc, setLoadingDoc] = useState(false)
+  const [viewerFailed, setViewerFailed] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const { language } = useLanguage()
+  const isArabic = language === "ar"
+  const isLocalAsset = url.startsWith("/")
+  const kind = fileKindFromUrl(url)
+
+  useEffect(() => {
+    if (!isOpen) return
+    if (kind !== "pdf") {
+      setLoadingDoc(false)
+      setBlobUrl(null)
+      setViewerFailed(false)
+      return
+    }
+
+    if (isLocalAsset) {
+      setLoadingDoc(false)
+      setViewerFailed(false)
+      setBlobUrl(null)
+      return
+    }
+
+    let active = true
+    let nextBlobUrl: string | null = null
+
+    const fetchBlob = async () => {
+      try {
+        setViewerFailed(false)
+        setLoadingDoc(true)
+        const token = getAccessToken()
+        const res = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        if (!res.ok) throw new Error("Failed to load schedule file")
+        const blob = await res.blob()
+        nextBlobUrl = URL.createObjectURL(blob)
+        if (active) setBlobUrl(nextBlobUrl)
+      } catch (err) {
+        console.error("Failed to load file blob:", err)
+        if (active) setBlobUrl(null)
+      } finally {
+        if (active) setLoadingDoc(false)
+      }
+    }
+
+    fetchBlob()
+    return () => {
+      active = false
+      if (nextBlobUrl) URL.revokeObjectURL(nextBlobUrl)
+      setBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+    }
+  }, [isLocalAsset, isOpen, kind, url])
+
+  const pdfHash = "toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+  const iframeSrc =
+    kind === "pdf" && !isLocalAsset && blobUrl ? `${blobUrl}#${pdfHash}` : null
+
+  const runDownload = async () => {
+    try {
+      setDownloading(true)
+      const token = getAccessToken()
+      const fetchUrl = isLocalAsset ? `${window.location.origin}${url}` : url
+      const res = await fetch(fetchUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error("Download failed")
+      const blob = await res.blob()
+      const ext = extensionForDownload(url, kind)
+      const safe = title.replace(/[^\w\s\-().]/g, "_").trim() || "schedule"
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = objectUrl
+      a.download = `${safe}${ext}`
+      a.rel = "noopener"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(objectUrl)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const PlaceholderIcon =
+    kind === "spreadsheet" ? (
+      <FileSpreadsheet className="h-10 w-10 text-muted-foreground/80" aria-hidden />
+    ) : (
+      <FileText className="h-10 w-10 text-muted-foreground/80" aria-hidden />
+    )
 
   return (
-    <>
-      {/* Preview Card */}
-      <div
-        onClick={() => setIsOpen(true)}
-        className="cursor-pointer flex flex-col group transition-transform hover:scale-[1.02]"
-        style={{ width }}
-      >
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className={`group flex h-auto cursor-pointer flex-col text-start transition-transform hover:scale-[1.02] hover:bg-transparent ${
+            isOpen ? "rounded-md ring-2 ring-[#39A5FF] ring-offset-2 ring-offset-background" : ""
+          }`}
+          style={{ width }}
+        >
         <div
-          className="w-full bg-gray-100 overflow-hidden flex items-start justify-center border-t border-l border-r border-[#1B2065F2] rounded-t-md"
+          className="relative flex w-full items-center justify-center overflow-hidden rounded-t-md border border-border bg-muted/80 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ height }}
         >
-          {thumbnail ? (
-            <img src={thumbnail} alt="PDF preview" className="w-full h-full object-cover object-top" />
+          {PlaceholderIcon}
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <span className="rounded-md border border-[#51689A]/60 bg-white/80 px-3 py-1 text-xs font-semibold text-[#1B2065F2] backdrop-blur-sm">
+              {isArabic ? "فتح" : "Open"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex w-full flex-col rounded-b-lg border border-border bg-card">
+          <div className="flex w-full items-center justify-center border-b border-border px-2 py-1 text-center text-[10px] font-semibold text-foreground">
+            {date}
+          </div>
+          <div className="flex w-full items-center justify-center bg-primary px-2 py-1.5 text-center text-xs font-medium text-primary-foreground">
+            {title}
+          </div>
+        </div>
+      </Button>
+      </DialogTrigger>
+
+      <DialogContent className="grid h-[100dvh] max-h-[100dvh] max-w-[97vw] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-border/50 bg-card/95 p-0 supports-backdrop-filter:backdrop-blur-md sm:max-w-6xl">
+        <DialogHeader className="border-b border-border/70 px-5 py-3">
+          <DialogTitle className="truncate text-sm sm:text-base">{title}</DialogTitle>
+          <DialogDescription className="truncate text-xs sm:text-sm">
+            {isArabic ? "المدرس" : "Teacher"}: {professor} - {date}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="h-full min-h-0 overflow-hidden bg-muted/30 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {kind === "spreadsheet" ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+              <FileSpreadsheet className="h-16 w-16 text-muted-foreground" aria-hidden />
+              <p className="max-w-md text-sm text-muted-foreground">
+                {isArabic
+                  ? "ملف Excel — استخدم زر التحميل لحفظه على جهازك."
+                  : "Spreadsheet file — use Download to save it to your device."}
+              </p>
+            </div>
+          ) : isLocalAsset ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                {isArabic
+                  ? "معاينة الملفات المحلية غير متاحة. استخدم التحميل."
+                  : "Local file preview is not available. Use download."}
+              </p>
+            </div>
+          ) : iframeSrc && !viewerFailed ? (
+            <iframe
+              src={iframeSrc}
+              width="100%"
+              height="100%"
+              title={title}
+              scrolling="no"
+              className="h-full min-h-0 w-full overflow-hidden border-none object-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              onError={() => setViewerFailed(true)}
+            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-gray-300 border-t-[#1B2065F2] rounded-full animate-spin" />
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-4">
+              {loadingDoc ? (
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-primary" />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {isArabic
+                    ? "تعذر عرض الملف هنا. استخدم التحميل."
+                    : "Could not preview this file. Use download below."}
+                </p>
+              )}
             </div>
           )}
         </div>
-        <div className="flex flex-col items-center gap-0 w-full">
-          <div className="flex bg-white text-[#1B2065F2] w-full">
-            <div className="w-1/2 border border-[#1B2065F2] px-2 py-1 flex items-center justify-center text-[10px] font-bold text-center">{date}</div>
-            <div className="w-1/2 border-t border-r border-b border-[#1B2065F2] px-2 py-1 flex items-center justify-center text-[10px] font-bold text-center leading-tight">{professor}</div>
-          </div>
-          <div className="w-full bg-[#1B2065F2] border border-[#1B2065F2] rounded-b-lg px-2 py-1.5 text-white flex items-center justify-center text-xs font-medium text-center">{title}</div>
-        </div>
-      </div>
 
-      {/* Modal rendered at document.body — escapes any transform context */}
-      {typeof window !== 'undefined' && createPortal(modal, document.body)}
-    </>
-  );
+        <div className="flex items-center justify-center border-t border-border/70 px-5 py-3">
+          <Button
+            type="button"
+            disabled={downloading}
+            onClick={runDownload}
+            className="bg-[#51689A] text-white hover:bg-[#445680] hover:text-white"
+          >
+            <Download size={14} />
+            {downloading
+              ? isArabic
+                ? "جارٍ التحميل..."
+                : "Downloading..."
+              : isArabic
+                ? "تحميل"
+                : "Download"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }

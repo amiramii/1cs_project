@@ -1,13 +1,34 @@
 import MyDropzone from "../DropBox";
-import { Upload, SquarePlus , GraduationCap , UserRoundPen , ChevronDown , CalendarCheck} from "lucide-react";
-import {Button, buttonVariants} from "@/components/ui/button";
-import { useCallback, useState } from "react";
+import {
+  Upload,
+  SquarePlus,
+  GraduationCap,
+  UserRoundPen,
+  CalendarCheck,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAccessToken } from "@/lib/tokenStorage";
+import { useLanguage } from "@/app/_components/language-provider";
+import StudScheduleList from "@/app/_components/admin/schedules/StudScheduleList";
+import ScheduleYearCombobox from "@/app/_components/admin/schedules/ScheduleYearCombobox";
 
-export default function SchedulsMiddleContainer() {
-  const [selectedValue, setSelectedValue] = useState("default");
-  const [activeTab, setActiveTab] = useState("professor");
+export type SchedualsVariant = "admin" | "student";
+
+type SchedMidProps = {
+  variant?: SchedualsVariant;
+  stagedPdf?: File | null;
+  onStagedPdfChange?: (file: File | null) => void;
+};
+
+export default function SchedulsMiddleContainer({
+  variant = "admin",
+  stagedPdf = null,
+  onStagedPdfChange,
+}: SchedMidProps) {
+  const [activeTab, setActiveTab] = useState<"professor" | "student">("professor");
   const [year, setYear] = useState("default");
   const [title, setTitle] = useState("");
   const [professorName, setProfessorName] = useState("");
@@ -16,186 +37,252 @@ export default function SchedulsMiddleContainer() {
   const [successMsg, setSuccessMsg] = useState(false);
   const router = useRouter();
   const ProfessorSchedulesPath = () => {
-    router.push("/Scheduals/Professor-Schedules"); 
+    router.push("/Scheduals/Professor-Schedules");
   };
   const StudentSchedulesPath = () => {
-    router.push("/Scheduals/Student-Schedules"); 
+    router.push("/Scheduals/Student-Schedules");
   };
-  const toBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-  });
-  const handleDrop = useCallback((acceptedFiles: File[]) => {
-  console.log("Files received:", acceptedFiles);
-  if (acceptedFiles.length > 0) {
-    setDroppedFile(acceptedFiles[0]);
-    console.log("File set:", acceptedFiles[0].name); // verify in console
-  }
-}, []);
-const handleUpload = async () => {
-  if (!droppedFile || !title) return;
+  const { language } = useLanguage();
+  const isArabic = language === "ar";
 
-  setIsUploading(true);
-  try {
-    const formData = new FormData();
-    formData.append("title", title);
-    formData.append("pdf", droppedFile);
-    formData.append("audience", activeTab);
+  const effectivePdf = stagedPdf ?? droppedFile;
 
-    const token = getAccessToken(); 
-    const res = await fetch("http://127.0.0.1:8000/api/documents/", {
-      method: "POST",
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }), 
-      },
-      body: formData,
+  const stripScheduleExtension = (name: string) =>
+    name.replace(/\.(pdf|xlsx|xls|csv)$/i, "").trim();
+
+  useEffect(() => {
+    if (!stagedPdf) return;
+    setTitle((prev) => {
+      if (prev.trim()) return prev;
+      const fromName = stripScheduleExtension(stagedPdf.name);
+      return fromName || prev;
     });
+  }, [stagedPdf]);
 
-    if (res.ok) {
-      console.log("Schedule uploaded successfully");
-      setSuccessMsg(true);
-      setTimeout(() => setSuccessMsg(false), 1000);
-    } else {
-      const error = await res.json();
-      console.error("Upload failed:", error);
+  const handleDrop = useCallback(
+    (acceptedFiles: File[]) => {
+      const file = acceptedFiles[0];
+      if (!file) return;
+      setDroppedFile(file);
+      onStagedPdfChange?.(file);
+      setTitle((prev) => {
+        const trimmed = prev.trim();
+        if (trimmed) return prev;
+        const fromName = stripScheduleExtension(file.name);
+        return fromName || prev;
+      });
+    },
+    [onStagedPdfChange]
+  );
+
+  const handleUpload = async () => {
+    if (!effectivePdf || !title.trim()) return;
+
+    setIsUploading(true);
+    try {
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(
+        /\/+$/,
+        ""
+      );
+      const audienceValue = activeTab === "professor" ? "teacher" : "student";
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("pdf", effectivePdf);
+      formData.append("audience", audienceValue);
+      if (activeTab === "student" && year !== "default") {
+        formData.append("year", year);
+      }
+      if (activeTab === "professor" && professorName.trim()) {
+        formData.append("professorName", professorName.trim());
+      }
+
+      const token = getAccessToken();
+      const res = await fetch(`${apiBase}/api/documents/`, {
+        method: "POST",
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: formData,
+      });
+
+      if (res.ok) {
+        setSuccessMsg(true);
+        setTimeout(() => setSuccessMsg(false), 1000);
+        setTitle("");
+        setProfessorName("");
+        setYear("default");
+        setDroppedFile(null);
+        onStagedPdfChange?.(null);
+      } else {
+        const error = await res.json();
+        console.error("Upload failed:", error);
+      }
+    } catch (err) {
+      console.error("Error uploading:", err);
+    } finally {
+      setIsUploading(false);
     }
-  } catch (err) {
-    console.error("Error uploading:", err);
-  } finally {
-    setIsUploading(false);
-  }
-};
-  return (
-  <div className="flex flex-col gap-20 items-center justify-center">
-    <div className="flex flex-col items-center gap-2 py-7 px-5 border border-[#1B2065] rounded-md bg-[#FEF9F9] shadow-[0px_4px_8px_rgba(0,0,0,0.4)] w-[50vw]">
-      <div className="grid grid-rows-3 place-items-center gap-4">
+  };
 
-        {/* ROW 1 - Title centered */}
-        <h1 className="text-[#1B2065F2] font-semibold text-2xl">Add Schedule</h1>
-      
-        {/* ROW 2 - Student-Prof Radio buttons*/}
-        <div className="flex flex-row gap-44">
-          {[
-           
-            { label: "Student", value: "student", icon: <GraduationCap size={18} /> },
-            { label: "Professor", value: "teacher", icon: <UserRoundPen size={18} /> },
-          ].map((option) => (
-            <label key={option.value} className="cursor-pointer">
-            <input
-              type="radio"
-              name="audiance"
-              value={option.value}
-              className="peer hidden"
-              checked={activeTab === option.value} 
-              onChange={() => setActiveTab(option.value)}
-            />
-            {/* The Styled Button Container */}
-            <div className="
-              flex items-center justify-center gap-2 px-5 py-2 h-9 w-40 rounded-xl border border-[#1B2065F2] transition-all
-              text-[#1B2065F2] font-semibold
-              peer-checked:bg-[#51689A] peer-checked:text-white
-              hover:bg-[#1B2065F2]/10
-            ">
-
-              {option.icon}
-              <span>{option.label}</span>
-            </div>
-          </label>
-          ))}
-      </div>
-        {/*ROW 3 - Year and Professor name*/}
-        <div className="flex flex-row gap-20">
-          <div className="relative w-60 h-10">
-            {year === "default" && 
-              <ChevronDown
-                className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#1B2065F2]"
-                size={18}
-              />
-            }
-    
-            <select
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              disabled={activeTab === "professor"}
-              className="w-full h-full bg-white text-[#1B2065F2] py-2 px-4 border border-[#1B2065] rounded-md text-left shadow-md appearance-none cursor-pointer"
-            >
-              <option value="default" disabled hidden>Year</option>
-              <option value="All" className="bg-white text-[#51689A]">All Years</option>
-              <option value="1CS" className="bg-white text-[#51689A]">1CP</option>
-              <option value="2CS" className="bg-white text-[#51689A]">2CP</option>
-              <option value="1CS" className="bg-white text-[#51689A]">1CS</option>
-              <option value="2CS" className="bg-white text-[#51689A]">2CS</option>
-              <option value="1CS" className="bg-white text-[#51689A]">3CS</option>
-              <option value="2CS" className="bg-white text-[#51689A]">Doctorats</option>
-            </select>
-          </div>
-          <input 
-            type="text" 
-            placeholder="Professor Name..." 
-            className="w-60 h-10 bg-white text-black py-2 px-4 border border-[#1B2065] rounded-md text-left shadow-md"
-            disabled={activeTab === "student"}
-          />
+  if (variant === "student") {
+    return (
+      <div className="mx-auto w-full min-w-0 max-w-4xl space-y-4">
+        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-5 shadow-sm">
+          <h1 className="text-lg font-semibold text-foreground">
+            {isArabic ? "الجداول" : "Schedules"}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isArabic
+              ? "جدولك الدراسي المنشور من الإدارة."
+              : "Your class timetable as published by the office."}
+          </p>
         </div>
-        {/* ROW 4 - Shedule Title */}
-        <input
-          type="text"
-          placeholder="Schedule Title..."
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="w-60 h-9 bg-white text-black py-2 px-4 border border-[#1B2065] rounded-md text-left shadow-md"
-        />
-        {/* ROW 5 -  Dropzone */}
-        <div className="">
+        <StudScheduleList />
+      </div>
+    );
+  }
+
+  const showAudienceToggle = variant === "admin";
+
+  return (
+    <div className="mx-auto w-full min-w-0 max-w-full md:w-11/12 lg:w-9/12 xl:w-8/12 space-y-6">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
+        <div className="mx-auto w-full space-y-5">
+          <h1 className="text-center text-xl font-semibold text-foreground sm:text-2xl">
+            {isArabic ? "إضافة جدول" : "Add schedule"}
+          </h1>
+
+          <p className="text-center text-xs text-muted-foreground sm:text-sm">
+            {isArabic
+              ? "يمكنك إفلات ملف PDF في أي مكان في الصفحة لتحديده، ثم اضغط «رفع الجدول» لحفظه في قاعدة البيانات."
+              : "Drop a PDF anywhere on this page to select it, then click “Upload Schedule” to save it to the database."}
+          </p>
+
+          {showAudienceToggle && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[
+                {
+                  label: isArabic ? "طالب" : "Student",
+                  value: "student" as const,
+                  icon: <GraduationCap size={18} />,
+                },
+                {
+                  label: isArabic ? "أستاذ" : "Professor",
+                  value: "professor" as const,
+                  icon: <UserRoundPen size={18} />,
+                },
+              ].map((option) => (
+                <label key={option.value} className="cursor-pointer">
+                  <input
+                    type="radio"
+                    name="audience"
+                    value={option.value}
+                    className="peer sr-only"
+                    checked={activeTab === option.value}
+                    onChange={() => setActiveTab(option.value)}
+                  />
+                  <div className="flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-background text-foreground transition-colors peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground hover:bg-accent">
+                    {option.icon}
+                    <span>{option.label}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <ScheduleYearCombobox
+              value={year}
+              onChange={setYear}
+              disabled={activeTab === "professor"}
+              isArabic={isArabic}
+            />
+            <Input
+              type="text"
+              placeholder={isArabic ? "اسم الأستاذ..." : "Professor Name..."}
+              value={professorName}
+              onChange={(event) => setProfessorName(event.target.value)}
+              className="h-11 rounded-md border-border bg-background disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={activeTab === "student"}
+            />
+          </div>
+
+          <Input
+            type="text"
+            placeholder={isArabic ? "عنوان الجدول..." : "Schedule Title..."}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="h-11 rounded-md border-border bg-background"
+          />
+
           <MyDropzone
             onDrop={handleDrop}
-            accept={{ "application/pdf": [".pdf"] }}
-            className="group cursor-pointer flex items-center justify-center 
-                       px-6 w-[40vw] h-[18vh] bg-[#D9D9D917] border-2 border-dashed border-gray-300 
-                       rounded-xl bg-white hover:border-[#1B2065] hover:bg-blue-50/30 
-                       transition-all duration-300"
+            accept={{
+              "application/pdf": [".pdf"],
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+              "application/vnd.ms-excel": [".xls"],
+              "text/csv": [".csv"],
+            }}
+            className="group mx-auto flex min-h-36 w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-border bg-background px-4 transition-colors hover:border-primary hover:bg-accent/30"
           >
-            <div className="flex flex-row items-center gap-2">
-              <SquarePlus size={24} className="text-gray-300 group-hover:text-[#1B2065F2]" />
-              <p className="text-sm font-medium text-slate-600">
-                {droppedFile ? droppedFile.name : "Drop file"}
+            <div className="flex max-w-full items-center gap-2 text-muted-foreground">
+              <SquarePlus size={24} className="group-hover:text-primary" />
+              <p className="w-full truncate whitespace-nowrap text-center text-sm font-medium">
+                {effectivePdf
+                  ? effectivePdf.name
+                  : isArabic
+                    ? "قم بإفلات ملف PDF أو Excel أو اختره"
+                    : "Drop or choose a PDF or Excel file"}
               </p>
             </div>
           </MyDropzone>
+
+          <div className="flex justify-center">
+            <Button
+              type="button"
+              onClick={handleUpload}
+              disabled={isUploading || !effectivePdf || !title.trim()}
+              className="inline-flex h-10 w-full sm:w-3/5 lg:w-1/2 items-center justify-center gap-2 rounded-md bg-[#51689A] px-4 text-sm font-semibold text-white-primary transition-colors hover:bg-[#445680] disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              <Upload size={18} />
+              {isUploading
+                ? isArabic
+                  ? "جارٍ الرفع..."
+                  : "Uploading..."
+                : isArabic
+                  ? "رفع الجدول"
+                  : "Upload Schedule"}
+            </Button>
+          </div>
+          {successMsg && (
+            <p className="text-center text-sm text-emerald-600 dark:text-emerald-400">
+              {isArabic ? "تم رفع الجدول بنجاح!" : "Schedule uploaded successfully!"}
+            </p>
+          )}
         </div>
-        {/* ROW 6 - Upload File button */}
-        <button 
-        onClick={handleUpload}
-        disabled={isUploading || !droppedFile || !title}
-        className="flex justify-center items-center gap-2 px-5 py-2 rounded-md h-9 w-[32vw] border border-[#1B2065F2] bg-[#1B2065F2] text-white font-semibold hover:bg-[#51689A] transition-all">
-          <Upload size={18} className="text-white"/>
-          {isUploading ? "Uploading..." : "Upload Schedule"}
-        </button>
-        {successMsg && (
-          <p className="text-green-600 text-sm">Schedule uploaded successfully!</p>
-        )}
       </div>
+
+      {variant === "admin" && (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Button
+            type="button"
+            onClick={ProfessorSchedulesPath}
+            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#51689A] py-5 text-center text-white-primary hover:bg-[#445680]"
+          >
+            <CalendarCheck className="text-white-primary" size={22} />
+            {isArabic ? "جداول الأساتذة" : "Professors Schedule"}
+          </Button>
+          <Button
+            type="button"
+            onClick={StudentSchedulesPath}
+            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#74A7BD] py-5 text-center text-white-primary hover:bg-[#5F8DA2]"
+          >
+            <CalendarCheck className="text-white-primary" size={22} />
+            {isArabic ? "جداول الطلاب" : "Students Schedule"}
+          </Button>
+        </div>
+      )}
+
     </div>
-    <div className="flex flex-row items-center gap-40">
-      <Button
-        onClick={ProfessorSchedulesPath}
-        className=" w-[24vw] bg-[#1B2065F2] border rounded-xl text-white font-semibold p-9 shadow-md"
-      >
-        <CalendarCheck className="text-white size-{28}"/>
-        Professors
-        Schedule
-      </Button>
-      <Button
-        onClick={StudentSchedulesPath}
-        className="w-[24vw] bg-[#1B2065F2] border rounded-xl text-white font-semibold p-9 shadow-md"
-      >
-        <CalendarCheck className="text-white"/>
-        Students 
-        Schedule
-      </Button>
-    </div>
-  </div>
   );
 }

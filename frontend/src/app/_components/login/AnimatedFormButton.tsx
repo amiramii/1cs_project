@@ -12,6 +12,8 @@
 
 import * as React from "react"
 import { Loader2 } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 export type AnimatedFormButtonVariant = "solid" | "outline" | "login"
@@ -49,13 +51,15 @@ export function AnimatedFormButton({
     loading && loadingLabel !== undefined ? loadingLabel : children
 
   return (
-    <button
+    <Button
       type={type}
+      variant="ghost"
       disabled={disabled || loading}
       onClick={onClick}
       aria-busy={loading}
       className={cn(
-        "w-full min-h-11 py-2.5 px-4 font-montserrat text-base md:text-lg rounded-full relative flex items-center justify-center gap-2 group overflow-hidden active:translate-y-px disabled:pointer-events-none disabled:opacity-55",
+        "group relative h-auto min-h-11 w-full overflow-hidden rounded-full border-0 bg-transparent px-4 py-2.5 font-montserrat text-base shadow-none ring-0 ring-offset-0 hover:bg-transparent focus-visible:ring-0 md:text-lg",
+        "flex items-center justify-center gap-2 active:translate-y-px disabled:pointer-events-none disabled:opacity-55",
         animateHover &&
           "transition-[transform,box-shadow] duration-500 ease-out",
         !animateHover && "transition-transform duration-200",
@@ -116,6 +120,6 @@ export function AnimatedFormButton({
       <span className="relative z-10 inline-flex items-center justify-center gap-2 transition-colors duration-300">
         {label}
       </span>
-    </button>
+    </Button>
   )
 }

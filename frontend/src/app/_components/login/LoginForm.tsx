@@ -18,14 +18,13 @@ import { usePathname, useRouter } from "next/navigation"
 import EmailInput from "./EmailInput"
 import login from "@/lib/auth"
 import {
-  DEFAULT_APP_ROLE,
   EMAIL_REGEX,
   PASSWORD_SYMBOL_REGEX,
   getDashboardHomePath,
   getLoginTexts,
-  getStoredLanguage,
-  setStoredLanguage,
 } from "../../../lib/constants"
+import { getCurrentAppRole } from "@/lib/tokenStorage"
+import { useLanguage } from "@/app/_components/language-provider"
 import SubmitButton from "./SubmitButton"
 import LanguageMenu from "./LanguageMenu"
 import PasswordInput from "./PasswordInput"
@@ -34,7 +33,7 @@ export default function LoginForm() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const [language, setLanguage] = useState<"en" | "ar">(() => getStoredLanguage())
+  const { language, setLanguage } = useLanguage()
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
 
@@ -46,10 +45,6 @@ export default function LoginForm() {
   const prevPathRef = useRef<string | undefined>(undefined)
 
   const t = getLoginTexts(language)
-
-  useEffect(() => {
-    setStoredLanguage(language)
-  }, [language])
 
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
@@ -87,8 +82,6 @@ export default function LoginForm() {
     return ""
   }
 
-  const dir = language === "ar" ? "rtl" : "ltr"
-
   const { validator, handleReset, handleSubmit: validatorHandleSubmit } =
     useValidator({
       initValues: data,
@@ -118,7 +111,7 @@ export default function LoginForm() {
     try {
       await login(values.email, values.password, rememberMe)
 
-      const role = DEFAULT_APP_ROLE
+      const role = getCurrentAppRole("admin")
       router.push(getDashboardHomePath(role))
     } catch (err) {
       setApiError(
@@ -151,10 +144,7 @@ export default function LoginForm() {
         />
       </header>
 
-      <main
-        className="w-full bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-4 px-5 md:px-6 text-foreground"
-        dir={dir}
-      >
+      <main className="w-full bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-4 px-5 md:px-6 text-foreground">
         <div className="self-end mb-2">
           <LanguageMenu language={language} onChange={setLanguage} />
         </div>
