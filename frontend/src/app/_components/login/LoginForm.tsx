@@ -144,7 +144,7 @@ export default function LoginForm() {
         />
       </header>
 
-      <main className="w-full bg-card/80 backdrop-blur-3xl border border-border flex flex-col rounded-3xl py-4 px-5 md:px-6 text-foreground">
+      <main className="w-full bg-card/80 backdrop-blur-3xl  flex flex-col rounded-3xl py-4 px-5 md:px-6 text-foreground shadow-lg">
         <div className="self-end mb-2">
           <LanguageMenu language={language} onChange={setLanguage} />
         </div>

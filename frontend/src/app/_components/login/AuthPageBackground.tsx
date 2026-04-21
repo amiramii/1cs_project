@@ -5,18 +5,18 @@ export function AuthPageBackground() {
   return (
     <>
       <Image
-        src="/bg2H.svg"
+        src="/bgC.svg"
         alt=""
         fill
         priority
-        className="object-cover scale-x-[-1] -z-10 dark:hidden "
+        className="object-cover  -z-10 dark:hidden blur-sm"
       />
       <Image
-        src="/bgD3.svg"
+        src="/bgCD.svg"
         alt=""
         fill
         priority
-        className="object-cover scale-x-[-1] -z-10 hidden dark:block "
+        className="object-cover  -z-10 hidden dark:block blur-sm"
       />
     </>
   )
