@@ -12,6 +12,7 @@ export default function ProfScheduleList() {
       nextLabelEn="Students"
       nextLabelAr="الطلاب"
       audience="professor"
+      allowDelete
     />
   )
 }

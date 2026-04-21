@@ -1,14 +1,11 @@
-import { previewLoadingDelay } from "@/lib/previewLoadingDelay"
-
 /**
- * Remounts on each navigation within (routes), so the preview delay runs
- * every time (unlike layout). Keeps loading UI visible longer for review.
+ * Remounts on each navigation within (routes). Kept synchronous so loading.tsx
+ * can show immediately; avoid async work here (it caused content/loader ordering glitches).
  */
-export default async function RoutesTemplate({
+export default function RoutesTemplate({
   children,
 }: {
   children: React.ReactNode
 }) {
-  await previewLoadingDelay()
   return <>{children}</>
 }

@@ -17,7 +17,7 @@ export default function Page() {
   }, [router]);
 
   return (
-    <div className="w-full space-y-4">
+    <div className="flex w-full min-w-0 max-w-none flex-1 flex-col self-stretch min-h-0">
       <ScheduleList />
     </div>
   );

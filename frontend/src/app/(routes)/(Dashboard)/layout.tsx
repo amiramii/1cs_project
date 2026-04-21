@@ -166,7 +166,7 @@ export default function DashboardLayout({
         </div>
       </header>
       <NotificationOnboardingDialog />
-      <main className={`mx-auto flex min-w-0 max-w-full flex-1 flex-col overflow-x-hidden px-4 py-4 sm:px-5 lg:px-6 ${isSchooling ? "items-stretch" : "items-center"}`}>
+      <main className="mx-auto flex w-full min-w-0 max-w-none flex-1 flex-col items-stretch overflow-x-hidden px-4 py-4 sm:px-5 lg:px-6">
         <DashboardRoleGuard>{children}</DashboardRoleGuard>
       </main>
       <DevRoleSwitcher />

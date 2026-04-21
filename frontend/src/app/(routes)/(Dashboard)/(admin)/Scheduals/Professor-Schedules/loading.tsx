@@ -2,8 +2,8 @@ import { DashboardPageSkeleton } from "@/app/_components/dashboard/DashboardPage
 
 export default function ProfessorSchedulesLoading() {
   return (
-    <div className="flex w-full min-w-0 flex-col gap-4">
-      <DashboardPageSkeleton variant="table" />
+    <div className="flex w-full min-w-0 max-w-none flex-1 flex-col self-stretch gap-4">
+      <DashboardPageSkeleton variant="schedule" />
     </div>
   )
 }

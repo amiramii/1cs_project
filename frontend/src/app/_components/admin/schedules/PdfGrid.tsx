@@ -91,7 +91,7 @@ const normalizePdfUrl = (rawUrl: string) => {
               {error}
             </p>
           )}
-          <div className="grid w-full grid-cols-1 gap-4 pb-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid w-full grid-cols-1 gap-3 pb-4 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 lg:gap-4">
             {schedules.map((item) => (
               <div key={item.id} className="w-full">
                 <PdfPreview
@@ -106,3 +106,4 @@ const normalizePdfUrl = (rawUrl: string) => {
         </>
     );
 }
+ 

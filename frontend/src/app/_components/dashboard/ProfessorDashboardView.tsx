@@ -75,24 +75,7 @@ export default function ProfessorDashboardView() {
         ))}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">
-          {isAr ? "انتقل إلى" : "Go to"}
-        </h2>
-        <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {links.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-emerald-500/30 hover:bg-emerald-500/5"
-              >
-                <span>{item.label}</span>
-                <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+      
     </div>
   );
 }
