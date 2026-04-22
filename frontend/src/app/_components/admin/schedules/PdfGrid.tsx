@@ -87,7 +87,7 @@ const normalizePdfUrl = (rawUrl: string) => {
     return (
         <>
           {error && (
-            <p className="pb-3 text-center text-xs text-amber-600 dark:text-amber-400">
+            <p className="pb-3 text-center text-xs text-[#E7CE51]">
               {error}
             </p>
           )}

@@ -1,6 +1,6 @@
 import MyDropzone from "../DropBox";
 import {
-  Upload,
+  Download,
   SquarePlus,
   GraduationCap,
   UserRoundPen,
@@ -216,17 +216,7 @@ export default function SchedulsMiddleContainer({
 
   if (variant === "student") {
     return (
-      <div className="mx-auto w-full min-w-0 max-w-4xl space-y-4">
-        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-5 shadow-sm">
-          <h1 className="text-lg font-semibold text-foreground">
-            {isArabic ? "الجداول" : "Schedules"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isArabic
-              ? "جدولك الدراسي المنشور من الإدارة."
-              : "Your class timetable as published by the office."}
-          </p>
-        </div>
+      <div className="mx-auto w-full min-w-0 max-w-6xl">
         <StudScheduleList />
       </div>
     );
@@ -332,9 +322,9 @@ export default function SchedulsMiddleContainer({
               type="button"
               onClick={handleUpload}
               disabled={isUploading || !effectivePdf || !title.trim()}
-              className="inline-flex h-10 w-full sm:w-3/5 lg:w-1/2 items-center justify-center gap-2 rounded-md bg-[#51689A] px-4 text-sm font-semibold text-white-primary transition-colors hover:bg-[#445680] disabled:cursor-not-allowed disabled:opacity-55"
+              className="inline-flex h-10 w-full sm:w-3/5 lg:w-1/2 items-center justify-center gap-2 rounded-md bg-[#51689A] px-4 text-sm font-semibold text-[#FEF9F9] transition-colors hover:bg-[#51689A]/90 disabled:cursor-not-allowed disabled:opacity-55"
             >
-              <Upload size={18} />
+              <Download size={18} className="shrink-0" aria-hidden />
               {isUploading
                 ? isArabic
                   ? "جارٍ الرفع..."
@@ -350,7 +340,7 @@ export default function SchedulsMiddleContainer({
             </p>
           )}
           {successMsg && (
-            <p className="text-center text-sm text-emerald-600 dark:text-emerald-400">
+            <p className="text-center text-sm text-[#74A7BD]">
               {isArabic ? "تم رفع الجدول بنجاح!" : "Schedule uploaded successfully!"}
             </p>
           )}
@@ -362,17 +352,17 @@ export default function SchedulsMiddleContainer({
           <Button
             type="button"
             onClick={ProfessorSchedulesPath}
-            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#51689A] py-4 text-center text-white-primary hover:bg-[#445680]"
+            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#51689A] py-4 text-center text-[#FEF9F9] hover:bg-[#51689A]/90"
           >
-            <CalendarCheck className="text-white-primary" size={22} />
+            <CalendarCheck className="text-[#FEF9F9]" size={22} />
             {isArabic ? "جداول الأساتذة" : "Professors Schedule"}
           </Button>
           <Button
             type="button"
             onClick={StudentSchedulesPath}
-            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#74A7BD] py-4 text-center text-white-primary hover:bg-[#5F8DA2]"
+            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#74A7BD] py-4 text-center text-[#FEF9F9] hover:bg-[#74A7BD]/90"
           >
-            <CalendarCheck className="text-white-primary" size={22} />
+            <CalendarCheck className="text-[#FEF9F9]" size={22} />
             {isArabic ? "جداول الطلاب" : "Students Schedule"}
           </Button>
         </div>

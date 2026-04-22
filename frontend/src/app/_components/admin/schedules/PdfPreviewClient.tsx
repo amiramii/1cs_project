@@ -29,6 +29,8 @@ export type PdfPreviewProps = {
   height?: number
   onDelete?: () => void | Promise<void>
   deletePending?: boolean
+  /** `stacked`: date row only, then navy footer with title (prof schedules tab design). */
+  cardLayout?: "default" | "stacked"
 }
 
 function fileKindFromUrl(url: string): 'pdf' | 'spreadsheet' {
@@ -112,6 +114,7 @@ export default function PdfPreviewClient({
   height = 168,
   onDelete,
   deletePending = false,
+  cardLayout = 'default',
 }: PdfPreviewProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
@@ -309,7 +312,7 @@ export default function PdfPreviewClient({
       <div
         className={cn(
           'relative flex w-full flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm transition-[box-shadow,ring]',
-          isOpen && 'ring-[3px] ring-[#39A5FF] ring-offset-2 ring-offset-background'
+          isOpen && 'ring-[3px] ring-[#74A7BD] ring-offset-2 ring-offset-background'
         )}
         style={{ width }}
       >
@@ -404,15 +407,21 @@ export default function PdfPreviewClient({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 divide-x divide-slate-300 bg-white py-2 text-center text-[11px] font-semibold text-[#1B2065] sm:text-xs">
-          <div className="truncate px-2">{date}</div>
-          <div className="truncate px-2" title={professor}>
-            {professor}
+        {cardLayout === 'stacked' ? (
+          <div className="border-t border-slate-200 bg-white py-2.5 text-center text-sm font-semibold tabular-nums text-[#1B2065]">
+            {date}
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-2 divide-x divide-slate-300 bg-white py-2 text-center text-[11px] font-semibold text-[#1B2065] sm:text-xs">
+            <div className="truncate px-2">{date}</div>
+            <div className="truncate px-2" title={professor}>
+              {professor}
+            </div>
+          </div>
+        )}
 
         <div
-          className="px-2 py-2 text-center text-[11px] font-semibold leading-snug text-white sm:text-xs"
+          className="px-3 py-2.5 text-center text-xs font-semibold leading-snug text-white sm:text-sm"
           style={{ backgroundColor: navy }}
         >
           {title}

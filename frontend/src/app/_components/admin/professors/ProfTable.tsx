@@ -1,27 +1,21 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import {
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
-  PencilLine,
-  Plus,
+  Pencil,
   Search,
   SlidersHorizontal,
   Trash2,
+  UserPlus,
   Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,14 +31,6 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
 import { useLanguage } from "@/app/_components/language-provider"
 
 type Semester = "S1" | "S2"
@@ -262,15 +248,13 @@ const PAGE_SIZE = 5
 export default function DataTable() {
   const { language } = useLanguage()
   const isArabic = language === "ar"
-  const [professors, setProfessors] = useState<ProfessorRow[]>(PROFESSORS)
+  const professors = PROFESSORS
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<FilterId>("all")
   const [openFilter, setOpenFilter] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [draftProfessor, setDraftProfessor] = useState<ProfessorRow | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -299,8 +283,22 @@ export default function DataTable() {
   const currentPageSafe = Math.min(currentPage, totalPages)
   const pageStart = (currentPageSafe - 1) * PAGE_SIZE
   const visibleRows = filteredRows.slice(pageStart, pageStart + PAGE_SIZE)
+
   const allVisibleSelected =
-    visibleRows.length > 0 && visibleRows.every((row) => selectedIds.includes(row.id))
+    visibleRows.length > 0 &&
+    visibleRows.every((row) => selectedIds.has(row.id))
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        for (const row of visibleRows) next.delete(row.id)
+      } else {
+        for (const row of visibleRows) next.add(row.id)
+      }
+      return next
+    })
+  }
 
   const pageItems = useMemo(() => {
     if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1)
@@ -323,140 +321,33 @@ export default function DataTable() {
     }
   }, [currentPage, totalPages])
 
-  const toggleSelection = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    )
-  }
-
-  const toggleSelectAllVisible = () => {
-    if (allVisibleSelected) {
-      const visibleSet = new Set(visibleRows.map((row) => row.id))
-      setSelectedIds((prev) => prev.filter((id) => !visibleSet.has(id)))
-      return
-    }
-
-    const merged = new Set([...selectedIds, ...visibleRows.map((row) => row.id)])
-    setSelectedIds(Array.from(merged))
-  }
-
-  const removeSelected = () => {
-    if (selectedIds.length === 0) return
-    setProfessors((prev) => prev.filter((row) => !selectedIds.includes(row.id)))
-    if (editingId && selectedIds.includes(editingId)) {
-      closeEditorSheet()
-    }
-    setSelectedIds([])
-  }
-
   const changePage = (page: number) => {
     if (page < 1 || page > totalPages) return
     setCurrentPage(page)
   }
 
-  const getModuleNames = (row: ProfessorRow) =>
-    Array.from(new Set(row.modules.map((module) => module.module)))
-  const getYears = (row: ProfessorRow) =>
-    Array.from(new Set(row.modules.map((module) => module.year)))
-
-  const openProfessorSheet = (row: ProfessorRow) => {
-    setEditingId(row.id)
-    setDraftProfessor({
-      ...row,
-      modules: row.modules.map((module) => ({ ...module })),
-    })
-    setSheetOpen(true)
-  }
-
-  const updateDraftField = (field: "name" | "email", value: string) => {
-    setDraftProfessor((prev) => (prev ? { ...prev, [field]: value } : prev))
-  }
-
-  const updateDraftModule = (
-    index: number,
-    field: keyof ModuleDetail,
-    value: string
-  ) => {
-    if (field === "id") return
-    setDraftProfessor((prev) => {
-      if (!prev) return prev
-      const modules = prev.modules.map((module, moduleIndex) =>
-        moduleIndex === index
-          ? {
-              ...module,
-              [field]: field === "semester" ? (value as Semester) : value,
-            }
-          : module
-      )
-      return { ...prev, modules }
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
     })
   }
 
-  const addDraftModule = () => {
-    setDraftProfessor((prev) =>
-      prev
-        ? {
-            ...prev,
-            modules: [
-              ...prev.modules,
-              {
-                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                module: "",
-                year: "",
-                groups: "",
-                semester: "S1",
-              },
-            ],
-          }
-        : prev
-    )
-  }
-
-  const removeDraftModule = (index: number) => {
-    setDraftProfessor((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        modules: prev.modules.filter((_, moduleIndex) => moduleIndex !== index),
-      }
+  const toggleRowSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
     })
   }
 
-  const saveDraft = () => {
-    if (!draftProfessor || !editingId) return
+  const primaryModule = (row: ProfessorRow) => row.modules[0] ?? null
 
-    const cleanedDraft: ProfessorRow = {
-      ...draftProfessor,
-      id: editingId,
-      name: draftProfessor.name.trim(),
-      email: draftProfessor.email.trim(),
-      modules: draftProfessor.modules.map((module) => ({
-        ...module,
-        module: module.module.trim(),
-        year: module.year.trim(),
-        groups: module.groups.trim(),
-      })),
-    }
-
-    setProfessors((prev) =>
-      prev.map((row) => (row.id === editingId ? cleanedDraft : row))
-    )
-    closeEditorSheet()
-  }
-
-  const closeEditorSheet = () => {
-    setSheetOpen(false)
-    setEditingId(null)
-    setDraftProfessor(null)
-  }
-
-  const handleSheetOpenChange = (open: boolean) => {
-    if (!open) {
-      closeEditorSheet()
-      return
-    }
-    setSheetOpen(open)
-  }
+  const formatModuleMeta = (m: ModuleDetail) =>
+    `${m.year} · ${m.groups} · ${m.semester}`
 
   const filterLabel = FILTERS.find((item) => item.id === filter)
   const filterText = isArabic ? filterLabel?.labelAr : filterLabel?.labelEn
@@ -473,8 +364,8 @@ export default function DataTable() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:min-w-44 sm:flex-1">
+        <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:flex-1 sm:justify-end">
+          <div className="relative w-full min-w-0 sm:max-w-xs sm:flex-1">
             <Search className="pointer-events-none absolute start-2.5 top-1/2 -translate-y-1/2 text-[#1B2065F2]/70" size={16} />
             <Input
               value={search}
@@ -487,140 +378,192 @@ export default function DataTable() {
             />
           </div>
 
-          <DropdownMenu open={openFilter} onOpenChange={setOpenFilter}>
-            <DropdownMenuTrigger asChild className="rounded-md">
-              <Button size="sm" className="h-9 gap-1 font-light">
-                <SlidersHorizontal size={14} />
-                {isArabic ? "فلتر" : "Filter"}
-                <span className="hidden sm:inline">({filterText})</span>
-                {openFilter ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="p-0">
-              {FILTERS.map((item) => (
-                <DropdownMenuItem
-                  key={item.id}
-                  onClick={() => {
-                    setFilter(item.id)
-                    setCurrentPage(1)
-                  }}
-                >
-                  <span>{isArabic ? item.labelAr : item.labelEn}</span>
-                  {filter === item.id && <Check className="ms-auto" size={14} />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <DropdownMenu open={openFilter} onOpenChange={setOpenFilter}>
+              <DropdownMenuTrigger asChild className="rounded-md">
+                <Button size="sm" className="h-9 gap-1 font-light">
+                  <SlidersHorizontal size={14} />
+                  {isArabic ? "فلتر" : "Filter"}
+                  <span className="hidden sm:inline">({filterText})</span>
+                  {openFilter ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="p-0">
+                {FILTERS.map((item) => (
+                  <DropdownMenuItem
+                    key={item.id}
+                    onClick={() => {
+                      setFilter(item.id)
+                      setCurrentPage(1)
+                    }}
+                  >
+                    <span>{isArabic ? item.labelAr : item.labelEn}</span>
+                    {filter === item.id && <Check className="ms-auto" size={14} />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          {selectedIds.length > 0 && (
-            <Button
-              size="sm"
-              onClick={removeSelected}
-              className="h-9 w-9 bg-[#74A7BD] p-0 text-white hover:bg-[#5F8DA2]"
-              aria-label={isArabic ? "إزالة المحدد" : "Remove selected professors"}
+            <div
+              className="flex items-center gap-0 border-[#51689A]/40 sm:border-s sm:ps-2"
+              aria-hidden
             >
-              <Trash2 size={16} />
-            </Button>
-          )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 text-[#1B2065F2] hover:bg-[#EEF2FF]/80"
+                disabled
+                title={isArabic ? "عرض فقط" : "View only"}
+              >
+                <Pencil size={18} strokeWidth={1.4} className="opacity-80" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 text-[#1B2065F2] hover:bg-[#EEF2FF]/80"
+                disabled
+                title={isArabic ? "عرض فقط" : "View only"}
+              >
+                <UserPlus size={18} strokeWidth={1.4} className="opacity-80" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 text-[#1B2065F2] hover:bg-[#EEF2FF]/80"
+                disabled
+                title={isArabic ? "عرض فقط" : "View only"}
+              >
+                <Trash2 size={18} strokeWidth={1.4} className="opacity-80" />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-[#51689A]/40 bg-white">
-        <div className="overflow-x-hidden">
-          <table className="w-full table-fixed text-xs sm:text-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-[640px] w-full text-xs sm:text-sm">
             <thead>
-              <tr className="border-b border-[#D6DEEF] bg-[#F6F8FF] text-[#1B2065F2]">
-                <th className="w-10 shrink-0 bg-[#F6F8FF] px-1 py-1.5 text-center sm:px-2 sm:py-2">
-                  <Checkbox
-                    checked={allVisibleSelected}
-                    onCheckedChange={() => toggleSelectAllVisible()}
-                    aria-label={isArabic ? "تحديد الكل" : "Select all"}
-                    className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
-                  />
+              <tr className="border-b-2 border-[#51689A]/30 bg-[#F6F8FF] text-[#1B2065F2]">
+                <th className="w-11 min-w-11 border-b border-[#D6DEEF] bg-[#F6F8FF] px-1 py-2 text-center sm:px-2">
+                  <div className="flex items-center justify-center gap-0.5">
+                    <Checkbox
+                      checked={allVisibleSelected}
+                      onCheckedChange={toggleSelectAllVisible}
+                      aria-label={isArabic ? "تحديد الصفحة" : "Select page"}
+                      className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
+                    />
+                    <span className="inline-block w-6 shrink-0" aria-hidden />
+                  </div>
                 </th>
-                <th className="w-[19%] bg-[#F6F8FF] px-1 py-1.5 text-left font-semibold md:w-[14%] lg:w-[12%] sm:px-2 sm:py-2">
+                <th className="min-w-0 border-b border-[#D6DEEF] bg-[#F6F8FF] px-1 py-2 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "الرقم" : "User ID"}
                 </th>
-                <th className="w-[46%] min-w-0 px-1 py-1.5 text-left font-semibold md:w-[16%] lg:w-[14%] sm:px-2 sm:py-2">
+                <th className="min-w-0 max-w-[min(28vw,8rem)] border-b border-[#D6DEEF] bg-[#F6F8FF] px-1 py-2 text-start text-[11px] font-bold uppercase tracking-wide sm:max-w-none sm:px-2 sm:text-sm">
                   {isArabic ? "الاسم" : "Name"}
                 </th>
-                <th className="hidden w-[22%] px-1 py-1.5 text-left font-semibold md:table-cell lg:w-[20%] sm:px-2 sm:py-2">
+                <th className="hidden min-w-0 border-b border-[#D6DEEF] bg-[#F6F8FF] px-1 py-2 text-start text-[11px] font-bold uppercase tracking-wide md:table-cell sm:px-2 sm:text-sm">
                   {isArabic ? "البريد" : "Email Address"}
                 </th>
-                <th className="hidden w-[16%] px-1 py-1.5 text-left font-semibold lg:table-cell sm:px-2 sm:py-2">
-                  {isArabic ? "المواد" : "Modules Taught"}
+                <th className="hidden min-w-0 border-b border-[#D6DEEF] bg-[#F6F8FF] px-1 py-2 text-start text-[11px] font-bold uppercase tracking-wide sm:table-cell sm:px-2 sm:text-sm">
+                  {isArabic ? "السنة" : "Year"}
                 </th>
-                <th className="hidden w-[11%] px-1 py-1.5 text-left font-semibold lg:table-cell sm:px-2 sm:py-2">
-                  {isArabic ? "سنوات التدريس" : "Years Taught"}
-                </th>
-                <th className="w-[16%] px-1 py-1.5 text-left font-semibold md:w-[14%] lg:w-[12%] sm:px-2 sm:py-2">
-                  {isArabic ? "التفاصيل" : "Details"}
+                <th className="hidden min-w-0 border-b border-[#D6DEEF] bg-[#F6F8FF] px-1 py-2 text-start text-[11px] font-bold uppercase tracking-wide sm:table-cell sm:px-2 sm:text-sm">
+                  {isArabic ? "المجموعة" : "Group"}
                 </th>
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map((row) => (
-                <tr key={row.id} className="border-b border-[#E6EBF5] text-[#1B2065F2]">
-                  <td className="w-10 shrink-0 bg-white px-1 py-1.5 text-center align-top sm:px-2 sm:py-2">
-                    <Checkbox
-                      checked={selectedIds.includes(row.id)}
-                      onCheckedChange={() => toggleSelection(row.id)}
-                      aria-label={`${isArabic ? "تحديد" : "Select"} ${row.name}`}
-                      className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
-                    />
-                  </td>
-                  <td className="w-[19%] bg-white px-1 py-1.5 font-mono text-[10px] align-top md:w-[14%] lg:w-[12%] sm:px-2 sm:py-2 sm:text-xs">
-                    {row.id}
-                  </td>
-                  <td
-                    className="w-[46%] min-w-0 break-words px-1 py-1.5 align-top md:w-[16%] lg:w-[14%] sm:px-2 sm:py-2"
-                    title={`${row.name}${row.email ? ` — ${row.email}` : ""}`}
-                  >
-                    {row.name}
-                  </td>
-                  <td className="hidden w-[22%] break-all px-1 py-1.5 text-[#5D719D] md:table-cell lg:w-[20%] sm:px-2 sm:py-2">
-                    {row.email}
-                  </td>
-                  <td className="hidden w-[16%] px-1 py-1.5 align-top lg:table-cell sm:px-2 sm:py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {getModuleNames(row).map((module) => (
-                        <span
-                          key={`${row.id}-${module}`}
-                          className="rounded-full bg-[#EEF2FF] px-1.5 py-0.5 text-[10px] text-[#51689A] sm:px-2 sm:text-xs"
+              {visibleRows.map((row) => {
+                const isOpen = expandedIds.has(row.id)
+                const pm = primaryModule(row)
+                return (
+                  <Fragment key={row.id}>
+                    <tr className="border-b border-[#D6DEEF] bg-white text-[#1B2065F2]">
+                      <td className="w-11 min-w-11 align-top">
+                        <div className="flex h-full min-h-[2.5rem] items-center justify-center gap-0.5 px-0.5 py-1.5 sm:px-1">
+                          <Checkbox
+                            checked={selectedIds.has(row.id)}
+                            onCheckedChange={() => toggleRowSelect(row.id)}
+                            aria-label={`${isArabic ? "تحديد" : "Select"} ${row.name}`}
+                            className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(row.id)}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#1B2065F2] hover:bg-[#EEF2FF]"
+                            aria-expanded={isOpen}
+                            aria-label={isArabic ? "توسيع المواد" : "Expand modules"}
+                          >
+                            {isOpen ? (
+                              <ChevronDown size={16} strokeWidth={2} />
+                            ) : (
+                              <ChevronRight size={16} strokeWidth={2} />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="min-w-0 max-w-24 font-mono text-[10px] align-top sm:max-w-none sm:px-1 sm:py-2 sm:text-xs">
+                        {row.id}
+                      </td>
+                      <td className="min-w-0 max-w-[min(28vw,8rem)] break-words align-top pe-0.5 pt-1.5 sm:max-w-none sm:px-1 sm:py-2">
+                        {row.name}
+                      </td>
+                      <td className="hidden min-w-0 align-top md:table-cell sm:px-1 sm:py-2">
+                        <a
+                          href={`mailto:${row.email}`}
+                          className="break-all text-[#2563EB] underline decoration-[#2563EB] underline-offset-2 visited:text-[#1d4ed8] hover:text-[#1d4ed8]"
                         >
-                          {module}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="hidden w-[11%] px-1 py-1.5 align-top lg:table-cell sm:px-2 sm:py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {getYears(row).map((year) => (
-                        <span
-                          key={`${row.id}-${year}`}
-                          className="rounded-full bg-[#E8F4F8] px-1.5 py-0.5 text-[10px] text-[#4A778D] sm:px-2 sm:text-xs"
-                        >
-                          {year}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="w-[16%] px-1 py-1.5 align-top md:w-[14%] lg:w-[12%] sm:px-2 sm:py-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openProfessorSheet(row)}
-                      className="h-8 max-w-full px-1 text-[#51689A] hover:bg-[#EEF2FF] sm:px-2"
-                    >
-                      <PencilLine size={14} />
-                      <span className="hidden sm:inline">
-                        {isArabic ? "تعديل" : "Edit"}
-                      </span>
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+                          {row.email}
+                        </a>
+                      </td>
+                      <td className="hidden min-w-0 align-top sm:table-cell sm:px-1 sm:py-2">
+                        {pm?.year ?? "—"}
+                      </td>
+                      <td className="hidden min-w-0 align-top sm:table-cell sm:px-1 sm:py-2">
+                        {pm?.groups ?? "—"}
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="border-b border-[#D6DEEF] bg-[#F6F8FF]">
+                        <td colSpan={6} className="p-0">
+                          <div
+                            className="border-t border-[#B8C4E0]/50 px-2 py-3 sm:ps-4 sm:pe-3"
+                            dir={isArabic ? "rtl" : "ltr"}
+                          >
+                            <p className="mb-2.5 text-[11px] font-semibold text-[#1B2065F2] sm:text-xs">
+                              {isArabic ? "المواد المدرّسة" : "Modules taught"}
+                            </p>
+                            <ul className="space-y-2">
+                              {row.modules.length === 0 && (
+                                <li className="rounded-md border border-dashed border-[#51689A]/50 bg-white px-3 py-2 text-xs text-[#5D719D]">
+                                  {isArabic ? "لا توجد مواد." : "No modules."}
+                                </li>
+                              )}
+                              {row.modules.map((m) => (
+                                <li
+                                  key={m.id}
+                                  className="flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-[#74A7BD]/70 bg-white px-3 py-2.5 text-xs shadow-sm sm:px-4 sm:text-sm"
+                                >
+                                  <span className="min-w-0 flex-1 font-medium leading-snug text-[#1B2065F2]">
+                                    {m.module}
+                                  </span>
+                                  <span className="shrink-0 text-end text-[11px] text-[#5D719D] sm:text-sm">
+                                    {formatModuleMeta(m)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -685,173 +628,6 @@ export default function DataTable() {
           </PaginationContent>
         </Pagination>
       </div>
-
-      <Sheet open={sheetOpen} onOpenChange={handleSheetOpenChange}>
-        <SheetContent
-          side={isArabic ? "left" : "right"}
-          className="w-full overflow-y-auto border-[#51689A]/30 bg-white/65 backdrop-blur-2xl dark:bg-slate-950/65 sm:max-w-2xl"
-        >
-          <SheetHeader>
-            <SheetTitle>{isArabic ? "تفاصيل الأستاذ" : "Professor details"}</SheetTitle>
-            <SheetDescription>
-              {isArabic
-                ? "يمكنك الاطلاع على معلومات الأستاذ وتعديلها."
-                : "Consult and edit professor information and taught modules."}
-            </SheetDescription>
-          </SheetHeader>
-
-          {draftProfessor && (
-            <div className="space-y-4 px-4 pb-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1 text-sm">
-                  <span className="text-[#1B2065F2]">{isArabic ? "الرقم" : "User ID"}</span>
-                  <div className="flex h-9 w-full items-center rounded-md border border-[#51689A]/40 bg-[#EEF2FF]/80 px-3 text-sm text-[#1B2065F2]">
-                    {draftProfessor.id}
-                  </div>
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-[#1B2065F2]">{isArabic ? "الاسم" : "Name"}</span>
-                  <Input
-                    value={draftProfessor.name}
-                    onChange={(event) => updateDraftField("name", event.target.value)}
-                    className="h-9 rounded-md border-[#51689A]/40 bg-[#FDFDFF] text-sm text-[#1B2065F2] focus-visible:ring-[#51689A]/40"
-                  />
-                </label>
-              </div>
-
-              <label className="space-y-1 text-sm">
-                <span className="text-[#1B2065F2]">
-                  {isArabic ? "البريد الإلكتروني" : "Email Address"}
-                </span>
-                <Input
-                  value={draftProfessor.email}
-                  onChange={(event) => updateDraftField("email", event.target.value)}
-                  className="h-9 rounded-md border-[#51689A]/40 bg-[#FDFDFF] text-sm text-[#1B2065F2] focus-visible:ring-[#51689A]/40"
-                />
-              </label>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-[#1B2065F2]">
-                    {isArabic ? "تفاصيل المواد المدرسة" : "Modules taught details"}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addDraftModule}
-                    className="border-[#51689A]/40 text-[#51689A]"
-                  >
-                    <Plus size={14} />
-                    {isArabic ? "إضافة مادة" : "Add module"}
-                  </Button>
-                </div>
-
-                {draftProfessor.modules.length === 0 && (
-                  <p className="rounded-md border border-dashed border-[#51689A]/40 bg-[#F6F8FF] p-3 text-xs text-[#5D719D]">
-                    {isArabic
-                      ? "لا توجد مواد حاليا. أضف مادة جديدة."
-                      : "No modules yet. Add a new module."}
-                  </p>
-                )}
-
-                {draftProfessor.modules.map((module, index) => (
-                  <div
-                    key={module.id}
-                    className="space-y-3 rounded-lg border border-[#51689A]/30 bg-white p-3"
-                  >
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="space-y-1 text-sm">
-                        <span className="text-[#1B2065F2]">{isArabic ? "المادة" : "Module"}</span>
-                        <Input
-                          value={module.module}
-                          onChange={(event) =>
-                            updateDraftModule(index, "module", event.target.value)
-                          }
-                          placeholder={isArabic ? "اسم المادة" : "Module name"}
-                          className="h-9 rounded-md border-[#51689A]/40 bg-[#FDFDFF] text-sm text-[#1B2065F2] focus-visible:ring-[#51689A]/40"
-                        />
-                      </label>
-
-                      <label className="space-y-1 text-sm">
-                        <span className="text-[#1B2065F2]">{isArabic ? "السنة" : "Year"}</span>
-                        <Input
-                          value={module.year}
-                          onChange={(event) => updateDraftModule(index, "year", event.target.value)}
-                          placeholder={isArabic ? "مثال: 1CS" : "e.g. 1CS"}
-                          className="h-9 rounded-md border-[#51689A]/40 bg-[#FDFDFF] text-sm text-[#1B2065F2] focus-visible:ring-[#51689A]/40"
-                        />
-                      </label>
-
-                      <label className="space-y-1 text-sm">
-                        <span className="text-[#1B2065F2]">{isArabic ? "المجموعات" : "Groups"}</span>
-                        <Input
-                          value={module.groups}
-                          onChange={(event) =>
-                            updateDraftModule(index, "groups", event.target.value)
-                          }
-                          placeholder={isArabic ? "مثال: G1, G2" : "e.g. G1, G2"}
-                          className="h-9 rounded-md border-[#51689A]/40 bg-[#FDFDFF] text-sm text-[#1B2065F2] focus-visible:ring-[#51689A]/40"
-                        />
-                      </label>
-
-                      <label className="space-y-1 text-sm">
-                        <span className="text-[#1B2065F2]">{isArabic ? "السداسي" : "Semester"}</span>
-                        <Select
-                          value={module.semester}
-                          onValueChange={(v) =>
-                            updateDraftModule(index, "semester", v as Semester)
-                          }
-                        >
-                          <SelectTrigger className="h-9 w-full rounded-md border-[#51689A]/40 bg-[#FDFDFF] px-3 text-sm text-[#1B2065F2] focus-visible:ring-[#51689A]/40">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="S1">S1</SelectItem>
-                            <SelectItem value="S2">S2</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </label>
-                    </div>
-
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeDraftModule(index)}
-                        className="h-8 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 size={14} />
-                        {isArabic ? "حذف المادة" : "Remove module"}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <SheetFooter className="border-t border-[#51689A]/20 bg-white/95">
-            <div className="flex w-full justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={closeEditorSheet}
-              >
-                {isArabic ? "إلغاء" : "Cancel"}
-              </Button>
-              <Button
-                type="button"
-                onClick={saveDraft}
-                className="bg-[#51689A] text-white hover:bg-[#445680] hover:text-white"
-              >
-                {isArabic ? "حفظ التعديلات" : "Save changes"}
-              </Button>
-            </div>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
     </section>
   )
 }

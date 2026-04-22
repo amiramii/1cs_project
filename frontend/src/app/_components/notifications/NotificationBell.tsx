@@ -97,9 +97,9 @@ export default function NotificationBell() {
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          
           size="icon"
-          className="relative h-10 w-10 shrink-0 rounded-full border-border bg-card hover:bg-accent"
+          className="relative h-10 w-10 shrink-0 rounded-full bg-card hover:bg-accent"
           aria-label={isAr ? "الإشعارات" : "Notifications"}
           aria-busy={loading}
         >
@@ -109,7 +109,7 @@ export default function NotificationBell() {
               aria-hidden
             />
           ) : (
-            <Bell className="size-[22px] text-muted-foreground" />
+            <Bell className="size-[20px] text-muted-foreground" />
           )}
           {!loading && unreadCount > 0 && (
             <Badge

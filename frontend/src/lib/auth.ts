@@ -4,6 +4,7 @@ import {
   getRoleFromAccessToken,
   persistAppRole,
   persistTokens,
+  persistUserEmail,
 } from "./tokenStorage";
 import { DEFAULT_APP_ROLE } from "./constants";
 import { formatDrfError } from "./drfError";
@@ -40,6 +41,7 @@ async function login(email: string, password: string, remember = false) {
   persistTokens(data.access, data.refresh, remember);
   const appRole = getRoleFromAccessToken(data.access) ?? DEFAULT_APP_ROLE;
   persistAppRole(appRole, remember);
+  persistUserEmail(email, remember);
   if (process.env.NODE_ENV === "development") {
     clearDevRoleOverride();
   }

@@ -45,7 +45,7 @@ export default function StudentsByRole({
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl space-y-5">
-      <header className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5 shadow-sm">
+      <header className="rounded-xl border border-[#51689A]/20 bg-[#51689A]/5 p-5 shadow-sm">
         <h1 className="text-xl font-semibold text-foreground">
           {isAr ? "طلابي" : "My students"}
         </h1>

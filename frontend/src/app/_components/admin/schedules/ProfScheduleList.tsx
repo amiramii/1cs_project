@@ -1,10 +1,19 @@
 import ScheduleListShell from "./ScheduleListShell"
 
-export default function ProfScheduleList() {
+export type ProfScheduleListProps = {
+  /** `prof-tab` = layout for professor `/Scheduals` (title, toolbar, grid only). */
+  variant?: "full" | "prof-tab"
+}
+
+export default function ProfScheduleList({
+  variant = "full",
+}: ProfScheduleListProps) {
+  const isProfTab = variant === "prof-tab"
+
   return (
     <ScheduleListShell
-      titleEn="Professors Schedules"
-      titleAr="جداول الأساتذة"
+      titleEn={isProfTab ? "Your Schedules" : "Professors Schedules"}
+      titleAr={isProfTab ? "جداولك" : "جداول الأساتذة"}
       backHref="/Scheduals"
       nextHref="/Scheduals/Student-Schedules"
       backLabelEn="Back"
@@ -12,7 +21,9 @@ export default function ProfScheduleList() {
       nextLabelEn="Students"
       nextLabelAr="الطلاب"
       audience="professor"
-      allowDelete
+      allowDelete={!isProfTab}
+      hideTopNavigation={isProfTab}
+      pdfCardLayout={isProfTab ? "stacked" : "default"}
     />
   )
 }

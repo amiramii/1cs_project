@@ -4,7 +4,7 @@
  * `/Sessions` — route shape varies by role:
  * - Admin: links into professor/student schedule management (different from teacher/student “live” sessions).
  * - Professor (`ProfessorSessionsView`): create sessions, attendance sheet, exports.
- * - Student: read-only timetable PDF list via `StudScheduleList`.
+ * - Student: `StudentSessionsHub` (mockups + PDF list via `StudScheduleList`).
  *
  * Notification prompts are scoped: professors get session reminders; students get
  * “timetable ready” hints tied to `ScheduleListShell`.
@@ -15,10 +15,9 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { CalendarCheck, ClipboardClock, Info } from "lucide-react"
 
-import NotificationPermissionPrompt from "@/app/_components/notifications/NotificationPermissionPrompt"
 import { useLanguage } from "@/app/_components/language-provider"
-import StudScheduleList from "@/app/_components/admin/schedules/StudScheduleList"
 import ProfessorSessionsView from "@/app/_components/sessions/ProfessorSessionsView"
+import StudentSessionsHub from "@/app/_components/sessions/StudentSessionsHub"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants"
 import { getAccessToken } from "@/lib/tokenStorage"
@@ -85,8 +84,7 @@ export default function Page() {
 
   if (role === "prof") {
     return (
-      <div className="mx-auto w-full max-w-3xl space-y-4">
-        <NotificationPermissionPrompt context="sessions-prof" />
+      <div className="mx-auto w-full min-w-0 space-y-4 xl:p-5">
         <ProfessorSessionsView />
       </div>
     )
@@ -94,21 +92,7 @@ export default function Page() {
 
   return (
     <div className="w-full space-y-4">
-      <NotificationPermissionPrompt context="sessions-student" />
-
-      <Alert className="border-violet-500/25 bg-violet-500/[0.07]">
-        <Info aria-hidden />
-        <div className="min-w-0 flex-1 space-y-1">
-          <AlertTitle>{isAr ? "حصصي" : "My sessions"}</AlertTitle>
-          <AlertDescription>
-            {isAr
-              ? "الجداول والحصص الخاصة بك كطالب."
-              : "Your class sessions and timetable as a student."}
-          </AlertDescription>
-        </div>
-      </Alert>
-
-      <StudScheduleList />
+      <StudentSessionsHub />
     </div>
   )
 }

@@ -7,11 +7,18 @@ import ScheduleListShell from "./ScheduleListShell"
 export default function StudScheduleList() {
   const role = useEffectiveAppRole(DEFAULT_APP_ROLE)
   const allowDelete = role === "admin"
+  const isStudentRole = role === "student"
 
   return (
     <ScheduleListShell
-      titleEn="Student Schedules"
-      titleAr="جداول الطلاب"
+      titleEn={isStudentRole ? "Your Schedules" : "Student Schedules"}
+      titleAr={isStudentRole ? "جداولك" : "جداول الطلاب"}
+      subtitleEn={
+        isStudentRole ? "Check your most important schedules" : undefined
+      }
+      subtitleAr={
+        isStudentRole ? "اطّلع على أهم جداولك الدراسية" : undefined
+      }
       backHref="/Scheduals/Professor-Schedules"
       nextHref="/Scheduals"
       backLabelEn="Professors"
@@ -20,6 +27,8 @@ export default function StudScheduleList() {
       nextLabelAr="العودة للتحميل"
       audience="student"
       allowDelete={allowDelete}
+      hideTopNavigation={isStudentRole}
+      studentBrowse={isStudentRole}
     />
   )
 }

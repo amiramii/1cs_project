@@ -13,23 +13,11 @@
 import { useEffect } from "react"
 import { Info } from "lucide-react"
 
-import NotificationPermissionPrompt, {
-  type NotificationContext,
-} from "@/app/_components/notifications/NotificationPermissionPrompt"
 import { useLanguage } from "@/app/_components/language-provider"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { getNotificationPermission, notifyUser } from "@/lib/utils"
 
 export type JustificationsViewerRole = "admin" | "student" | "schooling"
-
-/** Maps each dashboard role to the matching notification copy block. */
-function notificationContextForRole(
-  role: JustificationsViewerRole
-): NotificationContext {
-  if (role === "schooling") return "justifications-schooling"
-  if (role === "student") return "justifications-student"
-  return "justifications-admin"
-}
 
 export default function JustificationsByRole({
   role,
@@ -75,13 +63,9 @@ export default function JustificationsByRole({
     }
   }, [role, isAr])
 
-  const promptContext = notificationContextForRole(role)
-
   if (role === "admin") {
     return (
       <div className="w-full max-w-4xl space-y-4">
-        <NotificationPermissionPrompt context={promptContext} />
-
         <Alert>
           <Info aria-hidden />
           <div className="min-w-0 flex-1 space-y-1">
@@ -96,7 +80,7 @@ export default function JustificationsByRole({
           </div>
         </Alert>
 
-        <Alert variant="default" className="border-dashed bg-muted/20">
+        <Alert variant="default" className="border-dashed border-[#51689A]/35 bg-[#F6F7FE]">
           <Info aria-hidden />
           <div className="min-w-0 flex-1 space-y-1">
             <AlertTitle>
@@ -116,8 +100,6 @@ export default function JustificationsByRole({
   if (role === "schooling") {
     return (
       <div className="w-full max-w-4xl space-y-4">
-        <NotificationPermissionPrompt context={promptContext} />
-
         <Alert>
           <Info aria-hidden />
           <div className="min-w-0 flex-1 space-y-1">
@@ -134,7 +116,7 @@ export default function JustificationsByRole({
           </div>
         </Alert>
 
-        <Alert variant="default" className="border-dashed bg-muted/20">
+        <Alert variant="default" className="border-dashed border-[#51689A]/35 bg-[#F6F7FE]">
           <Info aria-hidden />
           <div className="min-w-0 flex-1 space-y-1">
             <AlertTitle>
@@ -153,9 +135,7 @@ export default function JustificationsByRole({
 
   return (
     <div className="w-full max-w-4xl space-y-4">
-      <NotificationPermissionPrompt context={promptContext} />
-
-      <Alert className="border-violet-500/25 bg-violet-500/[0.07]">
+      <Alert className="border-[#1B2065]/25 bg-[#1B2065]/10">
         <Info aria-hidden />
         <div className="min-w-0 flex-1 space-y-1">
           <AlertTitle>{isAr ? "مبرراتي" : "My justifications"}</AlertTitle>
@@ -167,7 +147,7 @@ export default function JustificationsByRole({
         </div>
       </Alert>
 
-      <Alert variant="default" className="border-dashed bg-muted/20">
+      <Alert variant="default" className="border-dashed border-[#51689A]/35 bg-[#F6F7FE]">
         <Info aria-hidden />
         <div className="min-w-0 flex-1 space-y-1">
           <AlertTitle>{isAr ? "النموذج والقائمة" : "Form & list"}</AlertTitle>

@@ -22,6 +22,7 @@ import {
 
 /** Where this prompt is shown — drives localized copy and future analytics hooks. */
 export type NotificationContext =
+  | "dashboard-home"
   | "justifications-schooling"
   | "justifications-student"
   | "justifications-admin"
@@ -32,6 +33,14 @@ const copy: Record<
   NotificationContext,
   { titleEn: string; titleAr: string; descEn: string; descAr: string }
 > = {
+  "dashboard-home": {
+    titleEn: "Dashboard notifications",
+    titleAr: "إشعارات لوحة التحكم",
+    descEn:
+      "Enable browser notifications so we can alert you about important events while you use Chekin.",
+    descAr:
+      "فعّل إشعارات المتصفح لنرسل لك تنبيهات مهمة أثناء استخدام تشيكن.",
+  },
   "justifications-schooling": {
     titleEn: "Justification alerts (schooling)",
     titleAr: "تنبيهات المبررات (الشؤون التعليمية)",

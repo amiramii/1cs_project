@@ -8,7 +8,7 @@
 import Link from "next/link";
 import Sidebar from "../../../components/ui/siderbar";
 import { useRouter } from "next/navigation";
-import { User } from "lucide-react";
+import { CircleUserRound } from "lucide-react";
 import {ModeToggle} from "../../_components/ModeToggle";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
@@ -93,7 +93,7 @@ export default function DashboardLayout({
 
   return (
     <NotificationProvider>
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-[#FEF9F9]/85 bg-gradient-to-br from-[#FEF9F9]/95 via-[#F6F7FE]/60 to-[#FEF9F9]/90 text-foreground">
       {!isSchooling && (
         <Sidebar
           expanded={expanded}
@@ -101,8 +101,8 @@ export default function DashboardLayout({
           role={role}
         />
       )}
-      <div className={shellClass}>
-      <header className="sticky top-0 z-30 flex min-h-16 w-full items-center justify-between gap-3 border-b border-border/70 bg-background/90 px-4 backdrop-blur sm:px-6">
+      <div className={`${shellClass} min-w-0`}>
+      <header className="sticky top-0 z-30 flex min-h-16 w-full items-center justify-between gap-3 border-b border-border/70 bg-background/90 px-4 backdrop-blur sm:px-6 shadow-md">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-primary/8 to-transparent" />
         {isSchooling ? (
           <nav
@@ -133,20 +133,19 @@ export default function DashboardLayout({
             <span className="truncate text-sm font-semibold sm:text-base">{activeItem.label}</span>
           </div>
         )}
-        <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+        <div className="flex shrink-0 items-center gap-3 sm:gap-4 ">
             <LanguageMenu language={language} onChange={setLanguage} />
-            <NotificationBell />
             <ModeToggle/>
+            <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
-                  variant="outline"
                   size="icon"
-                  className="ms-1 h-10 w-10 shrink-0 rounded-full border-border bg-card p-0 hover:bg-accent"
+                  className="ms-1 h-12 w-12 shrink-0 rounded-full bg-card p-2 hover:bg-accent"
                   aria-label={language === "ar" ? "الحساب" : "Account menu"}
                 >
-                  <User className="text-muted-foreground" size={22} />
+                  <CircleUserRound className="size-7 text-foreground" strokeWidth={1} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -166,7 +165,7 @@ export default function DashboardLayout({
         </div>
       </header>
       <NotificationOnboardingDialog />
-      <main className="mx-auto flex w-full min-w-0 max-w-none flex-1 flex-col items-stretch overflow-x-hidden px-4 py-4 sm:px-5 lg:px-6">
+      <main className="mx-auto flex w-full min-w-0 flex-1 flex-col items-stretch bg-[#FEF9F9] px-4 py-4 sm:px-5 lg:px-6">
         <DashboardRoleGuard>{children}</DashboardRoleGuard>
       </main>
       <DevRoleSwitcher />

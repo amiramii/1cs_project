@@ -27,20 +27,20 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`fixed inset-x-0 bottom-0 z-50 h-20 overflow-visible rounded-t-xl bg-sidebar py-2 shadow-lg backdrop-blur-md md:inset-x-auto md:top-0 md:h-screen md:rounded-t-none md:py-4 ${sidePositionClass} ${expanded ? "md:w-64" : "md:w-24"} md:translate-x-0 transition-all duration-200 ${
+      className={`fixed inset-x-0 bottom-0 z-50 h-20 overflow-visible rounded-t-xl bg-[#F6F7FE] py-2 shadow-lg backdrop-blur-md md:inset-x-auto md:top-0 md:h-screen md:rounded-t-none md:py-4 ${sidePositionClass} ${expanded ? "md:w-64" : "md:w-24"} md:translate-x-0 transition-all duration-200 ${
         isRtl
           ? "md:right-0 md:rounded-l-2xl"
           : "md:left-0 md:rounded-r-2xl"
       }`}
     >
         <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-sidebar/95" />
+          <div className="absolute inset-0 bg-background/90" />
         </div>
         <div className="hidden items-center justify-center md:flex">
           <Link
             href="/"
             className="relative flex shrink-0 rounded-md outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[hsl(var(--sidebar-ring))] focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            aria-label={isAr ? "الصفحة الرئيسية — تشيكن" : "ChecIn — home"}
+            aria-label={isAr ? "الصفحة الرئيسية — تشيك ان" : "CheckIn — home"}
           >
             <motion.div
               animate={{ width: expanded ? 140 : 34 }}

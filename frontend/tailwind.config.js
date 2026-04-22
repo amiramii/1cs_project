@@ -10,8 +10,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "blue-primary": "#51689a",
+        "blue-primary": "#51689A",
         "blue-secondary": "#74A7BD",
+        /** Chekin brand — aligns with globals.css */
+        "chekin-navy": "#1B2065",
+        "chekin-bg": "#F6F7FE",
+        "chekin-card": "#FEF9F9",
+        "chekin-warning": "#E7CE51",
+        "chekin-danger": "#C71122",
         "white-primary": "#EEF4F7",
 	      background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",

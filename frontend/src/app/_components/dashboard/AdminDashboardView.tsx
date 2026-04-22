@@ -7,6 +7,7 @@ import {
   UserRoundPen,
 } from "lucide-react";
 import { useLanguage } from "@/app/_components/language-provider";
+import NotificationPermissionPrompt from "@/app/_components/notifications/NotificationPermissionPrompt";
 
 export default function AdminDashboardView() {
   const { language } = useLanguage();
@@ -41,6 +42,7 @@ export default function AdminDashboardView() {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl space-y-8">
+      <NotificationPermissionPrompt context="dashboard-home" />
       <header
         className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card p-6 shadow-sm md:p-8"
       >

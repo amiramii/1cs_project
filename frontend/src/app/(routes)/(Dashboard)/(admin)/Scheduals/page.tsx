@@ -9,13 +9,10 @@ import SchedulsMiddleContainer from "@/app/_components/admin/schedules/SchedMidC
 import type { SchedualsVariant } from "@/app/_components/admin/schedules/SchedMidContainer";
 import PageFileStagingDropzone from "@/app/_components/PageFileStagingDropzone";
 import ProfScheduleList from "@/app/_components/admin/schedules/ProfScheduleList";
-import { useLanguage } from "@/app/_components/language-provider";
 
 export default function Page() {
   const router = useRouter();
   const appRole = useEffectiveAppRole("admin");
-  const { language } = useLanguage();
-  const isAr = language === "ar";
   const [stagedPdf, setStagedPdf] = useState<File | null>(null);
 
   useEffect(() => {
@@ -39,28 +36,8 @@ export default function Page() {
 
   if (appRole === "prof") {
     return (
-      <div className="mx-auto w-full max-w-6xl flex-col space-y-6">
-        <header className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h1 className="text-lg font-semibold text-foreground">
-            {isAr ? "الجداول" : "Schedules"}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {isAr
-              ? "عرض جداول PDF التي ينشرها المسؤول فقط. الأستاذ لا يرفع ملفات هنا."
-              : "View PDF timetables published by an administrator. Professors do not upload files here."}
-          </p>
-        </header>
-        <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-foreground">
-            {isAr ? "جداول PDF المنشورة" : "Published timetable PDFs"}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {isAr
-              ? "قائمة الملفات المتاحة لجمهور الأساتذة."
-              : "Files available to the professor audience."}
-          </p>
-          <ProfScheduleList />
-        </section>
+      <div className="mx-auto w-full max-w-6xl flex-1 pb-6 pt-2 sm:pt-4">
+        <ProfScheduleList variant="prof-tab" />
       </div>
     );
   }

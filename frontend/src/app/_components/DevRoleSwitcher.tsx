@@ -130,7 +130,7 @@ export default function DevRoleSwitcher() {
   return (
     <div
       ref={panelRef}
-      className="fixed z-[100] max-w-[min(100vw-2rem,22rem)] rounded-xl border border-amber-500/40 bg-amber-50/95 text-xs shadow-lg backdrop-blur-md dark:border-amber-500/30 dark:bg-amber-950/90"
+      className="fixed z-[100] max-w-[min(100vw-2rem,22rem)] rounded-xl border border-[#E7CE51]/50 bg-[#FEF9F9]/95 text-xs text-[#1B2065] shadow-lg backdrop-blur-md dark:border-[#51689A]/40 dark:bg-[#1B2065]/95 dark:text-[#FEF9F9]"
       style={{ left: pos.x, top: pos.y }}
       role="region"
       aria-label="Development role preview"
@@ -139,19 +139,19 @@ export default function DevRoleSwitcher() {
         ref={dragHandleRef}
         data-dev-role-drag-handle
         onPointerDown={onHandlePointerDown}
-        className="flex cursor-grab select-none items-center gap-2 rounded-t-xl border-b border-amber-500/30 bg-amber-100/80 px-2 py-2 active:cursor-grabbing dark:border-amber-500/20 dark:bg-amber-900/50"
+        className="flex cursor-grab select-none items-center gap-2 rounded-t-xl border-b border-[#E7CE51]/40 bg-[#E7CE51]/20 px-2 py-2 active:cursor-grabbing dark:border-[#51689A]/40 dark:bg-[#1B2065]/80"
         title="Drag to move"
       >
         <GripVertical
-          className="size-4 shrink-0 text-amber-700/80 dark:text-amber-300/80"
+          className="size-4 shrink-0 text-[#51689A] dark:text-[#74A7BD]"
           aria-hidden
         />
-        <p className="min-w-0 flex-1 font-semibold text-amber-900 dark:text-amber-100">
+        <p className="min-w-0 flex-1 font-semibold text-[#1B2065] dark:text-[#FEF9F9]">
           Dev: preview dashboard as
         </p>
       </div>
       <div className="p-3 pt-2">
-        <p className="mb-2 text-[11px] leading-snug text-amber-800/90 dark:text-amber-200/80">
+        <p className="mb-2 text-[11px] leading-snug text-[#51689A] dark:text-[#74A7BD]">
           UI only. API still uses your logged-in token.
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -161,8 +161,8 @@ export default function DevRoleSwitcher() {
             variant={active === "jwt" ? "default" : "outline"}
             className={
               active === "jwt"
-                ? "h-8 bg-amber-600 text-white hover:bg-amber-700"
-                : "h-8 border-amber-600/40"
+                ? "h-8 bg-[#51689A] text-[#FEF9F9] hover:bg-[#51689A]/90"
+                : "h-8 border-[#51689A]/40 text-[#1B2065] dark:text-[#FEF9F9]"
             }
             onClick={() => {
               clearDevRoleOverride()
@@ -179,8 +179,8 @@ export default function DevRoleSwitcher() {
               variant={active === r.id ? "default" : "outline"}
               className={
                 active === r.id
-                  ? "h-8 bg-amber-600 text-white hover:bg-amber-700"
-                  : "h-8 border-amber-600/40"
+                  ? "h-8 bg-[#51689A] text-[#FEF9F9] hover:bg-[#51689A]/90"
+                  : "h-8 border-[#51689A]/40 text-[#1B2065] dark:text-[#FEF9F9]"
               }
               onClick={() => {
                 setDevRoleOverride(r.id)

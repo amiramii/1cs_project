@@ -1,82 +1,109 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   ArrowUpFromLine,
-  CalendarPlus,
-  ChevronRight,
+  CalendarCheck,
   CirclePlay,
   Info,
+  Pencil,
   Play,
   Save,
   Search,
+  Star,
+  Users,
 } from "lucide-react";
 import { getAccessToken } from "@/lib/tokenStorage";
 import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors";
+import { toast } from "sonner";
 import { useLanguage } from "@/app/_components/language-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { notifyUser } from "@/lib/utils";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn, notifyUser } from "@/lib/utils";
 import {
+  buildDemoScheduleSessionRow,
+  buildDemoTeacherAssignments,
   buildMockProfSession,
+  isDemoTeacherAssignmentId,
+  isDemoTeacherAssignmentsEnabled,
   isMockProfSessionId,
   isProfSessionMockEnabled,
+  nextDemoScheduleSessionId,
 } from "@/app/_components/sessions/profSessionMock";
+import dayjs from "dayjs";
+import type { Dayjs } from "dayjs";
+import ScheduleSessionForm from "@/app/_components/sessions/ScheduleSessionForm";
+import SessionHistorySemesterSection from "@/app/_components/sessions/SessionHistorySemesterSection";
+import {
+  loadProfessorSessionData,
+  type AssignmentApi,
+  type AttendanceRow,
+  type AttendanceStatus,
+  type SessionApi,
+} from "@/lib/professorSessionData";
 
-type AttendanceStatus = "present" | "absent" | "justified";
-
-type AttendanceRow = {
-  id: number;
-  session?: number;
-  student: number;
-  student_name?: string;
-  student_email?: string;
+type RowDraft = {
   status: AttendanceStatus;
+  participation_points: number;
+  professor_note: string;
 };
 
-type SessionApi = {
-  id: number;
-  assignment: number;
-  date: string;
-  start_time: string;
-  end_time: string;
-  module_name?: string;
-  group_name?: string;
-  attendances?: AttendanceRow[];
-};
+function readExtraFromRow(row: AttendanceRow): {
+  participation_points: number;
+  professor_note: string;
+} {
+  const ex = row.extra_values ?? {};
+  const pts = Number(ex.participation_points);
+  return {
+    participation_points: Number.isFinite(pts) ? Math.trunc(pts) : 0,
+    professor_note: String(ex.professor_note ?? ""),
+  };
+}
 
-type AssignmentApi = {
-  id: number;
-  group_name?: string;
-  module_name?: string;
-};
+function serverRowDraft(row: AttendanceRow): RowDraft {
+  const { participation_points, professor_note } = readExtraFromRow(row);
+  return {
+    status: row.status,
+    participation_points,
+    professor_note,
+  };
+}
+
+function draftEquals(a: RowDraft, b: RowDraft) {
+  return (
+    a.status === b.status &&
+    a.participation_points === b.participation_points &&
+    a.professor_note === b.professor_note
+  );
+}
 
 /** Rows shown per page before “show more” on the attendance sheet (large groups). */
 const SHEET_PAGE_SIZE = 12;
+
+/** Chekin status colors (Present / Absent / Justified) */
+const STATUS_HEX = {
+  present: "#74A7BD",
+  absent: "#C71122",
+  justified: "#E7CE51",
+} as const;
 
 function apiBaseUrl() {
   return (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(
     /\/+$/,
     ""
   );
-}
-
-function unwrapList<T>(raw: unknown): T[] {
-  if (Array.isArray(raw)) return raw as T[];
-  if (raw && typeof raw === "object" && "results" in raw) {
-    const r = (raw as { results?: T[] }).results;
-    return Array.isArray(r) ? r : [];
-  }
-  return [];
 }
 
 function todayLocalIso(): string {
@@ -108,26 +135,30 @@ function formatSessionSubtitle(
   return `${mod} - ${grp} - ${dateLabel}`;
 }
 
-/** Column header like "Tue 13-Jan" */
-function formatSessionColumnDate(
-  s: SessionApi,
-  locale: string
-): string {
-  try {
-    const dt = new Date(s.date + "T12:00:00");
-    return dt.toLocaleDateString(locale, {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    });
-  } catch {
-    return "—";
-  }
-}
-
 function padTimeForApi(t: string): string {
   if (!t) return "09:00:00";
   return t.length === 5 ? `${t}:00` : t;
+}
+
+/**
+ * Clicks on shadcn `Select` content are portaled under `document.body`. The Radix
+ * dialog would otherwise treat them as "outside" and block or close.
+ */
+function isScheduleFormPortaledLayerTarget(
+  target: EventTarget | null
+): boolean {
+  const el =
+    target && "nodeType" in target && (target as Node).nodeType === Node.TEXT_NODE
+      ? (target as Text).parentElement
+      : target instanceof Element
+        ? target
+        : null;
+  if (!el) return false;
+  return Boolean(
+    el.closest(
+      '[data-slot="select-content"],[data-radix-select-content]'
+    )
+  );
 }
 
 /**
@@ -139,11 +170,17 @@ function padTimeForApi(t: string): string {
 export default function ProfessorSessionsView() {
   const { language } = useLanguage();
   const isAr = language === "ar";
+  /** Avoid refetch races when language flips on hydrate (keeps initial load single-flight). */
+  const isArRef = useRef(isAr);
+  isArRef.current = isAr;
   const locale = isAr ? "ar-DZ" : "en-US";
   const apiBase = apiBaseUrl();
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** True when assignments came from session rows (assignments API unavailable). */
+  const [assignmentsCatalogFallback, setAssignmentsCatalogFallback] =
+    useState(false);
   const [assignments, setAssignments] = useState<AssignmentApi[]>([]);
   const [sessions, setSessions] = useState<SessionApi[]>([]);
   /** All attendance rows for the teacher — used for absence counts across sessions */
@@ -152,9 +189,10 @@ export default function ProfessorSessionsView() {
   >([]);
 
   const [workingSession, setWorkingSession] = useState<SessionApi | null>(null);
-  const [pendingEdits, setPendingEdits] = useState<
-    Record<number, AttendanceStatus>
-  >({});
+  /** Local edits (from the row modal) until the professor ends the session with Save. */
+  const [rowOverrides, setRowOverrides] = useState<Record<number, RowDraft>>({});
+  const [rowModal, setRowModal] = useState<AttendanceRow | null>(null);
+  const [modalDraft, setModalDraft] = useState<RowDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
@@ -162,75 +200,39 @@ export default function ProfessorSessionsView() {
 
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [newAssignmentId, setNewAssignmentId] = useState<number | "">("");
-  const [newDate, setNewDate] = useState(todayLocalIso());
-  const [newStart, setNewStart] = useState("08:00");
-  const [newEnd, setNewEnd] = useState("10:00");
+  const [selectedGroup, setSelectedGroup] = useState("");
+  const [selectedModule, setSelectedModule] = useState("");
+  const [classRoom, setClassRoom] = useState("");
+  const [sessionStart, setSessionStart] = useState<Dayjs>(() =>
+    dayjs(`${todayLocalIso()}T08:00:00`)
+  );
   const [creating, setCreating] = useState(false);
 
+  const getRowDraft = useCallback(
+    (row: AttendanceRow): RowDraft =>
+      rowOverrides[row.id] ?? serverRowDraft(row),
+    [rowOverrides]
+  );
+
   const refreshData = useCallback(async () => {
-    const token = getAccessToken();
-    const headers: HeadersInit = {
-      ...(token && { Authorization: `Bearer ${token}` }),
-    };
-    let aRes: Response;
-    let sRes: Response;
-    let attRes: Response;
+    const ar = isArRef.current;
     try {
-      [aRes, sRes, attRes] = await Promise.all([
-        fetch(`${apiBase}/api/academic/teaching-assignments/?page_size=100`, {
-          headers,
-        }),
-        fetch(`${apiBase}/api/attendance/sessions/?page_size=100`, { headers }),
-        fetch(`${apiBase}/api/attendance/attendance/?page_size=500`, {
-          headers,
-        }),
-      ]);
+      const bundle = await loadProfessorSessionData(ar);
+      setSessions(bundle.sessions);
+      setTeacherAttendanceRows(bundle.teacherAttendanceRows);
+      setAssignments(bundle.assignments);
+      setAssignmentsCatalogFallback(bundle.assignmentsCatalogFallback);
     } catch (e) {
       setAssignments([]);
       setSessions([]);
       setTeacherAttendanceRows([]);
+      setAssignmentsCatalogFallback(false);
       if (isNetworkFailure(e)) {
-        throw new Error(apiUnreachableMessage(apiBase, isAr));
+        throw new Error(apiUnreachableMessage(apiBase, ar));
       }
       throw e;
     }
-    const aText = await aRes.text();
-    const sText = await sRes.text();
-    const attText = await attRes.text();
-    let aParsed: unknown = null;
-    let sParsed: unknown = null;
-    let attParsed: unknown = null;
-    try {
-      aParsed = aText ? JSON.parse(aText) : null;
-    } catch {
-      aParsed = null;
-    }
-    try {
-      sParsed = sText ? JSON.parse(sText) : null;
-    } catch {
-      sParsed = null;
-    }
-    try {
-      attParsed = attText ? JSON.parse(attText) : null;
-    } catch {
-      attParsed = null;
-    }
-    if (!aRes.ok) {
-      throw new Error(
-        isAr
-          ? "تعذر تحميل التعيينات التدريسية."
-          : "Could not load teaching assignments."
-      );
-    }
-    if (!sRes.ok) {
-      throw new Error(isAr ? "تعذر تحميل الحصص." : "Could not load sessions.");
-    }
-    setAssignments(unwrapList<AssignmentApi>(aParsed));
-    setSessions(unwrapList<SessionApi>(sParsed));
-    if (attRes.ok) {
-      setTeacherAttendanceRows(unwrapList<AttendanceRow>(attParsed));
-    }
-  }, [apiBase, isAr]);
+  }, [apiBase]);
 
   useEffect(() => {
     let alive = true;
@@ -247,7 +249,7 @@ export default function ProfessorSessionsView() {
           setLoadError(
             e instanceof Error
               ? e.message
-              : isAr
+              : isArRef.current
                 ? "خطأ في التحميل."
                 : "Failed to load."
           );
@@ -259,9 +261,20 @@ export default function ProfessorSessionsView() {
     return () => {
       alive = false;
     };
-  }, [refreshData, isAr]);
+  }, [refreshData]);
 
   const todayStr = todayLocalIso();
+
+  /** When the API has no teaching assignments, use a dev-only fake row for the schedule form. */
+  const assignmentsForSchedule = useMemo((): AssignmentApi[] => {
+    if (isDemoTeacherAssignmentsEnabled() && assignments.length === 0) {
+      return buildDemoTeacherAssignments();
+    }
+    return assignments;
+  }, [assignments]);
+
+  const scheduleFormUsesApiAssignmentsOnly =
+    assignmentsForSchedule.length === assignments.length;
 
   /** Merge a dev mock session when there is no real session today (for UI coding). */
   const sessionsDisplay = useMemo(() => {
@@ -284,6 +297,40 @@ export default function ProfessorSessionsView() {
 
   const highlightSession = todaySessions[0] ?? null;
 
+  const scheduleGroupOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of assignmentsForSchedule) {
+      if (a.group_name) set.add(a.group_name);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [assignmentsForSchedule]);
+
+  const scheduleModuleOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of assignmentsForSchedule) {
+      if (selectedGroup && a.group_name !== selectedGroup) continue;
+      if (a.module_name) set.add(a.module_name);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [assignmentsForSchedule, selectedGroup]);
+
+  const onScheduleGroupChange = useCallback((g: string) => {
+    setSelectedGroup(g);
+    setSelectedModule("");
+  }, []);
+
+  useEffect(() => {
+    if (!selectedGroup || !selectedModule) {
+      setNewAssignmentId("");
+      return;
+    }
+    const found = assignmentsForSchedule.find(
+      (a) =>
+        a.group_name === selectedGroup && a.module_name === selectedModule
+    );
+    setNewAssignmentId(found ? found.id : "");
+  }, [assignmentsForSchedule, selectedGroup, selectedModule]);
+
   const startWorking = async (
     s: SessionApi,
     opts?: { resetFeedback?: boolean }
@@ -292,11 +339,7 @@ export default function ProfessorSessionsView() {
     if (isMockProfSessionId(s.id)) {
       const full = buildMockProfSession();
       setWorkingSession(full);
-      const next: Record<number, AttendanceStatus> = {};
-      (full.attendances ?? []).forEach((a) => {
-        next[a.id] = a.status;
-      });
-      setPendingEdits(next);
+      setRowOverrides({});
       if (resetFeedback) setSaveMsg(null);
       setTableSearch("");
       setSheetShowAll(false);
@@ -326,11 +369,7 @@ export default function ProfessorSessionsView() {
       /* use list payload */
     }
     setWorkingSession(full);
-    const next: Record<number, AttendanceStatus> = {};
-    (full.attendances ?? []).forEach((a) => {
-      next[a.id] = a.status;
-    });
-    setPendingEdits(next);
+    setRowOverrides({});
     if (resetFeedback) setSaveMsg(null);
     setTableSearch("");
     setSheetShowAll(false);
@@ -343,30 +382,6 @@ export default function ProfessorSessionsView() {
     }
   };
 
-  const effectiveStatus = (row: AttendanceRow): AttendanceStatus =>
-    pendingEdits[row.id] ?? row.status;
-
-  const sessionIdsForCourse = useMemo(() => {
-    if (!workingSession) return new Set<number>();
-    return new Set(
-      sessionsDisplay
-        .filter((s) => s.assignment === workingSession.assignment)
-        .map((s) => s.id)
-    );
-  }, [sessionsDisplay, workingSession]);
-
-  /** Cumulative absence events (status `absent`) for this module/group across loaded sessions */
-  const absenceCountByStudent = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const row of teacherAttendanceRows) {
-      if (row.session === undefined) continue;
-      if (!sessionIdsForCourse.has(row.session)) continue;
-      if (row.status !== "absent") continue;
-      map.set(row.student, (map.get(row.student) ?? 0) + 1);
-    }
-    return map;
-  }, [teacherAttendanceRows, sessionIdsForCourse]);
-
   const stats = useMemo(() => {
     const rows = workingSession?.attendances ?? [];
     if (rows.length === 0) {
@@ -376,7 +391,7 @@ export default function ProfessorSessionsView() {
       a = 0,
       j = 0;
     rows.forEach((r) => {
-      const st = pendingEdits[r.id] ?? r.status;
+      const st = getRowDraft(r).status;
       if (st === "present") p++;
       else if (st === "justified") j++;
       else a++;
@@ -387,7 +402,7 @@ export default function ProfessorSessionsView() {
       absent: Math.round((a / n) * 100),
       justified: Math.round((j / n) * 100),
     };
-  }, [workingSession, pendingEdits]);
+  }, [workingSession, getRowDraft]);
 
   const filteredRows = useMemo(() => {
     const rows = workingSession?.attendances ?? [];
@@ -406,10 +421,6 @@ export default function ProfessorSessionsView() {
     return filteredRows.slice(0, SHEET_PAGE_SIZE);
   }, [filteredRows, sheetShowAll]);
 
-  const setRowStatus = (attendanceId: number, status: AttendanceStatus) => {
-    setPendingEdits((prev) => ({ ...prev, [attendanceId]: status }));
-  };
-
   const saveAttendance = async () => {
     if (!workingSession) return;
     if (isMockProfSessionId(workingSession.id)) {
@@ -422,21 +433,37 @@ export default function ProfessorSessionsView() {
     }
     const token = getAccessToken();
     const rows = workingSession.attendances ?? [];
-    const changed = rows.filter((r) => {
-      const next = pendingEdits[r.id];
-      return next !== undefined && next !== r.status;
-    });
-    if (changed.length === 0) {
-      setSaveMsg(
-        isAr ? "لا توجد تغييرات لحفظها." : "No changes to save."
-      );
-      return;
-    }
     setSaving(true);
     setSaveMsg(null);
     try {
-      for (const row of changed) {
-        const status = pendingEdits[row.id] ?? row.status;
+      for (const row of rows) {
+        const eff = getRowDraft(row);
+        const srv = serverRowDraft(row);
+        if (draftEquals(eff, srv)) continue;
+        const baseEx =
+          row.extra_values && typeof row.extra_values === "object"
+            ? { ...row.extra_values }
+            : {};
+        const mergedExtra: Record<string, unknown> = {
+          ...baseEx,
+          participation_points: eff.participation_points,
+          professor_note: eff.professor_note,
+        };
+        if (srv.status === "justified") {
+          const res = await fetch(
+            `${apiBase}/api/attendance/attendance/${row.id}/`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token && { Authorization: `Bearer ${token}` }),
+              },
+              body: JSON.stringify({ extra_values: mergedExtra }),
+            }
+          );
+          if (!res.ok) throw new Error(await res.text());
+          continue;
+        }
         const res = await fetch(
           `${apiBase}/api/attendance/attendance/${row.id}/`,
           {
@@ -445,32 +472,31 @@ export default function ProfessorSessionsView() {
               "Content-Type": "application/json",
               ...(token && { Authorization: `Bearer ${token}` }),
             },
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({
+              status: eff.status,
+              extra_values: mergedExtra,
+            }),
           }
         );
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
+        if (!res.ok) throw new Error(await res.text());
       }
       await refreshData();
-      const detailRes = await fetch(
-        `${apiBase}/api/attendance/sessions/${workingSession.id}/`,
-        { headers: { ...(token && { Authorization: `Bearer ${token}` }) } }
+      setSaveMsg(
+        isAr
+          ? "تم حفظ الورقة وإنهاء الحصة."
+          : "Session saved and completed."
       );
-      if (detailRes.ok) {
-        const fresh = (await detailRes.json()) as SessionApi;
-        await startWorking(fresh, { resetFeedback: false });
-        setSaveMsg(
-          isAr ? "تم حفظ الغياب والحضور." : "Attendance & absences saved."
-        );
-        void notifyUser({
-          title: isAr ? "تم الحفظ" : "Saved",
-          body: isAr
-            ? "تم تحديث الحضور والغياب لهذه الحصة."
-            : "Attendance for this session was updated.",
-          tag: `session-save-${workingSession.id}`,
-        });
-      }
+      void notifyUser({
+        title: isAr ? "انتهت الحصة" : "Session complete",
+        body: isAr
+          ? "سُجّل الحضور والنقاط والملاحظات في السجل."
+          : "Attendance, points, and notes were stored in history.",
+        tag: `session-close-${workingSession.id}`,
+      });
+      setWorkingSession(null);
+      setRowOverrides({});
+      setRowModal(null);
+      setModalDraft(null);
     } catch (e) {
       console.error(e);
       setSaveMsg(isAr ? "فشل الحفظ." : "Save failed.");
@@ -486,20 +512,23 @@ export default function ProfessorSessionsView() {
       "user_id",
       "name",
       "email",
-      `session_${workingSession.date}`,
-      "absence_count_course",
+      "presence",
+      "participation_points",
+      "professor_note",
     ];
     const lines = [
       header.join(","),
-      ...rows.map((r) =>
-        [
+      ...rows.map((r) => {
+        const d = getRowDraft(r);
+        return [
           r.student_email?.split("@")[0] ?? r.student,
           `"${(r.student_name ?? "").replace(/"/g, '""')}"`,
           `"${(r.student_email ?? "").replace(/"/g, '""')}"`,
-          effectiveStatus(r),
-          absenceCountByStudent.get(r.student) ?? 0,
-        ].join(",")
-      ),
+          d.status,
+          d.participation_points,
+          `"${(d.professor_note ?? "").replace(/"/g, '""')}"`,
+        ].join(",");
+      }),
     ];
     const blob = new Blob([lines.join("\n")], {
       type: "text/csv;charset=utf-8;",
@@ -514,6 +543,43 @@ export default function ProfessorSessionsView() {
 
   const createSession = async () => {
     if (newAssignmentId === "") return;
+
+    if (
+      isDemoTeacherAssignmentId(newAssignmentId) &&
+      isDemoTeacherAssignmentsEnabled()
+    ) {
+      setCreating(true);
+      try {
+        const id = nextDemoScheduleSessionId();
+        const date = sessionStart.format("YYYY-MM-DD");
+        const startH = padTimeForApi(sessionStart.format("HH:mm"));
+        const endH = padTimeForApi(
+          sessionStart.add(2, "hour").format("HH:mm")
+        );
+        const created = buildDemoScheduleSessionRow({
+          id,
+          date,
+          start_time: startH,
+          end_time: endH,
+          group_name: selectedGroup || "G-Demo",
+          module_name: selectedModule || "Module demo",
+        });
+        setSessions((s) => [created, ...s]);
+        setShowScheduleForm(false);
+        toast.success(
+          isAr
+            ? "حصة تجريبية — أُضيفت في الواجهة فقط (بدون حفظ على الخادم)."
+            : "Test session added in the app only (not saved to the server)."
+        );
+        await startWorking(created, { resetFeedback: true });
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
+
     const token = getAccessToken();
     setCreating(true);
     try {
@@ -525,9 +591,11 @@ export default function ProfessorSessionsView() {
         },
         body: JSON.stringify({
           assignment: newAssignmentId,
-          date: newDate,
-          start_time: padTimeForApi(newStart),
-          end_time: padTimeForApi(newEnd),
+          date: sessionStart.format("YYYY-MM-DD"),
+          start_time: padTimeForApi(sessionStart.format("HH:mm")),
+          end_time: padTimeForApi(
+            sessionStart.add(2, "hour").format("HH:mm")
+          ),
           extra_fields: [],
         }),
       });
@@ -537,6 +605,11 @@ export default function ProfessorSessionsView() {
       }
       await refreshData();
       setShowScheduleForm(false);
+      toast.success(
+        isAr
+          ? "تم إنشاء الحصة. تم إشعار الطلاب."
+          : "Session created. Students have been notified."
+      );
       let created: SessionApi | null = null;
       try {
         created = text ? (JSON.parse(text) as SessionApi) : null;
@@ -544,8 +617,6 @@ export default function ProfessorSessionsView() {
         created = null;
       }
       if (created?.id) {
-        // Opening the new session also triggers `notifyUser` inside `startWorking`
-        // when `resetFeedback` is true (default), so we do not notify twice here.
         await startWorking(created);
       }
     } catch (e) {
@@ -564,14 +635,15 @@ export default function ProfessorSessionsView() {
       isAr ? "التاريخ" : "Date"
     );
 
-  const sessionColLabel = workingSession
-    ? formatSessionColumnDate(workingSession, locale)
-    : "";
+  const historyAssignmentList = useMemo((): AssignmentApi[] => {
+    if (assignments.length > 0) return assignments;
+    return assignmentsForSchedule;
+  }, [assignments, assignmentsForSchedule]);
 
   if (loading) {
     return (
-      <div className="flex min-h-[12rem] items-center justify-center rounded-2xl border border-[#D6DEEF] bg-white/80 dark:bg-card">
-        <p className="text-sm text-[#5A6B82]">
+      <div className="flex min-h-[12rem] items-center justify-center rounded-2xl border border-border bg-card/80">
+        <p className="text-sm text-muted-foreground">
           {isAr ? "جارٍ تحميل الحصص وإدارة الغياب…" : "Loading sessions…"}
         </p>
       </div>
@@ -599,170 +671,267 @@ export default function ProfessorSessionsView() {
   }
 
   if (workingSession && sheetTitle) {
+    const exitSheet = () => {
+      setWorkingSession(null);
+      setRowOverrides({});
+      setRowModal(null);
+      setModalDraft(null);
+      setSaveMsg(null);
+    };
+
+    const openStudentModal = (row: AttendanceRow) => {
+      setRowModal(row);
+      setModalDraft({ ...getRowDraft(row) });
+    };
+
+    const commitModal = () => {
+      if (!rowModal || !modalDraft) return;
+      setRowOverrides((prev) => ({
+        ...prev,
+        [rowModal.id]: { ...modalDraft },
+      }));
+      setRowModal(null);
+      setModalDraft(null);
+    };
+
+    const cancelModal = () => {
+      setRowModal(null);
+      setModalDraft(null);
+    };
+
     return (
-      <div className="w-full max-w-6xl space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#D6DEEF] pb-5">
-          <div className="min-w-0 space-y-1">
-            <h2 className="text-xl font-bold tracking-tight text-[#2D3748] dark:text-[#E8EEF7]">
-              {isAr ? "ورقة الحضور والغياب" : "Semestrial Attendance Sheet"}
-            </h2>
-            <p className="text-sm text-[#718096] dark:text-muted-foreground">
-              {sheetTitle}
-            </p>
-            <p className="text-xs text-[#5A6B82]">
-              {isAr
-                ? "سجّل الغياب والحضور لكل طالب، ثم احفظ. يمكن تصدير الورقة كملف."
-                : "Record presence and absences for each student, then save. Export the sheet as needed."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-lg border-2 border-[#2D3748] bg-white px-4 text-[#2D3748] hover:bg-[#2D3748]/5 dark:border-[#94A3B8] dark:bg-transparent dark:text-foreground"
-              onClick={exportCsv}
-            >
-              <ArrowUpFromLine className="size-4" />
-              {isAr ? "تصدير" : "Export"}
-            </Button>
-            <Button
-              type="button"
-              className="h-10 rounded-lg bg-[#2D3748] px-5 text-white hover:bg-[#1e293b] dark:bg-[#334155]"
-              onClick={() => void saveAttendance()}
-              disabled={saving}
-            >
-              <Save className="size-4" />
-              {saving
-                ? isAr
-                  ? "جارٍ الحفظ…"
-                  : "Saving…"
-                : isAr
-                  ? "حفظ"
-                  : "Save"}
-            </Button>
+      <div className="w-full min-w-0 space-y-5">
+        <div className="space-y-4 border-b border-border pb-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+            <div className="flex min-w-0 items-start gap-2 sm:gap-3 sm:min-w-0 sm:flex-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="mt-0.5 shrink-0 text-foreground hover:bg-primary/10"
+                onClick={exitSheet}
+                aria-label={isAr ? "رجوع" : "Back"}
+              >
+                <ArrowLeft className="size-5 rtl:rotate-180" />
+              </Button>
+              <div className="min-w-0 flex-1 space-y-1">
+                <h2 className="break-words text-xl font-bold tracking-tight text-foreground">
+                  {isAr ? "ورقة الحضور اليومية" : "Daily Attendance Sheet"}
+                </h2>
+                <p className="break-words text-sm text-muted-foreground">
+                  {sheetTitle}
+                </p>
+                <p className="break-words text-xs text-muted-foreground">
+                  {isAr
+                    ? "انقر صفًا لتحرير الحضور والنقاط والملاحظات. «حفظ» يُسجّل كل شيء ويُنهي الحصة."
+                    : "Click a row to edit presence, points, and notes. Save stores everything and ends the session."}
+                </p>
+              </div>
+            </div>
+            <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:justify-end sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 min-w-0 rounded-lg border-2 border-primary bg-card px-3 text-sm text-primary shadow-md hover:bg-primary/5 sm:px-4"
+                onClick={exportCsv}
+              >
+                <ArrowUpFromLine className="size-4 shrink-0" />
+                {isAr ? "تصدير" : "Export"}
+              </Button>
+              <Button
+                type="button"
+                className="h-10 min-w-0 rounded-lg bg-[#51689A] px-3 text-sm text-white-primary shadow-md hover:bg-[#51689A]/90 sm:px-5"
+                onClick={() => void saveAttendance()}
+                disabled={saving}
+              >
+                <Save className="size-4 shrink-0" />
+                {saving
+                  ? isAr
+                    ? "جارٍ الحفظ…"
+                    : "Saving…"
+                  : isAr
+                    ? "حفظ"
+                    : "Save"}
+              </Button>
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-[#74CFC4]/70 bg-white px-4 py-4 text-center shadow-sm dark:bg-card">
-            <p className="text-2xl font-bold text-[#2A9D8F]">{stats.present}%</p>
-            <p className="text-sm font-medium text-[#2A9D8F]/90">
-              {isAr ? "حاضر" : "Present"}
-            </p>
+          <div className="relative overflow-hidden rounded-xl border border-[#74A7BD]/30 bg-gradient-to-br from-[#74A7BD]/12 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+            <div className="pointer-events-none absolute -end-10 -top-8 h-24 w-24 rounded-full bg-fuchsia-200/25 blur-2xl" />
+            <div className="pointer-events-none absolute -bottom-6 end-4 h-16 w-16 rounded-full bg-[#74A7BD]/20 blur-2xl" />
+            <div className="relative">
+              <p
+                className="text-2xl font-bold"
+                style={{ color: STATUS_HEX.present }}
+              >
+                {stats.present}%
+              </p>
+              <p
+                className="text-sm font-medium"
+                style={{ color: STATUS_HEX.present }}
+              >
+                {isAr ? "حاضر" : "Present"}
+              </p>
+            </div>
           </div>
-          <div className="rounded-xl border border-[#E76F51]/60 bg-white px-4 py-4 text-center shadow-sm dark:bg-card">
-            <p className="text-2xl font-bold text-[#E76F51]">{stats.absent}%</p>
-            <p className="text-sm font-medium text-[#E76F51]/90">
-              {isAr ? "غائب" : "Absent"}
-            </p>
+          <div className="relative overflow-hidden rounded-xl border-2 border-[#C71122]/45 bg-gradient-to-br from-[#C71122]/10 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+            <div className="pointer-events-none absolute -end-12 top-0 h-28 w-28 rounded-full bg-rose-300/30 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-6 start-0 h-20 w-20 rounded-full bg-[#C71122]/10 blur-2xl" />
+            <div className="relative">
+              <p
+                className="text-2xl font-bold"
+                style={{ color: STATUS_HEX.absent }}
+              >
+                {stats.absent}%
+              </p>
+              <p
+                className="text-sm font-medium"
+                style={{ color: STATUS_HEX.absent }}
+              >
+                {isAr ? "غائب" : "Absent"}
+              </p>
+            </div>
           </div>
-          <div className="rounded-xl border border-[#2D3748]/25 bg-white px-4 py-4 text-center shadow-sm dark:bg-card">
-            <p className="text-2xl font-bold text-[#2D3748] dark:text-[#CBD5E1]">
-              {stats.justified}%
-            </p>
-            <p className="text-sm font-medium text-[#4A5568] dark:text-muted-foreground">
-              {isAr ? "مبرر" : "Justified"}
-            </p>
+          <div className="relative overflow-hidden rounded-xl border border-[#E7CE51]/40 bg-gradient-to-br from-[#E7CE51]/10 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+            <div className="pointer-events-none absolute -end-8 -top-6 h-20 w-20 rounded-full bg-amber-200/35 blur-2xl" />
+            <div className="pointer-events-none absolute bottom-0 end-0 h-16 w-16 rounded-full bg-[#E7CE51]/15 blur-2xl" />
+            <div className="relative">
+              <p
+                className="text-2xl font-bold"
+                style={{ color: STATUS_HEX.justified }}
+              >
+                {stats.justified}%
+              </p>
+              <p
+                className="text-sm font-medium"
+                style={{ color: STATUS_HEX.justified }}
+              >
+                {isAr ? "مبرر" : "Justified"}
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-[#D6DEEF] bg-white shadow-sm dark:border-border dark:bg-card">
-          <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#E8EEF7] p-3">
-            <div className="relative w-full min-w-[200px] max-w-sm sm:max-w-xs">
-              <Search className="pointer-events-none absolute start-3 top-1/2 z-10 size-4 -translate-y-1/2 text-[#718096]" />
+        <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
+              <Users
+                className="size-4 shrink-0 text-[#1B2065F2] border border-[#1B2065F2]"
+                aria-hidden
+              />
+              {isAr ? "قائمة الطلاب" : "Student list"}
+            </div>
+            <div className="relative w-full min-w-0 sm:max-w-xs sm:shrink-0">
+              <Search className="pointer-events-none absolute start-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={tableSearch}
                 onChange={(e) => setTableSearch(e.target.value)}
                 placeholder={isAr ? "بحث عن طالب…" : "Search students…"}
-                className="h-10 rounded-full border-[#D6DEEF] bg-[#F7FAFC] ps-10 pe-4 text-sm text-[#2D3748] ring-offset-2 focus-visible:ring-[#5B8FA8]/40 dark:bg-background"
+                className="h-10 min-w-0 rounded-full border-border bg-background ps-10 pe-4 text-sm text-foreground ring-offset-2 focus-visible:ring-blue-secondary/40"
               />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
+            <table className="w-full min-w-0 text-sm">
               <thead>
-                <tr className="bg-[#5B8FA8] text-white">
-                  <th className="px-3 py-3 text-start font-semibold">
+                <tr className="bg-blue-primary text-primary-foreground">
+                  <th className="px-1.5 py-2 text-start text-[0.7rem] font-semibold sm:px-3 sm:py-3 sm:text-sm">
                     {isAr ? "المعرّف" : "User ID"}
                   </th>
-                  <th className="px-3 py-3 text-start font-semibold">
+                  <th className="px-1.5 py-2 text-start text-[0.7rem] font-semibold sm:px-3 sm:py-3 sm:text-sm">
                     {isAr ? "الاسم" : "Name"}
                   </th>
-                  <th className="px-3 py-3 text-center font-semibold">
-                    {sessionColLabel}
+                  <th className="px-1.5 py-2 text-center text-[0.7rem] font-semibold sm:px-3 sm:py-3 sm:text-sm">
+                    {isAr ? "تعليم الحضور" : "Mark presence"}
                   </th>
-                  <th className="px-3 py-3 text-center font-semibold">
-                    {isAr ? "مجموع الغياب" : "Absence count"}
+                  <th className="px-1.5 py-2 text-center text-[0.7rem] font-semibold sm:px-3 sm:py-3 sm:text-sm">
+                    {isAr ? "النقاط" : "Points"}
                   </th>
-                  <th className="w-10 px-1 py-3 text-center" aria-hidden>
-                    <ChevronRight className="mx-auto size-4 opacity-70" />
+                  <th className="px-1.5 py-2 text-center text-[0.7rem] font-semibold sm:px-3 sm:py-3 sm:text-sm">
+                    {isAr ? "ملاحظات" : "Notes"}
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {sheetRowsVisible.map((row) => {
-                  const st = effectiveStatus(row);
-                  const cumAbs = absenceCountByStudent.get(row.student) ?? 0;
+                  const d = getRowDraft(row);
+                  const st = d.status;
+                  const letter =
+                    st === "present" ? "P" : st === "absent" ? "A" : "J";
+                  const markBg =
+                    st === "present"
+                      ? STATUS_HEX.present
+                      : st === "absent"
+                        ? STATUS_HEX.absent
+                        : STATUS_HEX.justified;
+                  const fg =
+                    st === "justified" && letter === "J" ? "#1B2065" : "#fff";
+                  const hasNote = (d.professor_note ?? "").trim().length > 0;
                   return (
                     <tr
                       key={row.id}
-                      className="border-b border-[#E8EEF7] odd:bg-[#FAFCFF] dark:odd:bg-muted/20"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openStudentModal(row)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openStudentModal(row);
+                        }
+                      }}
+                      className="cursor-pointer border-b border-border odd:bg-card even:bg-muted/30 hover:bg-primary/5 focus-visible:outline focus-visible:ring-2 focus-visible:ring-blue-secondary/50 dark:even:bg-muted/15"
                     >
-                      <td className="px-3 py-2.5 font-mono text-xs text-[#2D3748]">
+                      <td className="px-1.5 py-2.5 font-mono text-xs text-foreground sm:px-3">
                         {row.student_email?.split("@")[0] ?? row.student}
                       </td>
-                      <td className="max-w-[200px] truncate px-3 py-2.5 text-[#2D3748] dark:text-foreground">
+                      <td className="max-w-[12rem] truncate px-1.5 py-2.5 text-foreground min-[400px]:max-w-[200px] sm:px-3">
                         {row.student_name ?? row.student_email ?? "—"}
                       </td>
-                      <td className="px-2 py-2">
-                        <div className="flex flex-wrap justify-center gap-1">
-                          {(
-                            [
-                              ["present", "P", "#2A9D8F"],
-                              ["absent", "A", "#E76F51"],
-                              ["justified", "J", "#2D3748"],
-                            ] as const
-                          ).map(([key, letter, color]) => (
-                            <Button
-                              key={key}
-                              type="button"
-                              variant="ghost"
-                              title={
-                                key === "present"
-                                  ? isAr
-                                    ? "حاضر"
-                                    : "Present"
-                                  : key === "absent"
-                                    ? isAr
-                                      ? "غائب"
-                                      : "Absent"
-                                    : isAr
-                                      ? "غياب مبرر"
-                                      : "Justified absence"
-                              }
-                              onClick={() =>
-                                setRowStatus(row.id, key as AttendanceStatus)
-                              }
-                              className="h-auto min-h-9 min-w-9 rounded-md p-0 text-sm font-bold transition-transform hover:scale-105 hover:bg-transparent"
-                              style={{
-                                backgroundColor:
-                                  st === key ? color : `${color}18`,
-                                color: st === key ? "#fff" : color,
-                                border:
-                                  st === key
-                                    ? `2px solid ${color}`
-                                    : `1px solid ${color}40`,
-                              }}
-                            >
-                              {letter}
-                            </Button>
-                          ))}
-                        </div>
+                      <td className="px-1.5 py-2 text-center sm:px-2">
+                        <span
+                          className="inline-flex h-8 min-w-8 items-center justify-center rounded-md text-sm font-bold"
+                          style={{
+                            backgroundColor: markBg,
+                            color: fg,
+                            border: `1px solid ${markBg}`,
+                          }}
+                        >
+                          {letter}
+                        </span>
                       </td>
-                      <td className="px-3 py-2.5 text-center font-semibold tabular-nums text-[#4A5568]">
-                        {cumAbs}
+                      <td className="px-1.5 py-2.5 text-center text-foreground sm:px-3">
+                        <span className="inline-flex items-center justify-center gap-1 tabular-nums">
+                          <Star
+                            className="size-3.5 shrink-0 fill-amber-400 text-amber-400 sm:size-4"
+                            aria-hidden
+                          />
+                          <span className="font-semibold text-blue-primary">
+                            {d.participation_points}
+                          </span>
+                        </span>
                       </td>
-                      <td />
+                      <td className="px-1.5 py-2.5 text-center sm:px-3">
+                        <Pencil
+                          className={cn(
+                            "mx-auto size-4",
+                            hasNote
+                              ? "text-blue-primary"
+                              : "text-muted-foreground/70"
+                          )}
+                          aria-hidden
+                        />
+                        <span className="sr-only">
+                          {hasNote
+                            ? isAr
+                              ? "يوجد ملاحظات"
+                              : "Has notes"
+                            : isAr
+                              ? "لا ملاحظات"
+                              : "No notes"}
+                        </span>
+                      </td>
                     </tr>
                   );
                 })}
@@ -770,11 +939,10 @@ export default function ProfessorSessionsView() {
             </table>
           </div>
           {filteredRows.length > SHEET_PAGE_SIZE && (
-            <div className="flex justify-end border-t border-[#E8EEF7] p-3">
+            <div className="flex justify-end border-t border-border p-3">
               <Button
                 type="button"
-                variant="secondary"
-                className="rounded-lg bg-[#2D3748] text-white hover:bg-[#1e293b]"
+                className="rounded-lg bg-blue-primary text-primary-foreground hover:bg-blue-primary/90"
                 onClick={() => setSheetShowAll((v) => !v)}
               >
                 {sheetShowAll
@@ -789,6 +957,187 @@ export default function ProfessorSessionsView() {
           )}
         </div>
 
+        <Dialog
+          open={rowModal != null}
+          onOpenChange={(open) => {
+            if (!open) cancelModal();
+          }}
+        >
+          <DialogContent
+            showCloseButton={false}
+            overlayClassName="fixed inset-0 z-50 bg-[#74A7BDCC] duration-100 supports-backdrop-filter:backdrop-blur-xl data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+            className="max-h-[min(90dvh,calc(100dvh-0.5rem))] w-full min-w-0 overflow-x-hidden overflow-y-auto border-border bg-[#FEF9F9] p-3 sm:max-w-2xl sm:rounded-xl sm:p-6 shadow-md"
+          >
+            {rowModal && modalDraft ? (
+              <div className="flex w-full min-w-0 flex-col gap-4 sm:gap-5">
+                <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <DialogTitle asChild>
+                    <h2 className="w-full min-w-0 text-balance break-words text-start text-lg font-bold leading-tight text-[#1B2065] sm:flex-1 sm:text-xl">
+                    {rowModal.student_name ??
+                      rowModal.student_email ??
+                      "—"}
+                    </h2>
+                  </DialogTitle>
+                  <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:justify-end">
+                    <Button
+                      type="button"
+                      className="h-10 min-w-0 rounded-md bg-[#1B2065] text-sm text-white shadow-md hover:bg-[#1B2065]/90"
+                      onClick={cancelModal}
+                    >
+                      {isAr ? "إلغاء" : "Cancel"}
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-10 min-w-0 rounded-md border-0 bg-[#74A7BD] text-sm text-white shadow-md hover:bg-[#74A7BD]/90"
+                      onClick={commitModal}
+                    >
+                      {isAr ? "حفظ" : "Save"}
+                    </Button>
+                  </div>
+                </div>
+
+                <DialogDescription asChild>
+                  <p className="min-w-0 break-words text-pretty text-start text-sm leading-relaxed text-[#51689A] sm:text-[15px]">
+                    {isAr
+                      ? "تأكد من الحضور، وأضف النقاط والملاحظات."
+                      : "Check attendance, write notes, and set participation points."}
+                  </p>
+                </DialogDescription>
+
+                {modalDraft.status === "justified" ? (
+                  <p className="rounded-lg border border-chekin-warning/40 bg-chekin-warning/10 px-3 py-2 text-start text-xs text-foreground sm:text-sm">
+                    {isAr
+                      ? "حالة «غياب مبرر» تُحدّث تلقائيًا عند موافقة الإدارة على المستندات. يمكنك تعديل النقاط والملاحظات فقط."
+                      : "“Justified” is set automatically when the school approves a student’s absence. You can only edit points and notes."}
+                  </p>
+                ) : null}
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-4">
+                  <span className="shrink-0 pt-0.5 text-sm font-bold text-[#1B2065] sm:min-w-[5.5rem] sm:pt-2.5">
+                    {isAr ? "الحضور" : "Attendance"}
+                  </span>
+                  <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:gap-4">
+                    <button
+                      type="button"
+                      disabled={modalDraft.status === "justified"}
+                      onClick={() =>
+                        setModalDraft((d) =>
+                          d ? { ...d, status: "present" } : d
+                        )
+                      }
+                      className={cn(
+                        "flex w-full min-w-0 items-center justify-start gap-2 border-0 bg-transparent py-1.5 text-start text-sm font-medium text-[#1B2065] shadow-none ring-0 transition-opacity outline-none min-[400px]:justify-center min-[400px]:gap-2.5 min-[400px]:text-base",
+                        "hover:opacity-100 focus-visible:ring-2 focus-visible:ring-[#74A7BD]/50 focus-visible:ring-offset-2",
+                        modalDraft.status === "justified" &&
+                          "pointer-events-none cursor-not-allowed opacity-50",
+                        modalDraft.status !== "present" && "opacity-70"
+                      )}
+                      aria-pressed={modalDraft.status === "present"}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white",
+                          modalDraft.status === "present"
+                            ? "bg-[#74A7BD]"
+                            : "bg-[#74A7BD]/45"
+                        )}
+                      >
+                        P
+                      </span>
+                      <span className="min-w-0 break-words">
+                        {isAr ? "حاضر" : "Present"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={modalDraft.status === "justified"}
+                      onClick={() =>
+                        setModalDraft((d) =>
+                          d ? { ...d, status: "absent" } : d
+                        )
+                      }
+                      className={cn(
+                        "flex w-full min-w-0 items-center justify-start gap-2 border-0 bg-transparent py-1.5 text-start text-sm font-medium text-[#1B2065] shadow-none ring-0 transition-opacity outline-none min-[400px]:justify-center min-[400px]:gap-2.5 min-[400px]:text-base",
+                        "hover:opacity-100 focus-visible:ring-2 focus-visible:ring-[#C71122]/50 focus-visible:ring-offset-2",
+                        modalDraft.status === "justified" &&
+                          "pointer-events-none cursor-not-allowed opacity-50",
+                        modalDraft.status !== "absent" && "opacity-70"
+                      )}
+                      aria-pressed={modalDraft.status === "absent"}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white",
+                          modalDraft.status === "absent"
+                            ? "bg-[#C71122]"
+                            : "bg-[#C71122]/40"
+                        )}
+                      >
+                        A
+                      </span>
+                      <span className="min-w-0 break-words">
+                        {isAr ? "غائب" : "Absent"}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                  <div className="shrink-0 sm:min-w-[5.5rem] sm:max-w-[12rem] sm:flex-1">
+                    <p className="text-sm font-bold text-[#1B2065]">
+                      {isAr ? "نقاط المشاركة" : "Participation points"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {isAr
+                        ? "إضافة خصم أو منح نقاط"
+                        : "Add or deduct participation points"}
+                    </p>
+                  </div>
+                  <div className="w-full min-w-0 sm:max-w-[11rem] sm:flex-none sm:ms-auto">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={-100}
+                      max={100}
+                      value={modalDraft.participation_points}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setModalDraft((d) =>
+                          d
+                            ? {
+                                ...d,
+                                participation_points: Number.isFinite(v)
+                                  ? Math.trunc(v)
+                                  : 0,
+                              }
+                            : d
+                        );
+                      }}
+                      className="h-10 w-full rounded-md border border-[#1B2065]/20 bg-white px-3 text-end text-base tabular-nums text-[#1B2065] shadow-md outline-none transition-[border,box-shadow] focus:border-[#74A7BD] focus:ring-2 focus:ring-[#74A7BD]/25"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex min-w-0 flex-col gap-2">
+                  <p className="text-sm font-bold text-[#1B2065]">
+                    {isAr ? "ملاحظات" : "Notes"}
+                  </p>
+                  <Textarea
+                    placeholder={isAr ? "اكتب ملاحظات…" : "write notes…"}
+                    className="min-h-[120px] w-full max-w-full resize-y rounded-lg border-border text-base sm:min-h-[100px]"
+                    value={modalDraft.professor_note}
+                    onChange={(e) =>
+                      setModalDraft((d) =>
+                        d ? { ...d, professor_note: e.target.value } : d
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+
         {saveMsg && (
           <Alert
             variant={
@@ -798,10 +1147,10 @@ export default function ProfessorSessionsView() {
             }
             className={
               saveMsg.includes("تجريبية") || saveMsg.includes("Demo")
-                ? "border-amber-500/40 bg-amber-500/10"
+                ? "border-chekin-warning/40 bg-chekin-warning/10"
                 : saveMsg.includes("فشل") || /failed/i.test(saveMsg)
                   ? undefined
-                  : "border-emerald-500/35 bg-emerald-500/10"
+                  : "border-blue-secondary/35 bg-blue-secondary/10"
             }
           >
             <Info aria-hidden />
@@ -828,12 +1177,8 @@ export default function ProfessorSessionsView() {
           <Button
             type="button"
             variant="outline"
-            className="rounded-lg border-[#D6DEEF]"
-            onClick={() => {
-              setWorkingSession(null);
-              setPendingEdits({});
-              setSaveMsg(null);
-            }}
+            className="rounded-lg border-border"
+            onClick={exitSheet}
           >
             {isAr ? "← الخروج من الحصة" : "← Exit session"}
           </Button>
@@ -843,20 +1188,20 @@ export default function ProfessorSessionsView() {
   }
 
   return (
-    <div className="w-full max-w-3xl space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight text-[#2D3748] dark:text-foreground">
+    <div className="w-full min-w-0 space-y-6 font-montserrat">
+      <header className="min-w-0 space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           {isAr ? "حصصك" : "Your Sessions"}
         </h1>
-        <p className="text-[15px] text-[#718096] dark:text-muted-foreground">
+        <p className="text-[15px] text-muted-foreground">
           {isAr
             ? "أنشئ الحصص وأدر الحضور."
             : "Create sessions and manage attendance."}
         </p>
-        <p className="text-xs text-[#718096]/90">
+        <p className="text-xs text-muted-foreground/90">
           <Link
             href="/Scheduals"
-            className="font-medium text-[#51689A] underline-offset-4 hover:underline"
+            className="font-medium text-blue-primary underline-offset-4 hover:underline"
           >
             {isAr
               ? "جداول PDF: من تبويب «الجداول»"
@@ -865,15 +1210,35 @@ export default function ProfessorSessionsView() {
         </p>
       </header>
 
+      {assignmentsCatalogFallback &&
+      !(
+        isDemoTeacherAssignmentsEnabled() &&
+        assignments.length === 0
+      ) ? (
+        <Alert className="border-chekin-warning/40 bg-chekin-warning/10">
+          <Info aria-hidden />
+          <div className="min-w-0 flex-1 space-y-1">
+            <AlertTitle>
+              {isAr ? "قائمة التعيينات" : "Teaching assignments"}
+            </AlertTitle>
+            <AlertDescription>
+              {isAr
+                ? "تعذّر تحميل قائمة التعيينات من الخادم. عند إنشاء حصة جديدة، تُستمد خيارات المستوى والمادة من حصصك الحالية عندما تكون متوفرة."
+                : "The teaching-assignment list could not be loaded from the server. When you schedule a new session, module and group choices use your existing sessions when available."}
+            </AlertDescription>
+          </div>
+        </Alert>
+      ) : null}
+
       {highlightSession && (
-        <div className="flex flex-col gap-4 rounded-2xl border-2 border-[#51689A]/55 bg-white p-5 shadow-sm dark:border-[#51689A]/45 dark:bg-card sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-xl border border-blue-primary/55 bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <p className="font-bold text-[#2D3748] dark:text-foreground">
+            <p className="font-bold text-foreground">
               {isAr
                 ? "لديك حصة مجدولة اليوم"
                 : "You have a session scheduled today"}
             </p>
-            <p className="text-sm text-[#718096] dark:text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {formatSessionSubtitle(
                 highlightSession,
                 locale,
@@ -883,12 +1248,15 @@ export default function ProfessorSessionsView() {
           </div>
           <Button
             type="button"
-            className="h-12 shrink-0 rounded-full bg-[#2D3748] px-8 text-white hover:bg-[#1e293b] dark:bg-[#334155]"
+            className="h-fit py-1 shrink-0 rounded-xl bg-[#51689A] px-8 text-white hover:bg-[#51689A]/90 flex justify-between border border-blue-primary/50"
             onClick={() => void startWorking(highlightSession)}
           >
             <span className="inline-flex items-center gap-2">
-              <span className="flex size-8 items-center justify-center rounded-full bg-white/15">
-                <Play className="size-4 fill-white text-white" />
+              <span className="flex size-8 items-center justify-center rounded-sm ">
+                <CirclePlay
+                className="size-5 text-white-primary font-bold"
+                strokeWidth={2}
+              />
               </span>
               {isAr ? "بدء الحصة" : "Start Session"}
             </span>
@@ -896,148 +1264,113 @@ export default function ProfessorSessionsView() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-[#D6DEEF] bg-[#F4F7FB] p-10 text-center shadow-inner dark:border-border dark:bg-muted/40">
-        <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-[#D4E8F2] dark:bg-muted">
-          <CirclePlay className="size-10 text-[#5B8FA8]" strokeWidth={1.25} />
-        </div>
-        <h2 className="text-lg font-semibold text-[#5B8FA8] dark:text-[#93C5D8]">
-          {isAr ? "لا توجد حصة نشطة" : "No Active Session"}
-        </h2>
-        <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-[#718096] dark:text-muted-foreground">
-          {isAr
-            ? "ابدأ حصة جديدة لتتبع الحضور. اختر الشعبة والمادة والتاريخ للبدء، أو استخدم حصة اليوم أعلاه."
-            : "Start a new session to start tracking attendance. Select a group, a module and a date to get started."}
-        </p>
+      <SessionHistorySemesterSection
+        isAr={isAr}
+        assignments={historyAssignmentList}
+        sessions={sessions}
+        teacherAttendanceRows={teacherAttendanceRows}
+      />
+
+      <div className="flex w-full justify-center">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-14 w-11/12 max-w-xl rounded-xl border-2 border-blue-primary/50 bg-card text-base font-medium text-blue-primary hover:bg-blue-primary/5 shadow-md"
+          onClick={() => setShowScheduleForm(true)}
+        >
+          <CalendarCheck className="me-2 size-5" />
+          {isAr ? "جدولة حصة إضافية" : "Schedule Extra Session"}
+        </Button>
       </div>
 
-      {showScheduleForm && (
-        <div className="space-y-4 rounded-2xl border border-[#D6DEEF] bg-[#F7FAFC] p-5 dark:border-border dark:bg-muted/30">
-          <p className="font-semibold text-[#2D3748]">
-            {isAr ? "جدولة حصة إضافية" : "Schedule extra session"}
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-xs font-medium text-[#5A6B82]">
-              {isAr ? "المادة / الشعبة" : "Module / group"}
-              <Select
-                value={
-                  newAssignmentId === ""
-                    ? undefined
-                    : String(newAssignmentId)
-                }
-                onValueChange={(v) =>
-                  setNewAssignmentId(v ? Number(v) : "")
-                }
-              >
-                <SelectTrigger className="mt-1.5 h-11 w-full rounded-2xl border-[#D6DEEF] bg-white px-3 text-sm text-[#2D3748] dark:bg-background">
-                  <SelectValue placeholder={isAr ? "اختر…" : "Choose…"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {assignments.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {(a.module_name ?? "?") + " — " + (a.group_name ?? "?")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="block text-xs font-medium text-[#5A6B82]">
-              {isAr ? "التاريخ" : "Date"}
-              <Input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="mt-1.5 h-11 rounded-2xl border-[#D6DEEF] bg-white px-3 text-sm dark:bg-background"
-              />
-            </label>
-            <label className="block text-xs font-medium text-[#5A6B82]">
-              {isAr ? "البداية" : "Start"}
-              <Input
-                type="time"
-                value={newStart}
-                onChange={(e) => setNewStart(e.target.value)}
-                className="mt-1.5 h-11 rounded-2xl border-[#D6DEEF] bg-white px-3 text-sm"
-              />
-            </label>
-            <label className="block text-xs font-medium text-[#5A6B82]">
-              {isAr ? "النهاية" : "End"}
-              <Input
-                type="time"
-                value={newEnd}
-                onChange={(e) => setNewEnd(e.target.value)}
-                className="mt-1.5 h-11 rounded-2xl border-[#D6DEEF] bg-white px-3 text-sm"
-              />
-            </label>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <Dialog
+        open={showScheduleForm}
+        onOpenChange={(open) => {
+          setShowScheduleForm(open);
+          if (open) {
+            const d = todayLocalIso();
+            setSessionStart(dayjs(`${d}T08:00:00`));
+            setSelectedGroup("");
+            setSelectedModule("");
+            setClassRoom("");
+            setNewAssignmentId("");
+          }
+        }}
+      >
+        <DialogContent
+          overlayClassName=" fixed inset-0 z-50 bg-[#1B2065]/80 duration-100 supports-backdrop-filter:backdrop-blur-xl data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+          className="max-h-[min(92dvh,760px)] w-full min-w-0 overflow-x-hidden overflow-y-auto border-0 bg-white p-4 shadow-xl sm:max-w-lg sm:p-6"
+          showCloseButton
+          onPointerDownOutside={(e) => {
+            if (isScheduleFormPortaledLayerTarget(e.target)) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (isScheduleFormPortaledLayerTarget(e.target)) e.preventDefault();
+          }}
+          onFocusOutside={(e) => {
+            if (isScheduleFormPortaledLayerTarget(e.target)) e.preventDefault();
+          }}
+        >
+          <DialogHeader className="gap-1">
+            <DialogTitle className="text-lg font-bold text-[#1B2065]">
+              {isAr ? "جدولة حصتك" : "Schedule your session"}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-[#51689A]">
+              {isAr
+                ? "أدخل التفاصيل لبدء الحصة."
+                : "Fill in the details to start your session."}
+            </DialogDescription>
+            {assignmentsForSchedule.length === 0 && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                {isAr
+                  ? "لا توجد تعيينات تدريس. أضف مدرساً وشعبةً ومادة في الخادم، أو نفّذ: python manage.py seed_schedule_demo"
+                  : "No teaching assignments for your account. Add a teacher, group, and module in the backend, or run: python manage.py seed_schedule_demo"}
+              </p>
+            )}
+            {!scheduleFormUsesApiAssignmentsOnly && (
+              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
+                {isAr
+                  ? "وضع تجريبي: «إنشاء الحصة» يضيف حصة وهمية في الواجهة فقط (بدون حفظ على الخادم). للإنتاج أضف تعيينات من الخادم."
+                  : "Test mode: Create session adds a mock session in the UI only (not saved to the server). For production, add real teaching assignments on the server."}
+              </p>
+            )}
+          </DialogHeader>
+          <ScheduleSessionForm
+            isAr={isAr}
+            groupOptions={scheduleGroupOptions}
+            moduleOptions={scheduleModuleOptions}
+            selectedGroup={selectedGroup}
+            selectedModule={selectedModule}
+            onGroupChange={onScheduleGroupChange}
+            onModuleChange={setSelectedModule}
+            classRoom={classRoom}
+            onClassRoomChange={setClassRoom}
+            sessionStart={sessionStart}
+            onSessionStartChange={(v) => v && setSessionStart(v)}
+          />
+          <DialogFooter className="relative z-10 mt-2 flex w-full flex-col items-center justify-center gap-0 sm:justify-center">
             <Button
               type="button"
-              className="rounded-lg bg-[#2D3748] text-white"
+              className="h-12 w-full max-w-sm cursor-pointer self-center rounded-full bg-[#51689A] text-base font-medium text-white shadow-sm hover:bg-[#51689A]/90 disabled:cursor-not-allowed disabled:opacity-60 p-2"
               onClick={() => void createSession()}
               disabled={creating || newAssignmentId === ""}
             >
-              {creating
-                ? isAr
-                  ? "جارٍ الإنشاء…"
-                  : "Creating…"
-                : isAr
-                  ? "تأكيد"
-                  : "Confirm"}
+              <span className="inline-flex items-center gap-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15">
+                  <Play className="size-4 fill-white text-white" />
+                </span>
+                {creating
+                  ? isAr
+                    ? "جارٍ الإنشاء…"
+                    : "Creating…"
+                  : isAr
+                    ? "إنشاء الحصة"
+                    : "Create session"}
+              </span>
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowScheduleForm(false)}
-            >
-              {isAr ? "إلغاء" : "Cancel"}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <Button
-        type="button"
-        variant="outline"
-        className="h-14 w-full rounded-xl border-2 border-[#2D3748] bg-white text-base font-medium text-[#2D3748] hover:bg-[#2D3748]/5 dark:bg-transparent dark:text-foreground"
-        onClick={() => setShowScheduleForm((v) => !v)}
-      >
-        <CalendarPlus className="me-2 size-5" />
-        {isAr ? "جدولة حصة إضافية" : "Schedule Extra Session"}
-      </Button>
-
-      {sessionsDisplay.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-sm font-bold text-[#2D3748] dark:text-foreground">
-            {isAr ? "كل الحصص" : "All sessions"}
-          </p>
-          {isProfSessionMockEnabled() &&
-            sessionsDisplay.some((s) => isMockProfSessionId(s.id)) && (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                {isAr
-                  ? "تظهر حصة تجريبية في وضع التطوير فقط."
-                  : "A demo session appears in development only."}
-              </p>
-            )}
-          <ul className="space-y-2">
-            {sessionsDisplay.map((s) => (
-              <li key={s.id}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => void startWorking(s)}
-                  className="h-auto w-full justify-between rounded-xl border border-[#E8EEF7] bg-white px-4 py-3 text-left text-sm font-normal text-[#2D3748] transition hover:border-[#5B8FA8]/50 hover:bg-[#F7FAFC] dark:bg-card dark:text-foreground dark:hover:bg-muted/30"
-                >
-                  <span className="font-medium">
-                    {formatSessionSubtitle(s, locale, "")}
-                  </span>
-                  <span className="text-[#5B8FA8]">
-                    <ChevronRight className="size-5 rtl:rotate-180" />
-                  </span>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

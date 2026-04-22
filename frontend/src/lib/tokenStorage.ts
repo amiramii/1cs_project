@@ -1,6 +1,7 @@
 const ACCESS_KEY = "access";
 const REFRESH_KEY = "refresh";
 const APP_ROLE_KEY = "app_role";
+const USER_EMAIL_KEY = "chekin_user_email";
 
 /** Development only: when set, UI pretends this role (JWT still used for API calls). */
 const DEV_APP_ROLE_OVERRIDE_KEY = "dev_app_role_preview";
@@ -150,6 +151,24 @@ export function hasValidAccessToken() {
   return payload.exp > now;
 }
 
+export function persistUserEmail(email: string, remember: boolean) {
+  if (typeof window === "undefined") return;
+  const n = email.trim().toLowerCase();
+  if (!n) return;
+  localStorage.removeItem(USER_EMAIL_KEY);
+  sessionStorage.removeItem(USER_EMAIL_KEY);
+  (remember ? localStorage : sessionStorage).setItem(USER_EMAIL_KEY, n);
+}
+
+export function getStoredUserEmail(): string | null {
+  if (typeof window === "undefined") return null;
+  return (
+    sessionStorage.getItem(USER_EMAIL_KEY) ??
+    localStorage.getItem(USER_EMAIL_KEY) ??
+    null
+  );
+}
+
 export function persistTokens(access: string, refresh: string, remember: boolean) {
   if (typeof window === "undefined") return;
   clearTokens();
@@ -193,9 +212,11 @@ export function clearTokens(){
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(APP_ROLE_KEY);
+  localStorage.removeItem(USER_EMAIL_KEY);
   sessionStorage.removeItem(ACCESS_KEY);
   sessionStorage.removeItem(REFRESH_KEY);
   sessionStorage.removeItem(APP_ROLE_KEY);
+  sessionStorage.removeItem(USER_EMAIL_KEY);
   if (isDevRolePreviewEnabled()) {
     sessionStorage.removeItem(DEV_APP_ROLE_OVERRIDE_KEY);
     dispatchDevRoleChanged();

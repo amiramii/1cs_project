@@ -60,7 +60,7 @@ export default function MiddleContainer({
       formData.append("user_type", "teacher");
 
       const token = getAccessToken();
-      const res = await fetch(`${apiBase}/api/students/upload/`, {
+      const res = await fetch(`${apiBase}/api/upload/`, {
         method: "POST",
         headers: {
           ...(token && { Authorization: `Bearer ${token}` }),
@@ -125,7 +125,7 @@ export default function MiddleContainer({
             type="button"
             disabled={uploading}
             onClick={submitTeachersCsv}
-            className="h-12 w-full rounded-md bg-[#51689A] text-sm font-semibold text-white-primary hover:bg-[#445680] xl:flex-1"
+            className="h-12 w-full rounded-md bg-[#51689A] text-sm font-semibold text-[#FEF9F9] hover:bg-[#51689A]/90 xl:flex-1"
           >
             {uploading
               ? isArabic

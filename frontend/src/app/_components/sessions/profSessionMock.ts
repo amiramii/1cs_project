@@ -1,24 +1,4 @@
-type AttendanceStatus = "present" | "absent" | "justified";
-
-type AttendanceRow = {
-  id: number;
-  session?: number;
-  student: number;
-  student_name?: string;
-  student_email?: string;
-  status: AttendanceStatus;
-};
-
-type SessionApi = {
-  id: number;
-  assignment: number;
-  date: string;
-  start_time: string;
-  end_time: string;
-  module_name?: string;
-  group_name?: string;
-  attendances?: AttendanceRow[];
-};
+import type { AttendanceRow, SessionApi } from "@/lib/professorSessionData";
 
 /** Reserved ID so we never hit the real API for this row */
 export const MOCK_PROF_SESSION_ID = 9_000_001;
@@ -42,6 +22,7 @@ export function buildMockProfSession(): SessionApi {
       student_name: "Boukhari Imene Douaa",
       student_email: "HBF0004@student.univ.dz",
       status: "absent",
+      extra_values: { participation_points: 0, professor_note: "" },
     },
     {
       id: 9_100_002,
@@ -50,6 +31,7 @@ export function buildMockProfSession(): SessionApi {
       student_name: "Demo Student",
       student_email: "student.demo@univ.dz",
       status: "present",
+      extra_values: { participation_points: 2, professor_note: "" },
     },
     {
       id: 9_100_003,
@@ -58,6 +40,7 @@ export function buildMockProfSession(): SessionApi {
       student_name: "Test User",
       student_email: "test.user@univ.dz",
       status: "justified",
+      extra_values: { participation_points: 0, professor_note: "" },
     },
   ];
   return {
@@ -85,4 +68,75 @@ export function isProfSessionMockEnabled(): boolean {
     process.env.NODE_ENV === "development" &&
     process.env.NEXT_PUBLIC_DEV_MOCK_PROF_SESSION !== "false"
   );
+}
+
+/** Reserved ID; never exists on the server — for schedule-form UI when there are no real assignments. */
+export const DEMO_TEACHER_ASSIGNMENT_ID = 9_000_002;
+
+type DemoAssignmentRow = {
+  id: number;
+  group_name: string;
+  module_name: string;
+};
+
+/**
+ * In `npm run dev`, when `GET` teaching-assignments yields nothing, inject a fake
+ * group/module pair so the schedule dialog can be exercised. Turn off with
+ * `NEXT_PUBLIC_DEV_DEMO_TEACHER_ASSIGNMENTS=false`.
+ */
+export function buildDemoTeacherAssignments(): DemoAssignmentRow[] {
+  return [
+    {
+      id: DEMO_TEACHER_ASSIGNMENT_ID,
+      group_name: "G-Demo",
+      module_name: "Module demo",
+    },
+  ];
+}
+
+export function isDemoTeacherAssignmentsEnabled(): boolean {
+  return (
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_DEV_DEMO_TEACHER_ASSIGNMENTS !== "false"
+  );
+}
+
+export function isDemoTeacherAssignmentId(id: number): boolean {
+  return id === DEMO_TEACHER_ASSIGNMENT_ID;
+}
+
+const DEMO_SCHEDULE_SESSION_ID_START = 9_200_000;
+let demoScheduleSessionSeq = 0;
+
+export function nextDemoScheduleSessionId(): number {
+  demoScheduleSessionSeq += 1;
+  return DEMO_SCHEDULE_SESSION_ID_START + demoScheduleSessionSeq;
+}
+
+/**
+ * Injected into local session state when the user “creates” a session in dev demo
+ * mode (no `POST` to the server).
+ */
+export function buildDemoScheduleSessionRow(p: {
+  id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  group_name: string;
+  module_name: string;
+}): SessionApi {
+  return {
+    id: p.id,
+    assignment: DEMO_TEACHER_ASSIGNMENT_ID,
+    date: p.date,
+    start_time: p.start_time,
+    end_time: p.end_time,
+    group_name: p.group_name,
+    module_name: p.module_name,
+    attendances: [],
+  };
+}
+
+export function isDemoScheduleSessionId(id: number): boolean {
+  return id >= DEMO_SCHEDULE_SESSION_ID_START && id < DEMO_SCHEDULE_SESSION_ID_START + 100_000;
 }
