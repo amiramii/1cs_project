@@ -27,15 +27,19 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`fixed inset-x-0 bottom-0 z-50 h-20 overflow-visible rounded-t-xl bg-[#F6F7FE] py-2 shadow-lg backdrop-blur-md md:inset-x-auto md:top-0 md:h-screen md:rounded-t-none md:py-4 ${sidePositionClass} ${expanded ? "md:w-64" : "md:w-24"} md:translate-x-0 transition-all duration-200 ${
+      className={`fixed inset-x-0 bottom-0 z-50 h-20 overflow-hidden rounded-t-xl border-t border-[#74A7BD]/20 py-2 shadow-lg md:inset-x-auto md:top-0 md:h-screen md:rounded-t-none md:border-t-0 md:border-e md:border-[#74A7BD]/20 md:py-4 ${sidePositionClass} ${expanded ? "md:w-64" : "md:w-24"} md:translate-x-0 transition-all duration-200 ${
         isRtl
           ? "md:right-0 md:rounded-l-2xl"
           : "md:left-0 md:rounded-r-2xl"
       }`}
     >
-        <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-background/90" />
+        <div className="pointer-events-none absolute inset-0" aria-hidden>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#74A7BD]/12 via-[#FEF9F9] to-[#F6F7FE]/88" />
+          <div className="absolute -end-3 top-2 h-24 w-24 rounded-full bg-fuchsia-200/30 blur-2xl md:top-6 md:h-32 md:w-32" />
+          <div className="absolute -start-1 bottom-10 h-20 w-20 rounded-full bg-[#74A7BD]/12 blur-2xl md:bottom-20" />
+          <div className="absolute end-1 bottom-1 h-14 w-14 rounded-full bg-sky-200/22 blur-xl md:end-2 md:bottom-2" />
         </div>
+        <div className="relative z-10 flex h-full min-h-0 flex-col">
         <div className="hidden items-center justify-center md:flex">
           <Link
             href="/"
@@ -97,7 +101,7 @@ export default function Sidebar({
             type="button"
             variant="ghost"
             size="sm"
-            className="hidden h-auto cursor-pointer rounded-md p-2 text-sidebar-foreground/80 hover:bg-sidebar-accent md:absolute md:bottom-8 md:left-3 md:right-3 md:flex md:items-center md:justify-center md:gap-2"
+            className="hidden h-auto cursor-pointer rounded-md border-0 !bg-transparent p-2 text-[#1B2065F2] shadow-none hover:!bg-blue-primary/20 focus-visible:ring-0 dark:text-[#FEF9F9] md:absolute md:bottom-8 md:left-3 md:right-3 md:flex md:items-center md:justify-center md:gap-2"
             onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded}
             aria-label={isAr ? "طي القائمة أو توسيعها" : "Collapse or expand sidebar"}
@@ -143,6 +147,7 @@ export default function Sidebar({
             </AnimatePresence>
           </Button>
         </nav>
+        </div>
     </aside>
   );
 }

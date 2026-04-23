@@ -20,6 +20,8 @@ import { useRouter } from "next/navigation"
 import SearchBar from "../SearchBar"
 import { useLanguage } from "@/app/_components/language-provider"
 import { getAccessToken } from "@/lib/tokenStorage"
+import { getApiBaseUrl } from "@/lib/apiBase"
+import { deleteDocument, fetchDocumentsByAudience } from "@/lib/checkinClient"
 import { getScheduleFileFetchUrl } from "@/lib/scheduleMediaUrl"
 import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors"
 import { notifyUser } from "@/lib/utils"
@@ -233,7 +235,7 @@ export default function ScheduleListShell({
   const backLabel = isArabic ? backLabelAr : backLabelEn
   const nextLabel = isArabic ? nextLabelAr : nextLabelEn
   const backendAudience = audience === "professor" ? "teacher" : "student"
-  const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "")
+  const apiBase = getApiBaseUrl()
   const isStudentBrowse = studentBrowse && audience === "student"
   const pageSize = isStudentBrowse ? 1 : SCHEDULE_PAGE_SIZE
 
@@ -254,12 +256,7 @@ export default function ScheduleListShell({
       try {
         setLoading(true)
         setError(null)
-        const token = getAccessToken()
-        const response = await fetch(`${apiBase}/api/documents/?audience=${backendAudience}`, {
-          headers: {
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        })
+        const response = await fetchDocumentsByAudience(backendAudience)
 
         const rawText = await response.text()
         let parsed: unknown = null
@@ -319,13 +316,7 @@ export default function ScheduleListShell({
     async (item: ScheduleItem) => {
       setDeletingId(item.id)
       try {
-        const token = getAccessToken()
-        const res = await fetch(`${apiBase}/api/documents/${item.id}/`, {
-          method: "DELETE",
-          headers: {
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        })
+        const res = await deleteDocument(item.id)
         if (!res.ok) {
           const text = await res.text().catch(() => "")
           throw new Error(text || res.statusText)
@@ -343,7 +334,7 @@ export default function ScheduleListShell({
         setDeletingId(null)
       }
     },
-    [apiBase, isArabic]
+    [isArabic]
   )
 
   const downloadScheduleItem = useCallback(async (item: ScheduleItem | undefined) => {

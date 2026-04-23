@@ -15,7 +15,6 @@ import {
   Star,
   Users,
 } from "lucide-react";
-import { getAccessToken } from "@/lib/tokenStorage";
 import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors";
 import { toast } from "sonner";
 import { useLanguage } from "@/app/_components/language-provider";
@@ -44,7 +43,9 @@ import {
 } from "@/app/_components/sessions/profSessionMock";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
-import ScheduleSessionForm from "@/app/_components/sessions/ScheduleSessionForm";
+import ScheduleSessionForm, {
+  buildSessionCreateBody,
+} from "@/app/_components/sessions/ScheduleSessionForm";
 import SessionHistorySemesterSection from "@/app/_components/sessions/SessionHistorySemesterSection";
 import {
   loadProfessorSessionData,
@@ -53,6 +54,12 @@ import {
   type AttendanceStatus,
   type SessionApi,
 } from "@/lib/professorSessionData";
+import { getApiBaseUrl } from "@/lib/apiBase";
+import {
+  createAttendanceSession,
+  getAttendanceSessionById,
+  patchAttendanceRow,
+} from "@/lib/checkinClient";
 
 type RowDraft = {
   status: AttendanceStatus;
@@ -99,13 +106,6 @@ const STATUS_HEX = {
   justified: "#E7CE51",
 } as const;
 
-function apiBaseUrl() {
-  return (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(
-    /\/+$/,
-    ""
-  );
-}
-
 function todayLocalIso(): string {
   const t = new Date();
   const y = t.getFullYear();
@@ -135,11 +135,6 @@ function formatSessionSubtitle(
   return `${mod} - ${grp} - ${dateLabel}`;
 }
 
-function padTimeForApi(t: string): string {
-  if (!t) return "09:00:00";
-  return t.length === 5 ? `${t}:00` : t;
-}
-
 /**
  * Clicks on shadcn `Select` content are portaled under `document.body`. The Radix
  * dialog would otherwise treat them as "outside" and block or close.
@@ -156,7 +151,7 @@ function isScheduleFormPortaledLayerTarget(
   if (!el) return false;
   return Boolean(
     el.closest(
-      '[data-slot="select-content"],[data-radix-select-content]'
+      '[data-slot="select-content"],[data-radix-select-content],[data-radix-popper-content-wrapper]'
     )
   );
 }
@@ -174,7 +169,7 @@ export default function ProfessorSessionsView() {
   const isArRef = useRef(isAr);
   isArRef.current = isAr;
   const locale = isAr ? "ar-DZ" : "en-US";
-  const apiBase = apiBaseUrl();
+  const apiBase = getApiBaseUrl();
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -200,11 +195,12 @@ export default function ProfessorSessionsView() {
 
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [newAssignmentId, setNewAssignmentId] = useState<number | "">("");
-  const [selectedGroup, setSelectedGroup] = useState("");
-  const [selectedModule, setSelectedModule] = useState("");
   const [classRoom, setClassRoom] = useState("");
   const [sessionStart, setSessionStart] = useState<Dayjs>(() =>
     dayjs(`${todayLocalIso()}T08:00:00`)
+  );
+  const [sessionEnd, setSessionEnd] = useState<Dayjs>(() =>
+    dayjs(`${todayLocalIso()}T08:00:00`).add(2, "hour")
   );
   const [creating, setCreating] = useState(false);
 
@@ -297,40 +293,6 @@ export default function ProfessorSessionsView() {
 
   const highlightSession = todaySessions[0] ?? null;
 
-  const scheduleGroupOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const a of assignmentsForSchedule) {
-      if (a.group_name) set.add(a.group_name);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [assignmentsForSchedule]);
-
-  const scheduleModuleOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const a of assignmentsForSchedule) {
-      if (selectedGroup && a.group_name !== selectedGroup) continue;
-      if (a.module_name) set.add(a.module_name);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [assignmentsForSchedule, selectedGroup]);
-
-  const onScheduleGroupChange = useCallback((g: string) => {
-    setSelectedGroup(g);
-    setSelectedModule("");
-  }, []);
-
-  useEffect(() => {
-    if (!selectedGroup || !selectedModule) {
-      setNewAssignmentId("");
-      return;
-    }
-    const found = assignmentsForSchedule.find(
-      (a) =>
-        a.group_name === selectedGroup && a.module_name === selectedModule
-    );
-    setNewAssignmentId(found ? found.id : "");
-  }, [assignmentsForSchedule, selectedGroup, selectedModule]);
-
   const startWorking = async (
     s: SessionApi,
     opts?: { resetFeedback?: boolean }
@@ -356,12 +318,9 @@ export default function ProfessorSessionsView() {
       }
       return;
     }
-    const token = getAccessToken();
     let full: SessionApi = s;
     try {
-      const res = await fetch(`${apiBase}/api/attendance/sessions/${s.id}/`, {
-        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
-      });
+      const res = await getAttendanceSessionById(s.id);
       if (res.ok) {
         full = (await res.json()) as SessionApi;
       }
@@ -431,7 +390,6 @@ export default function ProfessorSessionsView() {
       );
       return;
     }
-    const token = getAccessToken();
     const rows = workingSession.attendances ?? [];
     setSaving(true);
     setSaveMsg(null);
@@ -450,34 +408,16 @@ export default function ProfessorSessionsView() {
           professor_note: eff.professor_note,
         };
         if (srv.status === "justified") {
-          const res = await fetch(
-            `${apiBase}/api/attendance/attendance/${row.id}/`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                ...(token && { Authorization: `Bearer ${token}` }),
-              },
-              body: JSON.stringify({ extra_values: mergedExtra }),
-            }
-          );
+          const res = await patchAttendanceRow(row.id, {
+            extra_values: mergedExtra,
+          });
           if (!res.ok) throw new Error(await res.text());
           continue;
         }
-        const res = await fetch(
-          `${apiBase}/api/attendance/attendance/${row.id}/`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token && { Authorization: `Bearer ${token}` }),
-            },
-            body: JSON.stringify({
-              status: eff.status,
-              extra_values: mergedExtra,
-            }),
-          }
-        );
+        const res = await patchAttendanceRow(row.id, {
+          status: eff.status,
+          extra_values: mergedExtra,
+        });
         if (!res.ok) throw new Error(await res.text());
       }
       await refreshData();
@@ -552,17 +492,18 @@ export default function ProfessorSessionsView() {
       try {
         const id = nextDemoScheduleSessionId();
         const date = sessionStart.format("YYYY-MM-DD");
-        const startH = padTimeForApi(sessionStart.format("HH:mm"));
-        const endH = padTimeForApi(
-          sessionStart.add(2, "hour").format("HH:mm")
+        const startH = sessionStart.format("HH:mm:ss");
+        const endH = sessionEnd.format("HH:mm:ss");
+        const fromCatalog = assignmentsForSchedule.find(
+          (a) => a.id === newAssignmentId
         );
         const created = buildDemoScheduleSessionRow({
           id,
           date,
           start_time: startH,
           end_time: endH,
-          group_name: selectedGroup || "G-Demo",
-          module_name: selectedModule || "Module demo",
+          group_name: fromCatalog?.group_name || "G-Demo",
+          module_name: fromCatalog?.module_name || "Module demo",
         });
         setSessions((s) => [created, ...s]);
         setShowScheduleForm(false);
@@ -580,25 +521,17 @@ export default function ProfessorSessionsView() {
       return;
     }
 
-    const token = getAccessToken();
     setCreating(true);
     try {
-      const res = await fetch(`${apiBase}/api/attendance/sessions/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify({
-          assignment: newAssignmentId,
-          date: sessionStart.format("YYYY-MM-DD"),
-          start_time: padTimeForApi(sessionStart.format("HH:mm")),
-          end_time: padTimeForApi(
-            sessionStart.add(2, "hour").format("HH:mm")
-          ),
-          extra_fields: [],
-        }),
-      });
+      const payload = buildSessionCreateBody(
+        newAssignmentId,
+        sessionStart,
+        sessionEnd,
+        classRoom
+      );
+      const res = await createAttendanceSession(
+        payload as Record<string, unknown>
+      );
       const text = await res.text();
       if (!res.ok) {
         throw new Error(text || "create failed");
@@ -815,28 +748,28 @@ export default function ProfessorSessionsView() {
         </div>
 
         <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between bg-[#F6F7FE]">
             <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
               <Users
-                className="size-4 shrink-0 text-[#1B2065F2] border border-[#1B2065F2]"
+                className="size-4 shrink-0 text-[#1B2065F2] border border-[#1B2065F2] rounded-sm"
                 aria-hidden
               />
               {isAr ? "قائمة الطلاب" : "Student list"}
             </div>
-            <div className="relative w-full min-w-0 sm:max-w-xs sm:shrink-0">
-              <Search className="pointer-events-none absolute start-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="relative w-full min-w-0 sm:max-w-xs sm:shrink-0 ">
+              <Search className="pointer-events-none absolute start-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground " />
               <Input
                 value={tableSearch}
                 onChange={(e) => setTableSearch(e.target.value)}
                 placeholder={isAr ? "بحث عن طالب…" : "Search students…"}
-                className="h-10 min-w-0 rounded-full border-border bg-background ps-10 pe-4 text-sm text-foreground ring-offset-2 focus-visible:ring-blue-secondary/40"
+                className="h-10 min-w-0 rounded-full border-border bg-[#FEF9F9] ps-10 pe-4 text-sm text-foreground ring-offset-2 focus-visible:ring-blue-secondary/40"
               />
             </div>
           </div>
           <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
             <table className="w-full min-w-0 text-sm">
               <thead>
-                <tr className="bg-blue-primary text-primary-foreground">
+                <tr className="bg-blue-primary text-white-primary">
                   <th className="px-1.5 py-2 text-start text-[0.7rem] font-semibold sm:px-3 sm:py-3 sm:text-sm">
                     {isAr ? "المعرّف" : "User ID"}
                   </th>
@@ -904,7 +837,7 @@ export default function ProfessorSessionsView() {
                       <td className="px-1.5 py-2.5 text-center text-foreground sm:px-3">
                         <span className="inline-flex items-center justify-center gap-1 tabular-nums">
                           <Star
-                            className="size-3.5 shrink-0 fill-amber-400 text-amber-400 sm:size-4"
+                            className="size-3.5 shrink-0  text-amber-400 sm:size-4"
                             aria-hidden
                           />
                           <span className="font-semibold text-blue-primary">
@@ -1289,9 +1222,9 @@ export default function ProfessorSessionsView() {
           setShowScheduleForm(open);
           if (open) {
             const d = todayLocalIso();
-            setSessionStart(dayjs(`${d}T08:00:00`));
-            setSelectedGroup("");
-            setSelectedModule("");
+            const s = dayjs(`${d}T08:00:00`);
+            setSessionStart(s);
+            setSessionEnd(s.add(2, "hour"));
             setClassRoom("");
             setNewAssignmentId("");
           }
@@ -1337,16 +1270,15 @@ export default function ProfessorSessionsView() {
           </DialogHeader>
           <ScheduleSessionForm
             isAr={isAr}
-            groupOptions={scheduleGroupOptions}
-            moduleOptions={scheduleModuleOptions}
-            selectedGroup={selectedGroup}
-            selectedModule={selectedModule}
-            onGroupChange={onScheduleGroupChange}
-            onModuleChange={setSelectedModule}
+            assignments={assignmentsForSchedule}
+            assignmentId={newAssignmentId}
+            onAssignmentIdChange={setNewAssignmentId}
             classRoom={classRoom}
             onClassRoomChange={setClassRoom}
             sessionStart={sessionStart}
             onSessionStartChange={(v) => v && setSessionStart(v)}
+            sessionEnd={sessionEnd}
+            onSessionEndChange={(v) => v && setSessionEnd(v)}
           />
           <DialogFooter className="relative z-10 mt-2 flex w-full flex-col items-center justify-center gap-0 sm:justify-center">
             <Button

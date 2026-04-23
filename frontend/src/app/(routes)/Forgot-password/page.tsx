@@ -8,6 +8,7 @@ import { AuthPageBackground } from "../../_components/login/AuthPageBackground"
 import { FieldError, FieldTitle } from "@/components/ui/field"
 import EmailInput from "../../_components/login/EmailInput"
 import api from "@/lib/api"
+import { checkinPath } from "@/lib/checkinApi"
 import { formatDrfError } from "@/lib/drfError"
 import {
   EMAIL_REGEX,
@@ -75,7 +76,7 @@ function Page() {
     setError("")
     try {
       const res = await api(
-        "api/reset-password-request",
+        checkinPath.resetPasswordRequest,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

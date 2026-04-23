@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import MiddleContainer from "@/app/_components/admin/students/StudMidContainer";
 import StudTotals from "@/app/_components/admin/students/StudTotals";
+import StudTable from "@/app/_components/admin/students/StudTable";
 import PageFileStagingDropzone from "@/app/_components/PageFileStagingDropzone";
 import { useLanguage } from "@/app/_components/language-provider";
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
@@ -39,6 +40,7 @@ export default function StudentsByRole({
       >
         <StudTotals />
         <MiddleContainer stagedCsv={stagedCsv} onStagedCsvChange={setStagedCsv} />
+        <StudTable />
       </PageFileStagingDropzone>
     );
   }

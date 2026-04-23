@@ -1,5 +1,13 @@
 import { getAccessToken, getStoredUserEmail } from "@/lib/tokenStorage";
 import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors";
+import { getApiBaseUrl } from "@/lib/apiBase";
+import { checkinPath } from "@/lib/checkinApi";
+import {
+  drfPaginationNext,
+  loadDrfListAll,
+  resolveAgainstApiBase,
+  unwrapList,
+} from "@/lib/drfPaginatedList";
 
 export type AttendanceStatus = "present" | "absent" | "justified";
 
@@ -28,6 +36,9 @@ export type SessionApi = {
   end_time: string;
   module_name?: string;
   group_name?: string;
+  /** If present on list/detail payloads (for derived assignment labels). */
+  year_name?: string;
+  semester?: string;
   attendances?: AttendanceRow[];
 };
 
@@ -35,6 +46,10 @@ export type AssignmentApi = {
   id: number;
   group_name?: string;
   module_name?: string;
+  /** From teaching-assignment `year` (module academic year name), e.g. "1CS". */
+  year_name?: string;
+  /** From teaching-assignment `semester`, e.g. "S1" | "S2". */
+  semester?: string;
 };
 
 type RawTeachingAssignment = {
@@ -42,6 +57,10 @@ type RawTeachingAssignment = {
   teacher: number;
   group: number;
   module: number;
+  /** DRF: `module.year.name` */
+  year?: string;
+  /** DRF: `module.semester` (e.g. S1 / S2) */
+  semester?: string;
 };
 
 type GroupRow = { id: number; name: string };
@@ -49,77 +68,6 @@ type ModuleRow = { id: number; name: string };
 type TeacherListRow = { id: number; email?: string };
 
 const API_LIST_PAGE_SIZE = 50;
-
-function apiBaseUrl() {
-  return (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(
-    /\/+$/,
-    ""
-  );
-}
-
-function unwrapList<T>(raw: unknown): T[] {
-  if (Array.isArray(raw)) return raw as T[];
-  if (raw && typeof raw === "object" && "results" in raw) {
-    const r = (raw as { results?: T[] }).results;
-    return Array.isArray(r) ? r : [];
-  }
-  return [];
-}
-
-function drfPaginationNext(raw: unknown): string | null {
-  if (raw && typeof raw === "object" && "next" in raw) {
-    const n = (raw as { next?: unknown }).next;
-    if (typeof n === "string" && n.trim()) return n;
-  }
-  return null;
-}
-
-function resolveAgainstApiBase(apiBase: string, pathOrUrl: string): string {
-  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-  const base = apiBase.replace(/\/+$/, "");
-  return pathOrUrl.startsWith("/")
-    ? `${base}${pathOrUrl}`
-    : `${base}/${pathOrUrl}`;
-}
-
-async function loadDrfListAll<T>(
-  apiBase: string,
-  relativePath: string,
-  headers: HeadersInit,
-  options?: { requireFirstOk?: boolean; errorMessage?: string }
-): Promise<T[]> {
-  const requireFirst = options?.requireFirstOk === true;
-  const errMsg = options?.errorMessage ?? "List request failed";
-  const base = apiBase.replace(/\/+$/, "");
-  const path = relativePath.replace(/^\//, "");
-  const sep = path.includes("?") ? "&" : "?";
-  let url: string | null = `${base}/${path}${sep}page_size=${API_LIST_PAGE_SIZE}`;
-  const merged: T[] = [];
-  let guard = 0;
-  while (url && guard < 50) {
-    guard += 1;
-    const r = await fetch(url, { headers });
-    if (!r.ok) {
-      if (requireFirst && merged.length === 0) {
-        throw new Error(errMsg);
-      }
-      break;
-    }
-    const t = await r.text();
-    let p: unknown = null;
-    try {
-      p = t ? JSON.parse(t) : null;
-    } catch {
-      if (requireFirst && merged.length === 0) throw new Error(errMsg);
-      break;
-    }
-    merged.push(...unwrapList<T>(p));
-    const next = drfPaginationNext(p);
-    if (!next) break;
-    url = resolveAgainstApiBase(apiBase, next);
-  }
-  return merged;
-}
 
 function buildResolvedAssignments(
   rawRows: RawTeachingAssignment[],
@@ -130,7 +78,19 @@ function buildResolvedAssignments(
   for (const ra of rawRows) {
     const gn = groupById.get(ra.group);
     const mn = modById.get(ra.module);
-    if (gn && mn) out.push({ id: ra.id, group_name: gn, module_name: mn });
+    if (gn && mn) {
+      out.push({
+        id: ra.id,
+        group_name: gn,
+        module_name: mn,
+        ...(typeof ra.year === "string" && ra.year.trim()
+          ? { year_name: ra.year.trim() }
+          : {}),
+        ...(typeof ra.semester === "string" && ra.semester.trim()
+          ? { semester: ra.semester.trim() }
+          : {}),
+      });
+    }
   }
   return out.sort((a, b) => a.id - b.id);
 }
@@ -231,12 +191,16 @@ function deriveAssignmentsFromSessions(
         id,
         group_name: s.group_name,
         module_name: s.module_name,
+        year_name: s.year_name,
+        semester: s.semester,
       });
     } else {
       byId.set(id, {
         ...prev,
         group_name: prev.group_name ?? s.group_name,
         module_name: prev.module_name ?? s.module_name,
+        year_name: prev.year_name ?? s.year_name,
+        semester: prev.semester ?? s.semester,
       });
     }
   }
@@ -283,11 +247,11 @@ export type ProfessorSessionBundle = {
 export async function loadProfessorSessionData(
   isAr: boolean
 ): Promise<ProfessorSessionBundle> {
-  const apiBase = apiBaseUrl();
+  const apiBase = getApiBaseUrl();
   await deferOneFrame();
   let token = await waitForAccessToken(2500);
   let headers = authHeaders(token);
-  const sessionsUrl = `${apiBase}/api/attendance/sessions/?page_size=${API_LIST_PAGE_SIZE}`;
+  const sessionsUrl = `${apiBase}/${checkinPath.attendance.sessions}/?page_size=${API_LIST_PAGE_SIZE}`;
 
   try {
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -339,7 +303,7 @@ export async function loadProfessorSessionData(
       ] = await Promise.all([
         (async () => {
           const first = await fetch(
-            `${apiBase}/api/attendance/attendance/?page_size=${API_LIST_PAGE_SIZE}`,
+            `${apiBase}/${checkinPath.attendance.attendance}/?page_size=${API_LIST_PAGE_SIZE}`,
             { headers }
           );
           if (!first.ok) return [] as AttendanceRow[];
@@ -371,21 +335,26 @@ export async function loadProfessorSessionData(
           }
           return merged;
         })(),
-        loadDrfListAll<GroupRow>(apiBase, "api/academic/groups/", headers, {}),
-        loadDrfListAll<ModuleRow>(apiBase, "api/academic/modules/", headers, {}),
+        loadDrfListAll<GroupRow>(
+          apiBase,
+          `${checkinPath.academic.groups}/`,
+          headers,
+          {}
+        ),
+        loadDrfListAll<ModuleRow>(
+          apiBase,
+          `${checkinPath.academic.modules}/`,
+          headers,
+          {}
+        ),
         loadDrfListAll<RawTeachingAssignment>(
           apiBase,
-          "api/academic/teaching-assignments/",
+          `${checkinPath.academic.teachingAssignments}/`,
           headers,
           {}
         ),
-        loadDrfListAll<TeacherListRow>(apiBase, "api/teachers/", headers, {}),
-        loadDrfListAll<StudentListRecord>(
-          apiBase,
-          "api/students/",
-          headers,
-          {}
-        ),
+        loadDrfListAll<TeacherListRow>(apiBase, `${checkinPath.teachers}/`, headers, {}),
+        loadDrfListAll<StudentListRecord>(apiBase, `${checkinPath.students}/`, headers, {}),
       ]);
 
       const groupById = new Map(

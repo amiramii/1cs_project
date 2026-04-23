@@ -1,10 +1,25 @@
 "use client";
 
+import { MoreHorizontal } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+
 interface NavItemProps {
   label: string;
   icon?: React.ReactNode;
   count?: number | string;
-  details: string;
+  details?: string;
+  /** Rich footer (e.g. split stats, accent colors). Replaces `details` when set. */
+  footer?: React.ReactNode;
+  className?: string;
+  /** When false, only the top-right icon is shown (no ⋯ menu). */
+  showMenu?: boolean;
 }
 
 export default function TotalStaff({
@@ -12,118 +27,73 @@ export default function TotalStaff({
   icon,
   count,
   details,
+  footer,
+  className,
+  showMenu = true,
 }: NavItemProps) {
   return (
-    <article className="flex min-h-28 min-w-0 w-full basis-[280px] flex-1 flex-col rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:bg-accent/50">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        {icon && <span className="text-primary">{icon}</span>}
+    <article
+      className={cn(
+        "relative flex min-h-[140px] min-w-0 w-full flex-1 flex-col rounded-[10px] border border-[#E0E5F2] bg-[#F4F7FE] p-4 pe-4 pt-3 transition-colors sm:min-h-[150px] sm:p-5 sm:pe-5 sm:pt-4",
+        className
+      )}
+    >
+      <div
+        className={cn(
+          "absolute end-2 top-2 z-10 flex flex-col items-end sm:end-3 sm:top-3",
+          showMenu ? "gap-0.5 sm:gap-1" : "gap-0"
+        )}
+      >
+        {showMenu && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 text-[#707EAE] hover:bg-[#E0E5F2]/60 hover:text-[#1B2559]"
+                aria-label="More"
+              >
+                <MoreHorizontal className="h-4 w-4" strokeWidth={2} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[8rem]">
+              <DropdownMenuItem className="text-xs text-muted-foreground" disabled>
+                Details coming soon
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {icon && (
+          <span
+            className={cn(
+              "flex h-8 w-8 items-center justify-center text-[#1B2559] sm:h-9 sm:w-9 [&_svg]:h-7 [&_svg]:w-7 sm:[&_svg]:h-8 sm:[&_svg]:w-8",
+              showMenu && "mt-0.5"
+            )}
+          >
+            {icon}
+          </span>
+        )}
       </div>
-      <p className="pt-2 text-2xl font-semibold text-foreground">{count}</p>
-      <p className="pt-2 text-xs text-muted-foreground">{details}</p>
+
+      <p
+        className={cn(
+          "text-sm font-medium leading-tight text-[#707EAE]",
+          showMenu ? "pe-16 sm:pe-20" : "pe-12 sm:pe-14"
+        )}
+      >
+        {label}
+      </p>
+      <p className="pt-2 text-2xl font-bold leading-none tracking-tight text-[#1B2559] sm:text-3xl">
+        {count}
+      </p>
+      <div className="mt-auto flex flex-1 flex-col justify-end pt-3 text-xs sm:text-sm">
+        {footer != null ? (
+          footer
+        ) : details ? (
+          <p className="text-[#707EAE]">{details}</p>
+        ) : null}
+      </div>
     </article>
   );
 }
-    // <Link href={route} className="flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors">
-    //   {icon && <span className="mr-2">{icon}</span>}
-    //   <span className="font-medium text-gray-700">{label}</span>
-    // </Link>
-// 'use client';
-
-// import React, { useState, useEffect } from 'react';
-
-// interface PDFFile {
-//   url: string;
-//   name: string;
-// }
-
-// interface TotalStaffProps {
-//   label: string;
-//   icon?: React.ReactNode;
-//   backendUrl: string; // The link to your API
-// }
-
-// export default function TotalStaff({ label, icon, backendUrl }: TotalStaffProps) {
-//   const [files, setFiles] = useState<PDFFile[]>([]);
-//   const [currentIndex, setCurrentIndex] = useState(0);
-//   const [loading, setLoading] = useState(true);
-
-//   // 1. Fetch the PDF list from the backend
-//   useEffect(() => {
-//     async function fetchData() {
-//       try {
-//         const response = await fetch(backendUrl);
-//         const data = await response.json();
-//         // Assuming backend returns an array: [{ name: "File 1", url: "..." }, ...]
-//         setFiles(data);
-//         setLoading(false);
-//       } catch (error) {
-//         console.error("Error fetching PDFs:", error);
-//         setLoading(false);
-//       }
-//     }
-//     fetchData();
-//   }, [backendUrl]);
-
-//   // 2. Navigation Logic
-//   const nextFile = () => {
-//     if (currentIndex < files.length - 1) setCurrentIndex(currentIndex + 1);
-//   };
-
-//   const prevFile = () => {
-//     if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
-//   };
-
-//   return (
-//     <div className="bg-[#F6F7FEF2] border border-[#1B2065F2] rounded-2xl p-4 w-full max-w-2xl shadow-sm">
-//       <div className="flex items-center justify-between mb-4">
-//         <div className="flex items-center gap-2">
-//           {icon && <span className="text-[#1B2065F2]">{icon}</span>}
-//           <p className="text-[#1B2065F2] font-bold text-lg">{label}</p>
-//         </div>
-        
-//         {/* Navigation Buttons */}
-//         {!loading && files.length > 0 && (
-//           <div className="flex gap-2">
-//             <button 
-//               onClick={prevFile} 
-//               disabled={currentIndex === 0}
-//               className="px-3 py-1 bg-white border border-[#1B2065F2] rounded-md disabled:opacity-30"
-//             >
-//               Back
-//             </button>
-//             <button 
-//               onClick={nextFile} 
-//               disabled={currentIndex === files.length - 1}
-//               className="px-3 py-1 bg-[#1B2065F2] text-white rounded-md disabled:opacity-30"
-//             >
-//               Next
-//             </button>
-//           </div>
-//         )}
-//       </div>
-
-//       {/* 3. The PDF Display Area */}
-//       <div className="bg-white rounded-xl border border-gray-200 h-[500px] overflow-hidden flex items-center justify-center">
-//         {loading ? (
-//           <p className="text-gray-400 animate-pulse">Loading documents...</p>
-//         ) : files.length > 0 ? (
-//           <iframe
-//             key={files[currentIndex].url}
-//             src={`${files[currentIndex].url}#toolbar=0`}
-//             className="w-full h-full border-none"
-//           />
-//         ) : (
-//           <p className="text-gray-400">No documents found.</p>
-//         )}
-//       </div>
-
-//       {/* File info footer */}
-//       {!loading && files.length > 0 && (
-//         <p className="mt-2 text-xs text-[#1B2065F2] text-center">
-//           Viewing: {files[currentIndex].name} ({currentIndex + 1} of {files.length})
-//         </p>
-//       )}
-//     </div>
-//   );
-// }

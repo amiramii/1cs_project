@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getAccessToken } from "@/lib/tokenStorage";
+import { postDocument } from "@/lib/checkinClient";
 import { useLanguage } from "@/app/_components/language-provider";
 import StudScheduleList from "@/app/_components/admin/schedules/StudScheduleList";
 import ScheduleYearCombobox from "@/app/_components/admin/schedules/ScheduleYearCombobox";
@@ -158,10 +159,6 @@ export default function SchedulsMiddleContainer({
         return;
       }
 
-      const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(
-        /\/+$/,
-        ""
-      );
       const audienceValue = activeTab === "professor" ? "teacher" : "student";
       const formData = new FormData();
       formData.append("title", title);
@@ -174,13 +171,7 @@ export default function SchedulsMiddleContainer({
         formData.append("professorName", professorName.trim());
       }
 
-      const res = await fetch(`${apiBase}/api/documents/`, {
-        method: "POST",
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: formData,
-      });
+      const res = await postDocument(formData);
 
       if (res.ok) {
         setSuccessMsg(true);

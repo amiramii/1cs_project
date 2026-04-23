@@ -9,6 +9,7 @@ import LanguageMenu from "@/app/_components/login/LanguageMenu"
 import { AnimatedFormButton } from "@/app/_components/login/AnimatedFormButton"
 import PasswordInput from "@/app/_components/login/PasswordInput"
 import api from "@/lib/api"
+import { checkinPath } from "@/lib/checkinApi"
 import login from "@/lib/auth"
 import { formatDrfError } from "@/lib/drfError"
 import {
@@ -73,7 +74,7 @@ export default function ResetPasswordPage() {
     let leavePageAfterSuccess = false
     try {
       const resetRes = await api(
-        "api/reset-password",
+        checkinPath.resetPassword,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

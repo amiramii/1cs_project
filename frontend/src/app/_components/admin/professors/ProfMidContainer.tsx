@@ -4,8 +4,7 @@ import MyDropzone from "../DropBox";
 import { SquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/app/_components/language-provider";
-import { getApiBaseUrl } from "@/lib/apiBase";
-import { getAccessToken } from "@/lib/tokenStorage";
+import { uploadCheckinCsv } from "@/lib/checkinClient";
 import { useState } from "react";
 
 type Props = {
@@ -54,19 +53,7 @@ export default function MiddleContainer({
     setUploading(true);
     setFeedback(null);
     try {
-      const apiBase = getApiBaseUrl();
-      const formData = new FormData();
-      formData.append("file", effectiveFile);
-      formData.append("user_type", "teacher");
-
-      const token = getAccessToken();
-      const res = await fetch(`${apiBase}/api/upload/`, {
-        method: "POST",
-        headers: {
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: formData,
-      });
+      const res = await uploadCheckinCsv(effectiveFile, "teacher");
 
       const data = await res.json().catch(() => ({}));
 

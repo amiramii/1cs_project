@@ -5,6 +5,7 @@ import {
   persistTokens,
   isRememberMeSession,
 } from "./tokenStorage";
+import { checkinPath } from "./checkinApi";
 
 type ApiOptions = {
   withAuth?: boolean
@@ -30,7 +31,7 @@ function buildHeader(options: RequestInit = {},apiOptions: ApiOptions = {}){
   )
 }
 async function tryRefresh(refresh: string): Promise<boolean> {
-  const res = await fetch(buildApiUrl("/api/token/refresh"), {
+  const res = await fetch(buildApiUrl(`/${checkinPath.tokenRefresh}`), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

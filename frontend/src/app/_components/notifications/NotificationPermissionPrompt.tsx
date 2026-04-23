@@ -181,7 +181,7 @@ export default function NotificationPermissionPrompt({
 
   if (effective === "denied") {
     return (
-      <Alert variant="destructive">
+      <Alert variant="destructive" >
         <Bell aria-hidden />
         <div className="min-w-0 flex-1 space-y-1">
           <AlertTitle>
@@ -198,7 +198,7 @@ export default function NotificationPermissionPrompt({
   }
 
   return (
-    <Alert className="border-dashed">
+    <Alert className="border-dashed ">
       <Bell aria-hidden />
       <div className="min-w-0 flex-1 space-y-2">
         <AlertTitle>{title}</AlertTitle>

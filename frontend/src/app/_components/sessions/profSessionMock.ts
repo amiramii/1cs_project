@@ -77,6 +77,8 @@ type DemoAssignmentRow = {
   id: number;
   group_name: string;
   module_name: string;
+  year_name?: string;
+  semester?: string;
 };
 
 /**
@@ -88,8 +90,10 @@ export function buildDemoTeacherAssignments(): DemoAssignmentRow[] {
   return [
     {
       id: DEMO_TEACHER_ASSIGNMENT_ID,
-      group_name: "G-Demo",
-      module_name: "Module demo",
+      group_name: "G4",
+      year_name: "1CS",
+      semester: "S2",
+      module_name: "Gestion des Projets",
     },
   ];
 }

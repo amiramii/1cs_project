@@ -80,7 +80,7 @@ export default function NotificationOnboardingDialog() {
         if (!o) finish()
       }}
     >
-      <DialogContent className="sm:max-w-md" showCloseButton>
+      <DialogContent className="sm:max-w-md bg-white/50 backdrop-blur-sm" showCloseButton>
         <DialogHeader>
           <DialogTitle>
             {isAr ? "تفعيل الإشعارات؟" : "Enable notifications?"}
@@ -95,7 +95,7 @@ export default function NotificationOnboardingDialog() {
           <Button type="button" variant="outline" onClick={finish}>
             {isAr ? "ليس الآن" : "Not now"}
           </Button>
-          <Button type="button" onClick={() => void onEnable()}>
+          <Button type="button" className="ms-2 bg-blue-100" onClick={() => void onEnable()}>
             {isAr ? "تفعيل" : "Enable"}
           </Button>
         </DialogFooter>

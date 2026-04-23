@@ -1,5 +1,7 @@
 /**
  * Notifications API client (frontend-first).
+ * Not part of `Checkin_backend` — there is no `/api/notifications/` route there
+ * (see `lib/checkinApi.ts` for the routes that backend does expose).
  *
  * Future Django contract (suggested):
  * - GET  /api/notifications/?unread=1  → { results: NotificationDto[] }

@@ -68,7 +68,7 @@ function NotificationRow({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 shrink-0 px-2 text-xs"
+          className="h-7 shrink-0 px-2 text-xs rounded-sm"
           onClick={() => onRead(n.id)}
         >
           {isAr ? "تم" : "Read"}
@@ -167,10 +167,9 @@ export default function NotificationBell() {
         </div>
 
         {unread.length > 0 && (
-          <div className="border-t border-border p-2">
+          <div className="border-t border-border p-2 hover:bg-white/10 rounded-md">
             <Button
               type="button"
-              variant="secondary"
               className="w-full"
               size="sm"
               onClick={() => void markAllRead()}

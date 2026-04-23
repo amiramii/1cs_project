@@ -10,8 +10,8 @@ import {
   Pencil,
   Search,
   Trash2,
-  UserPlus,
   Users,
+  UserPlus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -36,38 +36,33 @@ import { getAccessToken } from "@/lib/tokenStorage"
 import { getApiBaseUrl } from "@/lib/apiBase"
 import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
-import { deleteTeacherById } from "@/lib/checkinClient"
+import { deleteUserById, loadAllAcademicSections } from "@/lib/checkinClient"
 
-type Semester = "S1" | "S2"
-
-type ModuleDetail = {
+type JustifiedSemester = {
   id: string
-  module: string
-  year: string
-  groups: string
-  semester: Semester
+  labelEn: string
+  labelAr: string
+  count: number
+  max: number
 }
 
-type ProfessorRow = {
+type StudentRow = {
   id: string
   name: string
   email: string
-  modules: ModuleDetail[]
-}
-
-type ApiTeachingAssignment = {
-  id: number
-  group: number
-  module: number
   year: string
-  semester: string
+  section: string
+  group: string
+  justifiedSemesters: JustifiedSemester[]
 }
 
-type ApiTeacherRow = {
-  id: number
+type ApiStudentRow = {
+  user_id: string | number
   full_name: string
   email: string
-  assignments: ApiTeachingAssignment[]
+  year: number
+  section: number
+  group: number
 }
 
 const controlBtnClass =
@@ -75,20 +70,14 @@ const controlBtnClass =
 
 const PAGE_SIZE = 5
 
-function countDistinctYears(modules: ModuleDetail[]) {
-  return new Set(modules.map((m) => m.year.trim())).size
+function collectYears(rows: StudentRow[]) {
+  return Array.from(new Set(rows.map((r) => r.year))).sort()
 }
 
-function collectYears(rows: ProfessorRow[]) {
-  const s = new Set<string>()
-  for (const r of rows) for (const m of r.modules) s.add(m.year)
-  return Array.from(s).sort()
-}
-
-export default function DataTable() {
+export default function StudTable() {
   const { language } = useLanguage()
   const isArabic = language === "ar"
-  const [data, setData] = useState<ProfessorRow[]>([])
+  const [data, setData] = useState<StudentRow[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -98,30 +87,27 @@ export default function DataTable() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  const mapTeacherToRow = useCallback(
+  const mapStudents = useCallback(
     (
-      t: ApiTeacherRow,
-      modMap: Map<number, string>,
-      groupMap: Map<number, string>
-    ): ProfessorRow => {
-      const modules: ModuleDetail[] = (t.assignments ?? []).map((a) => ({
-        id: `ta-${t.id}-${a.id}`,
-        module: modMap.get(a.module) ?? `#${a.module}`,
-        year: a.year,
-        groups: groupMap.get(a.group) ?? `#${a.group}`,
-        semester: a.semester === "S1" || a.semester === "S2" ? a.semester : "S1",
+      raw: ApiStudentRow[],
+      yMap: Map<number, string>,
+      secMap: Map<number, string>,
+      gMap: Map<number, string>
+    ): StudentRow[] => {
+      return raw.map((s) => ({
+        id: String(s.user_id),
+        name: s.full_name,
+        email: s.email,
+        year: yMap.get(s.year) ?? "—",
+        section: secMap.get(s.section) ?? "—",
+        group: gMap.get(s.group) ?? "—",
+        justifiedSemesters: [],
       }))
-      return {
-        id: String(t.id),
-        name: t.full_name,
-        email: t.email,
-        modules,
-      }
     },
     []
   )
 
-  const loadProfessors = useCallback(async () => {
+  const loadStudents = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     const token = getAccessToken()
@@ -130,14 +116,15 @@ export default function DataTable() {
     }
     const base = getApiBaseUrl()
     try {
-      const [teachers, modules, groups] = await Promise.all([
-        loadDrfListAll<ApiTeacherRow>(base, `${checkinPath.teachers}/`, headers, {}),
+      const [rawStudents, years, sections, groups] = await Promise.all([
+        loadDrfListAll<ApiStudentRow>(base, `${checkinPath.students}/`, headers, {}),
         loadDrfListAll<{ id: number; name: string }>(
           base,
-          `${checkinPath.academic.modules}/`,
+          `${checkinPath.academic.years}/`,
           headers,
           {}
         ),
+        loadAllAcademicSections(),
         loadDrfListAll<{ id: number; name: string }>(
           base,
           `${checkinPath.academic.groups}/`,
@@ -145,26 +132,25 @@ export default function DataTable() {
           {}
         ),
       ])
-      const modMap = new Map(modules.map((m) => [m.id, m.name]))
-      const groupMap = new Map(groups.map((g) => [g.id, g.name]))
-      setData(
-        teachers.map((t) => mapTeacherToRow(t, modMap, groupMap))
-      )
+      const yMap = new Map(years.map((y) => [y.id, y.name]))
+      const secMap = new Map(sections.map((x) => [x.id, x.name]))
+      const gMap = new Map(groups.map((g) => [g.id, g.name]))
+      setData(mapStudents(rawStudents, yMap, secMap, gMap))
     } catch {
       setLoadError(
         isArabic
-          ? "تعذر تحميل الأساتذة. تحقق من الاتصال والصلاحيات."
-          : "Could not load teachers. Check the connection and your permissions."
+          ? "تعذر تحميل الطلاب. تحقق من الاتصال والصلاحيات."
+          : "Could not load students. Check the connection and your permissions."
       )
       setData([])
     } finally {
       setLoading(false)
     }
-  }, [isArabic, mapTeacherToRow])
+  }, [isArabic, mapStudents])
 
   useEffect(() => {
-    void loadProfessors()
-  }, [loadProfessors])
+    void loadStudents()
+  }, [loadStudents])
 
   const yearOptions = useMemo(() => collectYears(data), [data])
 
@@ -176,17 +162,12 @@ export default function DataTable() {
         row.id.toLowerCase().includes(q) ||
         row.name.toLowerCase().includes(q) ||
         row.email.toLowerCase().includes(q) ||
-        row.modules.some((module) =>
-          `${module.module} ${module.year} ${module.groups} ${module.semester}`
-            .toLowerCase()
-            .includes(q)
-        )
+        row.year.toLowerCase().includes(q) ||
+        row.section.toLowerCase().includes(q) ||
+        row.group.toLowerCase().includes(q)
 
       if (!matchesSearch) return false
-
-      if (yearFilter !== "all" && !row.modules.some((m) => m.year === yearFilter)) {
-        return false
-      }
+      if (yearFilter !== "all" && row.year !== yearFilter) return false
       return true
     })
   }, [data, yearFilter, search])
@@ -260,45 +241,41 @@ export default function DataTable() {
   const handleDeleteSelected = async () => {
     if (!hasSelection) return
     const ids = [...selectedIds]
-    for (const tid of ids) {
-      const res = await deleteTeacherById(tid)
+    for (const userId of ids) {
+      const res = await deleteUserById(userId)
       if (!res.ok) {
         setLoadError(
           isArabic
-            ? "تعذر حذف الأستاذ. قد تكون الصلاحيات غير كافية."
-            : "Could not delete a teacher. You may lack permissions."
+            ? "تعذر حذف مستخدم. قد تكون الصلاحيات غير كافية."
+            : "Could not delete a user. You may not have admin permissions."
         )
         return
       }
     }
     setSelectedIds(new Set())
     setExpandedIds(new Set())
-    await loadProfessors()
+    await loadStudents()
   }
 
   const filterLabelText =
-    yearFilter === "all"
-      ? isArabic
-        ? "الكل"
-        : "All years"
-      : yearFilter
+    yearFilter === "all" ? (isArabic ? "الكل" : "All years") : yearFilter
 
-  const colCount = 6
+  const colCount = 7
 
   return (
-    <section className="mx-auto w-full max-w-full min-w-0 space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm">
+    <section className="mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm">
       {loadError && (
         <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {loadError}
         </p>
       )}
-      <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30  from-white to-[#FEF9F9]/90 p-3 sm:flex-row sm:items-center sm:justify-between bg-[#F6F7FE]">
-        <div className="flex items-center gap-2 text-[#1B2065F2] ">
-          <span className="flex h-fit w-fit items-center justify-center rounded-sm border border-[#51689A] bg-white shadow-sm">
+      <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30 bg-[#F6F7FE] p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-[#1B2065F2]">
+          <span className="flex h-fit w-fit items-center justify-center rounded-sm border border-[#51689A] bg-white shadow-sm ">
             <Users size={18} className="text-[#1B2065F2]" strokeWidth={1.75} />
           </span>
           <p className="text-sm font-semibold sm:text-base">
-            {isArabic ? "قائمة الأساتذة" : "Professor list"}
+            {isArabic ? "قائمة الطلاب" : "Student list"}
           </p>
         </div>
 
@@ -311,21 +288,21 @@ export default function DataTable() {
                 setCurrentPage(1)
               }}
               placeholder={isArabic ? "ابحث..." : "Search..."}
-              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9 "
+              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9"
             />
             <Search
-              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70 "
+              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70"
               strokeWidth={2}
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 ">
+          <div className="flex flex-wrap items-center gap-1.5">
             <DropdownMenu open={openFilter} onOpenChange={setOpenFilter}>
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
                   variant="outline"
-                  className={`${controlBtnClass} inline-flex h-[43px] min-w-0 items-center justify-center gap-1.5 px-3 sm:h-9 bg-[#FEF9F9]`}
+                  className={`${controlBtnClass} inline-flex h-[43px] min-w-0 items-center justify-center gap-1.5 bg-[#FEF9F9] px-3 sm:h-9`}
                 >
                   <Funnel size={16} className="shrink-0" strokeWidth={1.75} />
                   <span className="font-medium">
@@ -362,14 +339,12 @@ export default function DataTable() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div
-              className="flex items-center gap-1 border-[#51689A]/30 sm:gap-1.5 sm:border-s sm:ps-2"
-            >
+            <div className="flex items-center gap-1 border-[#51689A]/30 sm:gap-1.5 sm:border-s sm:ps-2">
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                className={`${controlBtnClass} py-[1px] px-[6px] bg-[#FEF9F9] h-fit w-fit`}
+                className={`${controlBtnClass} h-fit w-fit bg-[#FEF9F9] px-[6px] py-px`}
                 disabled
                 title={isArabic ? "تعديل (قريباً)" : "Edit (coming soon)"}
                 aria-label={isArabic ? "تعديل" : "Edit"}
@@ -380,10 +355,10 @@ export default function DataTable() {
                 type="button"
                 variant="outline"
                 size="icon"
-                className={`${controlBtnClass} py-[1px] px-[6px] bg-[#FEF9F9] h-fit w-fit`}
+                className={`${controlBtnClass} h-fit w-fit bg-[#FEF9F9] px-[6px] py-px`}
                 disabled
                 title={isArabic ? "إضافة (قريباً)" : "Add (coming soon)"}
-                aria-label={isArabic ? "إضافة مستخدم" : "Add user"}
+                aria-label={isArabic ? "إضافة طالب" : "Add student"}
               >
                 <UserPlus size={18} strokeWidth={1.5} className="text-[#1B2065F2]" />
               </Button>
@@ -392,7 +367,7 @@ export default function DataTable() {
                   type="button"
                   variant="outline"
                   size="icon"
-                  className={`${controlBtnClass}  text-destructive hover:text-destructive py-[1px] px-[6px] bg-[#FEF9F9] h-fit w-fit`}
+                  className={`${controlBtnClass} h-fit w-fit bg-[#FEF9F9] px-[6px] py-px text-destructive hover:text-destructive`}
                   onClick={handleDeleteSelected}
                   title={isArabic ? "حذف المحدد" : "Delete selected"}
                   aria-label={isArabic ? "حذف" : "Delete"}
@@ -407,7 +382,7 @@ export default function DataTable() {
 
       <div className="overflow-hidden rounded-lg border border-[#74A7BD]/30 bg-white/90">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-xs sm:text-sm">
+          <table className="w-full min-w-[820px] text-xs sm:text-sm">
             <thead>
               <tr className="border-b-2 border-[#51689A]/20 bg-gradient-to-r from-white to-[#F6F8FF] text-[#1B2065F2]">
                 <th className="w-12 min-w-12 border-b border-[#D6DEEF] px-1 py-2.5 text-center sm:px-2">
@@ -416,7 +391,7 @@ export default function DataTable() {
                       checked={allVisibleSelected}
                       onCheckedChange={toggleSelectAllVisible}
                       aria-label={isArabic ? "تحديد الصفحة" : "Select page"}
-                      className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white appearance-none rounded-full"
+                      className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
                     />
                     <span className="inline-block w-6 shrink-0" aria-hidden />
                   </div>
@@ -431,10 +406,13 @@ export default function DataTable() {
                   {isArabic ? "البريد" : "Email Address"}
                 </th>
                 <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
-                  {isArabic ? "المواد" : "Modules"}
+                  {isArabic ? "السنة" : "Year"}
                 </th>
                 <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
-                  {isArabic ? "المستويات" : "Levels"}
+                  {isArabic ? "الشعبة" : "Section"}
+                </th>
+                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                  {isArabic ? "المجموعة" : "Group"}
                 </th>
               </tr>
             </thead>
@@ -447,27 +425,36 @@ export default function DataTable() {
                 </tr>
               )}
               {!loading &&
-                visibleRows.map((row) => {
+                visibleRows.map((row, vIdx) => {
                 const isOpen = expandedIds.has(row.id)
-                const nMods = row.modules.length
-                const nLevels = countDistinctYears(row.modules)
+                const stripe = vIdx % 2 === 0
                 return (
                   <Fragment key={row.id}>
-                    <tr className="border-b border-[#D6DEEF] bg-gradient-to-r from-white to-[#FFF5F0]/75 text-[#1B2065F2]">
+                    <tr
+                      className={`border-b border-[#D6DEEF] text-[#1B2065F2] ${
+                        stripe
+                          ? "bg-gradient-to-r from-white to-[#EEF3FB]/80"
+                          : "bg-gradient-to-r from-[#F5F8FD]/90 to-white"
+                      }`}
+                    >
                       <td className="w-12 min-w-12 align-middle">
                         <div className="flex min-h-[2.75rem] items-center justify-center gap-0.5 px-0.5 py-1.5 sm:px-1">
                           <Checkbox
                             checked={selectedIds.has(row.id)}
                             onCheckedChange={() => toggleRowSelect(row.id)}
                             aria-label={`${isArabic ? "تحديد" : "Select"} ${row.name}`}
-                            className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white appearance-none rounded-full"
+                            className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
                           />
                           <button
                             type="button"
                             onClick={() => toggleExpand(row.id)}
                             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#1B2065F2] hover:bg-[#E8ECF4]/80"
                             aria-expanded={isOpen}
-                            aria-label={isArabic ? "توسيع المواد" : "Expand modules"}
+                            aria-label={
+                              isArabic
+                                ? "توسيع الغياب المبرر"
+                                : "Expand justified absences"
+                            }
                           >
                             {isOpen ? (
                               <ChevronDown size={16} strokeWidth={2} />
@@ -491,69 +478,48 @@ export default function DataTable() {
                           {row.email}
                         </a>
                       </td>
-                      <td className="min-w-0 align-middle sm:px-1 sm:py-2.5">
-                        <span className="inline-flex items-center rounded-full border border-[#74A7BD]/50 bg-[#51689A]/10 px-2.5 py-0.5 text-xs font-medium text-[#51689A]">
-                          {nMods}{" "}
-                          {isArabic
-                            ? nMods === 1
-                              ? "مادة"
-                              : "مواد"
-                            : nMods === 1
-                              ? "module"
-                              : "modules"}
-                        </span>
+                      <td className="min-w-0 align-middle text-[#51689A] sm:px-1 sm:py-2.5">
+                        {row.year}
+                      </td>
+                      <td className="min-w-0 align-middle text-[#51689A] sm:px-1 sm:py-2.5">
+                        {row.section}
                       </td>
                       <td className="min-w-0 align-middle sm:px-1 sm:py-2.5">
-                        <span className="inline-flex items-center rounded-full bg-[#74A7BD]/20 px-2.5 py-0.5 text-xs font-medium text-[#74A7BD] border border-[#74A7BD] ">
-                          {nLevels}{" "}
-                          {isArabic
-                            ? nLevels === 1
-                              ? "مستوى"
-                              : "مستويات"
-                            : nLevels === 1
-                              ? "level"
-                              : "levels"}
-                        </span>
+                        <span className="font-medium text-[#6CB4B4]">{row.group}</span>
                       </td>
-                      
                     </tr>
                     {isOpen && (
-                      <tr className="border-b border-[#D6DEEF] bg-[#F6F7FE]">
+                      <tr className="border-b border-[#D6DEEF] bg-[#E0E4F0]/50">
                         <td colSpan={colCount} className="p-0">
                           <div
                             className="px-2 py-3 sm:px-4 sm:py-4"
                             dir={isArabic ? "rtl" : "ltr"}
                           >
                             <p className="mb-3 text-xs font-medium text-[#51689A] sm:text-sm">
-                              {isArabic ? "المواد" : "Modules"}
+                              {isArabic ? "الغيابات المبررة" : "Justified Absences"}
                             </p>
                             <ul className="space-y-2.5">
-                              {row.modules.length === 0 && (
-                                <li className="rounded-lg border border-dashed border-[#51689A]/50 bg-white px-3 py-2 text-xs text-[#51689A]">
-                                  {isArabic ? "لا توجد مواد." : "No modules."}
+                              {row.justifiedSemesters.length === 0 ? (
+                                <li className="text-sm text-[#5D719D]">
+                                  {isArabic
+                                    ? "لا بيانات غياب مبرر من الخادم على هذا المقتطف."
+                                    : "No justified-absence data from the server for this list."}
                                 </li>
+                              ) : (
+                                row.justifiedSemesters.map((j) => (
+                                  <li
+                                    key={j.id}
+                                    className="relative flex min-h-[3rem] items-center rounded-lg border border-[#74A7BD]/45 bg-white px-4 py-3 shadow-sm"
+                                  >
+                                    <span className="text-sm font-medium text-[#51689A]">
+                                      {isArabic ? j.labelAr : j.labelEn}
+                                    </span>
+                                    <span className="absolute start-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm font-semibold tabular-nums text-[#1B2065F2]">
+                                      {j.count}/{j.max}
+                                    </span>
+                                  </li>
+                                ))
                               )}
-                              {row.modules.map((m) => (
-                                <li
-                                  key={m.id}
-                                  className="rounded-lg border border-[#51689A]/45 bg-white px-3 py-2.5 shadow-sm sm:px-4 sm:py-3"
-                                >
-                                  <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_7.5rem_2.5rem] sm:items-center sm:gap-x-8 sm:gap-y-0">
-                                    <span className="min-w-0 text-xs font-medium leading-snug text-[#1B2065F2] sm:text-sm">
-                                      {m.module}
-                                    </span>
-                                    <span className="shrink-0 text-xs font-medium text-[#1B2065F2] sm:text-sm">
-                                      {m.year}
-                                    </span>
-                                    <span className="min-w-0 break-words text-xs text-[#1B2065F2] sm:text-sm">
-                                      {m.groups}
-                                    </span>
-                                    <span className="shrink-0 text-xs font-medium text-[#1B2065F2] sm:justify-self-end sm:text-sm md:justify-self-center">
-                                      {m.semester}
-                                    </span>
-                                  </div>
-                                </li>
-                              ))}
                             </ul>
                           </div>
                         </td>
@@ -568,7 +534,7 @@ export default function DataTable() {
 
         {!loading && visibleRows.length === 0 && (
           <p className="py-5 text-center text-sm text-[#5D719D]">
-            {isArabic ? "لا توجد نتائج." : "No matching professors found."}
+            {isArabic ? "لا توجد نتائج." : "No matching students found."}
           </p>
         )}
       </div>

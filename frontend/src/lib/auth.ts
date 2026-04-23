@@ -1,4 +1,5 @@
 import api from "./api";
+import { checkinPath } from "./checkinApi";
 import {
   clearDevRoleOverride,
   getRoleFromAccessToken,
@@ -11,7 +12,7 @@ import { formatDrfError } from "./drfError";
 
 async function login(email: string, password: string, remember = false) {
   const res = await api(
-    "api/token",
+    checkinPath.token,
     {
       method: "POST",
       headers: {

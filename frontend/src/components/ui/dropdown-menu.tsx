@@ -7,9 +7,18 @@ import { cn } from "@/lib/utils"
 import { CheckIcon, ChevronRightIcon } from "lucide-react"
 
 function DropdownMenu({
+  /* modal true locks body scroll and adds padding to body — with a fixed sidebar the main
+   * column looks like it “shifts” horizontally; non-modal is standard for app menus. */
+  modal = false,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+  return (
+    <DropdownMenuPrimitive.Root
+      data-slot="dropdown-menu"
+      modal={modal}
+      {...props}
+    />
+  )
 }
 
 function DropdownMenuPortal({

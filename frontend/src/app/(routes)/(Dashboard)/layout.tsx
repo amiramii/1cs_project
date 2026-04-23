@@ -93,7 +93,16 @@ export default function DashboardLayout({
 
   return (
     <NotificationProvider>
-    <div className="min-h-screen bg-[#FEF9F9]/85 bg-gradient-to-br from-[#FEF9F9]/95 via-[#F6F7FE]/60 to-[#FEF9F9]/90 text-foreground">
+    <div className="relative min-h-screen text-foreground font-montserrat">
+      <div
+        className="pointer-events-none fixed inset-0 -z-10"
+        aria-hidden
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-[#74A7BD]/10 via-[#FEF9F9] to-[#FEF9F9]" />
+        <div className="absolute -end-16 top-0 h-44 w-44 rounded-full bg-fuchsia-200/35 blur-3xl" />
+        <div className="absolute -end-20 top-8 h-48 w-48 rounded-full bg-[#74A7BD]/12 blur-3xl" />
+        <div className="absolute end-8 bottom-0 h-32 w-32 rounded-full bg-sky-200/25 blur-2xl" />
+      </div>
       {!isSchooling && (
         <Sidebar
           expanded={expanded}
@@ -102,8 +111,8 @@ export default function DashboardLayout({
         />
       )}
       <div className={`${shellClass} min-w-0`}>
-      <header className="sticky top-0 z-30 flex min-h-16 w-full items-center justify-between gap-3 border-b border-border/70 bg-background/90 px-4 backdrop-blur sm:px-6 shadow-md">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-primary/8 to-transparent" />
+      <header className="sticky top-0 z-30 flex min-h-16 w-full items-center justify-between gap-3 border-b border-[#74A7BD]/20 bg-[#FEF9F9]/80 px-4 shadow-md backdrop-blur-sm sm:px-6">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-[#74A7BD]/8 to-transparent" />
         {isSchooling ? (
           <nav
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-2 [&::-webkit-scrollbar]:hidden"
@@ -165,7 +174,7 @@ export default function DashboardLayout({
         </div>
       </header>
       <NotificationOnboardingDialog />
-      <main className="mx-auto flex w-full min-w-0 flex-1 flex-col items-stretch bg-[#FEF9F9] px-4 py-4 sm:px-5 lg:px-6">
+      <main className="mx-auto flex w-full min-w-0 flex-1 flex-col items-stretch bg-transparent px-4 py-4 sm:px-5 lg:px-6">
         <DashboardRoleGuard>{children}</DashboardRoleGuard>
       </main>
       <DevRoleSwitcher />

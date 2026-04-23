@@ -252,8 +252,10 @@ export default function SemestrialAttendancePage() {
     if (canUseLocalDemo) {
       return {
         id: assignmentId,
-        group_name: "G-Demo",
-        module_name: "Module demo",
+        group_name: "G4",
+        year_name: "1CS",
+        semester: "S2",
+        module_name: "Gestion des Projets",
       };
     }
     return null;
@@ -401,8 +403,12 @@ export default function SemestrialAttendancePage() {
     );
   }
 
-  const sub =
-    `${openAssignment.module_name ?? "—"} - ${openAssignment.group_name ?? "—"} - ${sem}`;
+  const sub = [
+    openAssignment.group_name?.trim() || "—",
+    openAssignment.year_name?.trim() || "—",
+    openAssignment.semester?.trim() || sem,
+    openAssignment.module_name?.trim() || "—",
+  ].join(" - ");
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-0 pb-10 pt-2 font-montserrat sm:px-1">
