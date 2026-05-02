@@ -8,6 +8,7 @@ import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole";
 import AdminDashboardView from "@/app/_components/dashboard/AdminDashboardView";
 import ProfessorDashboardView from "@/app/_components/dashboard/ProfessorDashboardView";
 import StudentDashboardView from "@/app/_components/dashboard/StudentDashboardView";
+import SchoolingDashboardView from "@/app/_components/dashboard/SchoolingDashboardView";
 import NotificationPermissionPrompt from "@/app/_components/notifications/NotificationPermissionPrompt";
 
 export default function Page() {
@@ -29,14 +30,7 @@ export default function Page() {
     return <StudentDashboardView />;
   }
   if (role === "schooling") {
-    return (
-      <div
-        className="flex min-h-[calc(100vh-5rem)] w-full flex-1 flex-col gap-4"
-        aria-label="Schooling dashboard placeholder"
-      >
-        <NotificationPermissionPrompt context="dashboard-home" />
-      </div>
-    );
+    return <SchoolingDashboardView/>;
   }
 
   return <AdminDashboardView />;

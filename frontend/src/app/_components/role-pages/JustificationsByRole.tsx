@@ -17,6 +17,8 @@ import { useLanguage } from "@/app/_components/language-provider"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { getNotificationPermission, notifyUser } from "@/lib/utils"
 
+import { SchoolingJustificationsTable } from "../admin/justifications/SchoolJustTable"
+
 export type JustificationsViewerRole = "admin" | "student" | "schooling"
 
 export default function JustificationsByRole({
@@ -99,38 +101,12 @@ export default function JustificationsByRole({
 
   if (role === "schooling") {
     return (
-      <div className="w-full max-w-4xl space-y-4">
-        <Alert>
-          <Info aria-hidden />
-          <div className="min-w-0 flex-1 space-y-1">
-            <AlertTitle>
-              {isAr
-                ? "مبررات الغياب — الشؤون التعليمية"
-                : "Absence justifications — schooling office"}
-            </AlertTitle>
-            <AlertDescription>
-              {isAr
-                ? "هنا تعالج طلبات الغياب المبررة: القبول، الرفض، أو طلب مستندات إضافية."
-                : "Process justified absence requests: approve, reject, or ask for more documents."}
-            </AlertDescription>
-          </div>
-        </Alert>
-
-        <Alert variant="default" className="border-dashed border-[#51689A]/35 bg-[#F6F7FE]">
-          <Info aria-hidden />
-          <div className="min-w-0 flex-1 space-y-1">
-            <AlertTitle>
-              {isAr ? "قائمة الطلبات" : "Request queue"}
-            </AlertTitle>
-            <AlertDescription>
-              {isAr
-                ? "سيتم ربط هذه الصفحة بقائمة الطلبات من الـ API لاحقًا."
-                : "Connect this view to your API list of justification requests when ready."}
-            </AlertDescription>
-          </div>
-        </Alert>
-      </div>
-    )
+    <div className=" space-y-4">
+      <h1 className="text-2xl font-semibold text-[#1B2065F2]">Jusifications</h1>
+      <p className="text-lg text-[#51689AF2]">student unchecked justifications</p>
+      <SchoolingJustificationsTable />
+    </div>
+    );
   }
 
   return (
