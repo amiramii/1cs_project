@@ -1,5 +1,5 @@
 "use client"
-
+import Link from "next/link"
 import { Fragment, useMemo, useState } from "react"
 import {
   ChevronDown,
@@ -59,7 +59,16 @@ export function SchoolingJustificationsTable() {
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  const data = MOCK_DATA
+  // In MOCK_DATA, replace the empty array:
+const MOCK_DATA: JustificationRow[] = [
+  { id: "1", name: "Amira Bensalem",  email: "amira.bensalem@school.dz",  year: "2024", group: "G1", justificationCount: 3 },
+  { id: "2", name: "Yacine Ouahrani", email: "yacine.ouahrani@school.dz", year: "2024", group: "G2", justificationCount: 1 },
+  { id: "3", name: "Nadia Zerrouki",  email: "nadia.zerrouki@school.dz",  year: "2023", group: "G1", justificationCount: 5 },
+  { id: "4", name: "Karim Messaoudi", email: "karim.messaoudi@school.dz", year: "2023", group: "G3", justificationCount: 2 },
+  { id: "5", name: "Sonia Hamidi",    email: "sonia.hamidi@school.dz",    year: "2024", group: "G2", justificationCount: 4 },
+  { id: "6", name: "Bilal Rahmani",   email: "bilal.rahmani@school.dz",   year: "2025", group: "G1", justificationCount: 1 },
+]
+const data = MOCK_DATA;
 
   const yearOptions = useMemo(() => collectYears(data), [data])
 
@@ -233,7 +242,12 @@ export function SchoolingJustificationsTable() {
                       />
                     </td>
                     <td className="min-w-0 max-w-[min(28vw,8rem)] break-words px-2 py-2.5 align-middle sm:max-w-none">
-                      {row.name}
+                        <Link
+                          href="/Justifications/Justification-details"
+                          className="font-medium text-[#1B2065F2] underline decoration-[#51689A]/40 underline-offset-2 hover:text-[#51689A] hover:decoration-[#51689A]"
+                        >
+                          {row.name}
+                        </Link>
                     </td>
                     <td className="hidden min-w-0 px-2 py-2.5 align-middle md:table-cell">
                       

@@ -29,7 +29,9 @@ export function isRouteAllowedForRole(pathname: string, role: AppSidebarRole): b
       p.startsWith("/Dashboard/") ||
       p === "/Justifications" ||
       p === "/Justifications/Schooling-Justifications" ||
-      p.startsWith("/Justifications/Schooling-Justifications/")
+      p.startsWith("/Justifications/Schooling-Justifications/") ||
+      p === "/Justifications/Justification-details" ||
+      p.startsWith("/Justifications/Justification-details/")
     )
   }
 
