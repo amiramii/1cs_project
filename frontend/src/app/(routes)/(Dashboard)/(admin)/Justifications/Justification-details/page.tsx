@@ -1,5 +1,11 @@
+import React from 'react';
+import JustificationDetails from "@/app/_components/admin/justifications/JustificationDetails";
+
+
 export default function Page(){
     return(
-        <h1>helloo</h1>
+        <div>
+            <JustificationDetails />
+        </div>
     );
 }

@@ -85,11 +85,9 @@ export default function DashboardLayout({
     ) ??
     navItems[0];
 
-  const shellClass = isSchooling
-    ? "flex min-h-screen flex-1 flex-col transition-all duration-200"
-    : `flex min-h-screen flex-1 flex-col pb-24 md:pb-0 transition-all duration-200 ${
-        expanded ? (isRtl ? "md:mr-64" : "md:ml-64") : isRtl ? "md:mr-24" : "md:ml-24"
-      }`;
+  const shellClass = `flex min-h-screen flex-1 flex-col pb-24 md:pb-0 transition-all duration-200 ${
+    expanded ? (isRtl ? "md:mr-64" : "md:ml-64") : isRtl ? "md:mr-24" : "md:ml-24"
+  }`;
 
   return (
     <NotificationProvider>
@@ -103,45 +101,18 @@ export default function DashboardLayout({
         <div className="absolute -end-20 top-8 h-48 w-48 rounded-full bg-[#74A7BD]/12 blur-3xl" />
         <div className="absolute end-8 bottom-0 h-32 w-32 rounded-full bg-sky-200/25 blur-2xl" />
       </div>
-      {!isSchooling && (
         <Sidebar
           expanded={expanded}
           setExpanded={setExpanded}
           role={role}
         />
-      )}
       <div className={`${shellClass} min-w-0`}>
       <header className="sticky top-0 z-30 flex min-h-16 w-full items-center justify-between gap-3 border-b border-[#74A7BD]/20 bg-[#FEF9F9]/80 px-4 shadow-md backdrop-blur-sm sm:px-6">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-[#74A7BD]/8 to-transparent" />
-        {isSchooling ? (
-          <nav
-            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-2 [&::-webkit-scrollbar]:hidden"
-            aria-label="Schooling"
-          >
-            {navItems.map((item) => {
-              const active = item.href === activeItem.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                    active
-                      ? "border-primary/30 bg-primary/10 text-foreground"
-                      : "border-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                  }`}
-                >
-                  <SidebarMenuIcon id={item.iconId} size={16} className="shrink-0" />
-                  <span className="whitespace-nowrap">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        ) : (
           <div className="flex min-w-0 items-center gap-2 text-foreground">
             <SidebarMenuIcon id={activeItem.iconId} size={18} className="shrink-0" />
             <span className="truncate text-sm font-semibold sm:text-base">{activeItem.label}</span>
           </div>
-        )}
         <div className="flex shrink-0 items-center gap-3 sm:gap-4 ">
             <LanguageMenu language={language} onChange={setLanguage} />
             <ModeToggle/>
