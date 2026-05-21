@@ -61,7 +61,7 @@ export function SchoolingJustificationsTable() {
 
   // In MOCK_DATA, replace the empty array:
 const MOCK_DATA: JustificationRow[] = [
-  { id: "1", name: "Amira Bensalem",  email: "amira.bensalem@school.dz",  year: "2024", group: "G1", justificationCount: 3 },
+  { id: "1", name: "Bensaber Mohammed",  email: "m.bensaber@esi-sba.dz",  year: "2024", group: "G2", justificationCount: 2 },
   { id: "2", name: "Yacine Ouahrani", email: "yacine.ouahrani@school.dz", year: "2024", group: "G2", justificationCount: 1 },
   { id: "3", name: "Nadia Zerrouki",  email: "nadia.zerrouki@school.dz",  year: "2023", group: "G1", justificationCount: 5 },
   { id: "4", name: "Karim Messaoudi", email: "karim.messaoudi@school.dz", year: "2023", group: "G3", justificationCount: 2 },
