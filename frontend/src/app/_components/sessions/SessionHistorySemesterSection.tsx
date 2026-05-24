@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import {
   academicStartYearsFromSessions,
   currentAcademicStartYear,
+  inferAcademicStartYearFromDate,
+  inferSemesterForDate,
   isIsoDateInRange,
   semesterBounds,
 } from "@/lib/semesterAcademic";
@@ -49,6 +51,29 @@ function SessionHistorySemesterSection({
     [sem, academicStartYear]
   );
 
+  /**
+   * If the selected S1/S2 window contains no sessions but we do have sessions in
+   * the app (e.g. May dates while S1 Sep–Jan is selected), align filters to the
+   * latest session so history percentages update without manual toggling.
+   */
+  useEffect(() => {
+    if (sessions.length === 0) return;
+
+    const anyInView = sessions.some((s) =>
+      isIsoDateInRange(s.date, from, to)
+    );
+    if (anyInView) return;
+
+    const latest = [...sessions].sort((a, b) =>
+      b.date.localeCompare(a.date)
+    )[0];
+    if (!latest?.date) return;
+
+    const ay = inferAcademicStartYearFromDate(latest.date);
+    const nextSem = inferSemesterForDate(latest.date, ay);
+    setAcademicStartYear(ay);
+    setSem(nextSem);
+  }, [sessions, from, to]);
   const yearLabel = (y: number) => `${y}–${(y + 1).toString().slice(-2)}`;
 
   const nudgeYear = (delta: -1 | 1) => {

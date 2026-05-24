@@ -27,16 +27,9 @@ import dayjs from "dayjs";
 import { currentAcademicStartYear, semesterBounds } from "@/lib/semesterAcademic";
 import {
   buildSessionHistoryMatrix,
-  distributionFromMatrixRows,
   overallStatusDistributionPct,
   shortDateHeader,
 } from "@/lib/sessionHistoryMatrix";
-import { isDemoSemestrialMatrix, buildSemestrialDemoMatrix } from "@/lib/semestrialDemoData";
-import {
-  buildDemoTeacherAssignments,
-  isDemoTeacherAssignmentId,
-  isDemoTeacherAssignmentsEnabled,
-} from "@/app/_components/sessions/profSessionMock";
 import { cn } from "@/lib/utils";
 
 const STATUS_HEX = {
@@ -115,12 +108,6 @@ function formatSessionPillLabel(
   return `${month} ${englishOrdinalDay(d.date())} ${y} - ${time}`;
 }
 
-const DEMO_SESSION_NOTES = [
-  "wonderful presentation",
-  "Attentive in class.",
-  "Good work.",
-] as const;
-
 function findProfessorNote(
   studentId: number,
   sessionId: number,
@@ -133,18 +120,11 @@ function findProfessorNote(
 }
 
 function sessionNoteText(
-  rowId: number,
+  studentId: number,
   session: SessionApi,
-  sessionIndex: number,
-  attendance: AttendanceRow[] | undefined,
-  isDemo: boolean
+  attendance: AttendanceRow[] | undefined
 ): string {
-  const fromApi = findProfessorNote(rowId, session.id, attendance ?? []);
-  if (fromApi) return fromApi;
-  if (isDemo) {
-    return DEMO_SESSION_NOTES[sessionIndex % DEMO_SESSION_NOTES.length] ?? "—";
-  }
-  return "";
+  return findProfessorNote(studentId, session.id, attendance ?? []);
 }
 
 type HistoryMatrixRow = {
@@ -215,17 +195,9 @@ export default function SemestrialAttendancePage() {
     return semesterBounds(sem, academicYear);
   }, [sem, academicYear]);
 
-  const canUseLocalDemo = useMemo(
-    () =>
-      isDemoTeacherAssignmentsEnabled() ||
-      (typeof process !== "undefined" &&
-        process.env.NODE_ENV === "development"),
-    []
-  );
-
   const matrix = useMemo(() => {
     if (!bundle || !assignmentId || !from) return null;
-    const real = buildSessionHistoryMatrix(
+    return buildSessionHistoryMatrix(
       assignmentId,
       from,
       to,
@@ -233,38 +205,16 @@ export default function SemestrialAttendancePage() {
       bundle.teacherAttendanceRows,
       isAr
     );
-    const empty =
-      real.courseSessions.length === 0 || real.rows.length === 0;
-    if (!empty) return real;
-    if (canUseLocalDemo) {
-      return buildSemestrialDemoMatrix(assignmentId, from, to, isAr);
-    }
-    return real;
-  }, [bundle, assignmentId, from, to, isAr, canUseLocalDemo]);
+  }, [bundle, assignmentId, from, to, isAr]);
 
   const openAssignment = useMemo((): AssignmentApi | null => {
     if (!bundle) return null;
-    const found = bundle.assignments.find((a) => a.id === assignmentId);
-    if (found) return found;
-    if (isDemoTeacherAssignmentId(assignmentId) && isDemoTeacherAssignmentsEnabled()) {
-      return buildDemoTeacherAssignments()[0];
-    }
-    if (canUseLocalDemo) {
-      return {
-        id: assignmentId,
-        group_name: "G4",
-        year_name: "1CS",
-        semester: "S2",
-        module_name: "Gestion des Projets",
-      };
-    }
-    return null;
-  }, [bundle, assignmentId, canUseLocalDemo]);
+    return bundle.assignments.find((a) => a.id === assignmentId) ?? null;
+  }, [bundle, assignmentId]);
 
   const dist = useMemo(() => {
-    if (!matrix) return { present: 0, absent: 0, justified: 0 };
-    if (isDemoSemestrialMatrix(matrix)) {
-      return distributionFromMatrixRows(matrix.rows);
+    if (!matrix || matrix.courseSessions.length === 0) {
+      return { present: 0, absent: 0, justified: 0 };
     }
     return overallStatusDistributionPct(
       matrix.courseSessions,
@@ -289,17 +239,14 @@ export default function SemestrialAttendancePage() {
 
   const sessionNotePills = useMemo(() => {
     if (!studentModal || !matrix) return [];
-    const isDemo = isDemoSemestrialMatrix(matrix);
-    return matrix.courseSessions.map((session, idx) => ({
+    return matrix.courseSessions.map((session) => ({
       session,
       key: session.id,
       label: formatSessionPillLabel(session, locale, isAr),
       note: sessionNoteText(
         studentModal.id,
         session,
-        idx,
-        bundle?.teacherAttendanceRows,
-        isDemo
+        bundle?.teacherAttendanceRows
       ),
     }));
   }, [studentModal, matrix, bundle?.teacherAttendanceRows, locale, isAr]);
@@ -443,13 +390,6 @@ export default function SemestrialAttendancePage() {
               {yearLabel(academicYear)} · {from} – {to}
             </span>
           </p>
-          {matrix && isDemoSemestrialMatrix(matrix) ? (
-            <p className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-xs text-sky-950">
-              {isAr
-                ? "بيانات تجريبية للواجهة: طلاب وغياب ومبرر وهميّان."
-                : "Demo data: sample students with mixed present, absent, and justified (frontend only)."}
-            </p>
-          ) : null}
         </div>
         <Button
           type="button"

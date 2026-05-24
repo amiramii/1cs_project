@@ -1,20 +1,69 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   CalendarCheck2,
   ClipboardClock,
-  GraduationCap,
   FileWarning,
+  GraduationCap,
 } from "lucide-react";
 import { useLanguage } from "@/app/_components/language-provider";
 import NotificationPermissionPrompt from "@/app/_components/notifications/NotificationPermissionPrompt";
 import { Button } from "@/components/ui/button";
+import {
+  fetchStudentDashboardMetrics,
+  formatDashboardCount,
+} from "@/lib/dashboardMetrics";
 
 export default function StudentDashboardView() {
   const { language } = useLanguage();
   const isAr = language === "ar";
+
+  const [stats, setStats] = useState<{
+    pendingJustifications: number;
+    schedulesOnFile: number;
+    absenceMarksTotal: number;
+    absentSlotsThisWeek: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchStudentDashboardMetrics().then((m) => {
+      if (alive) setStats(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const cards = [
+    {
+      label: isAr ? "مبررات قيد المراجعة" : "Justifications pending",
+      value: stats
+        ? formatDashboardCount(stats.pendingJustifications)
+        : "—",
+      icon: FileWarning,
+    },
+    {
+      label: isAr ? "جداول مسجّلة" : "Schedules on file",
+      value: stats ? formatDashboardCount(stats.schedulesOnFile) : "—",
+      icon: CalendarCheck2,
+    },
+    {
+      label: isAr ? "سجلات غياب" : "Absence marks recorded",
+      value: stats ? formatDashboardCount(stats.absenceMarksTotal) : "—",
+      icon: GraduationCap,
+    },
+    {
+      label: isAr ? "غياب هذا الأسبوع" : "Absent slots this week",
+      value: stats
+        ? formatDashboardCount(stats.absentSlotsThisWeek)
+        : "—",
+      icon: ClipboardClock,
+    },
+  ];
 
   return (
     <div className="w-full max-w-6xl space-y-8">
@@ -46,77 +95,27 @@ export default function StudentDashboardView() {
                 : "Create sessions and manage attendance — overview."}
             </p>
           </div>
-          <Button variant="outline" size="sm" className="border-[#51689A] text-[#1B2065] hover:bg-[#74A7BD]/15" asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-[#51689A] text-[#1B2065] hover:bg-[#74A7BD]/15"
+            asChild
+          >
             <Link href="/Sessions" className="inline-flex items-center gap-1">
               {isAr ? "كل الحصص" : "All sessions"}
               <ArrowRight className="size-4 rtl:rotate-180" />
             </Link>
           </Button>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {[
-            {
-              label: isAr ? "حاضر" : "Present",
-              value: "70%",
-              color: "#74A7BD",
-            },
-            {
-              label: isAr ? "غائب" : "Absent",
-              value: "20%",
-              color: "#C71122",
-            },
-            {
-              label: isAr ? "مبرر" : "Justified",
-              value: "10%",
-              color: "#E7CE51",
-            },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="rounded-xl border border-[#51689A]/25 bg-[#FEF9F9] px-4 py-4 text-center shadow-sm"
-            >
-              <p
-                className="text-2xl font-bold tabular-nums"
-                style={{ color: s.color }}
-              >
-                {s.value}
-              </p>
-              <p className="text-sm font-medium text-[#51689A]">
-                {s.label}
-              </p>
-            </div>
-          ))}
-        </div>
         <p className="text-xs text-[#51689A]">
           {isAr
-            ? "أرقام توضيحية؛ تُستبدل ببياناتك عند الربط."
-            : "Illustrative rates; replaced by your data when the API is connected."}
+            ? "الأرقام أدناه من خوادم المنصة (غياب، مبررات، مستندات الجداول)."
+            : "Counts below come from the platform APIs (absences, justifications, schedule PDFs)."}
         </p>
       </section>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            label: isAr ? "حصص هذا الأسبوع" : "Sessions this week",
-            value: "18",
-            icon: ClipboardClock,
-          },
-          {
-            label: isAr ? "نسبة الحضور" : "Attendance rate",
-            value: "92%",
-            icon: GraduationCap,
-          },
-          {
-            label: isAr ? "مبررات قيد المراجعة" : "Justifications pending",
-            value: "2",
-            icon: FileWarning,
-          },
-          {
-            label: isAr ? "جداول مسجّلة" : "Schedules on file",
-            value: "5",
-            icon: CalendarCheck2,
-          },
-        ].map((card) => (
+        {cards.map((card) => (
           <article
             key={card.label}
             className="rounded-xl border border-[#51689A]/20 bg-[#FEF9F9] p-4 shadow-sm transition-colors hover:border-[#74A7BD]/35 hover:bg-[#F6F7FE]"
@@ -131,8 +130,6 @@ export default function StudentDashboardView() {
           </article>
         ))}
       </section>
-
-      
     </div>
   );
 }

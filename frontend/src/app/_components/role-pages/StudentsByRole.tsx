@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import MiddleContainer from "@/app/_components/admin/students/StudMidContainer";
 import StudTotals from "@/app/_components/admin/students/StudTotals";
 import StudTable from "@/app/_components/admin/students/StudTable";
+import ProfStudentsRoster from "@/app/_components/admin/students/ProfStudentsRoster";
 import PageFileStagingDropzone from "@/app/_components/PageFileStagingDropzone";
 import { useLanguage } from "@/app/_components/language-provider";
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
@@ -57,11 +58,7 @@ export default function StudentsByRole({
             : "Students linked to your courses and sessions—without bulk admin import tools."}
         </p>
       </header>
-      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
-        {isAr
-          ? "جدول الحضور والقوائم ستُحمّل من الـ API حسب الأستاذ."
-          : "Roster and attendance tables will load from the API for your teacher profile."}
-      </div>
+      <ProfStudentsRoster />
     </div>
   );
 }

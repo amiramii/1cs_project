@@ -1,15 +1,15 @@
 "use client"
 
 /**
- * `/Justifications` — schooling office and students (admins use other tools; no admin tab).
+ * `/Justifications` — schooling office, students, and admins (review queue).
  * The effective role picks which copy loads inside `JustificationsByRole`.
  */
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-
 import JustificationsByRole from "@/app/_components/role-pages/JustificationsByRole"
+import type { JustificationsViewerRole } from "@/app/_components/role-pages/JustificationsByRole"
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants"
 import { getAccessToken } from "@/lib/tokenStorage"
 import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole"
@@ -19,12 +19,6 @@ export default function Page() {
   const role = useEffectiveAppRole("admin")
 
   useEffect(() => {
-    if (role === "admin") {
-      router.replace("/Dashboard")
-    }
-  }, [role, router])
-
-  useEffect(() => {
     if (!ENABLE_AUTH_REDIRECTS) return
     const token = getAccessToken()
     if (!token) {
@@ -32,10 +26,8 @@ export default function Page() {
     }
   }, [router])
 
-  if (role === "admin") {
-    return null
-  }
+  const viewRole: JustificationsViewerRole =
+    role === "student" ? "student" : role === "admin" ? "admin" : "schooling"
 
-  const viewRole = role === "student" ? "student" : "schooling"
   return <JustificationsByRole role={viewRole} />
 }

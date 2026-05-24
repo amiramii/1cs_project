@@ -31,16 +31,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn, notifyUser } from "@/lib/utils";
-import {
-  buildDemoScheduleSessionRow,
-  buildDemoTeacherAssignments,
-  buildMockProfSession,
-  isDemoTeacherAssignmentId,
-  isDemoTeacherAssignmentsEnabled,
-  isMockProfSessionId,
-  isProfSessionMockEnabled,
-  nextDemoScheduleSessionId,
-} from "@/app/_components/sessions/profSessionMock";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
 import ScheduleSessionForm, {
@@ -60,6 +50,11 @@ import {
   getAttendanceSessionById,
   patchAttendanceRow,
 } from "@/lib/checkinClient";
+import { hydrateAttendanceRowsStudentInfo } from "@/lib/attendanceStudentHydrate";
+import {
+  markProfessorSessionClosedLocally,
+  readClosedProfessorSessionIds,
+} from "@/lib/professorClosedSessions";
 
 type RowDraft = {
   status: AttendanceStatus;
@@ -114,6 +109,45 @@ function todayLocalIso(): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Django session payloads omit module/group strings; fill from the teaching-assignment catalog. */
+function applyAssignmentCatalogLabels(
+  session: SessionApi,
+  catalogs: AssignmentApi[]
+): SessionApi {
+  const cat = catalogs.find((a) => a.id === session.assignment);
+  if (!cat) return session;
+  return {
+    ...session,
+    module_name: session.module_name ?? cat.module_name,
+    group_name: session.group_name ?? cat.group_name,
+    year_name: session.year_name ?? cat.year_name,
+    semester: session.semester ?? cat.semester,
+  };
+}
+
+/** Django session payloads omit module/group strings; reuse teaching-assignment catalog + cached rows. */
+function enrichSessionSheetPayload(
+  session: SessionApi,
+  catalogs: AssignmentApi[],
+  teacherFlat: AttendanceRow[]
+): SessionApi {
+  let next = applyAssignmentCatalogLabels(session, catalogs);
+  const sid = session.id;
+  const flatById = new Map(
+    teacherFlat.filter((r) => r.session === sid).map((r) => [r.id, r] as const)
+  );
+  const attendances = (next.attendances ?? []).map((row) => {
+    const f = flatById.get(row.id);
+    return {
+      ...row,
+      session: sid,
+      student_name: row.student_name ?? f?.student_name,
+      student_email: row.student_email ?? f?.student_email,
+    };
+  });
+  return { ...next, attendances };
+}
+
 function formatSessionSubtitle(
   s: SessionApi,
   locale: string,
@@ -132,7 +166,8 @@ function formatSessionSubtitle(
   } catch {
     /* ignore */
   }
-  return `${mod} - ${grp} - ${dateLabel}`;
+  const room = s.room?.trim();
+  return [mod, grp, dateLabel, room].filter(Boolean).join(" — ");
 }
 
 /**
@@ -174,6 +209,7 @@ export default function ProfessorSessionsView() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   /** True when assignments came from session rows (assignments API unavailable). */
+  const [sessionsFetchDegraded, setSessionsFetchDegraded] = useState(false);
   const [assignmentsCatalogFallback, setAssignmentsCatalogFallback] =
     useState(false);
   const [assignments, setAssignments] = useState<AssignmentApi[]>([]);
@@ -203,6 +239,8 @@ export default function ProfessorSessionsView() {
     dayjs(`${todayLocalIso()}T08:00:00`).add(2, "hour")
   );
   const [creating, setCreating] = useState(false);
+  /** Re-read browser closed-session ids after Save (backend has no completed flag). */
+  const [closedSessionsBump, setClosedSessionsBump] = useState(0);
 
   const getRowDraft = useCallback(
     (row: AttendanceRow): RowDraft =>
@@ -218,11 +256,13 @@ export default function ProfessorSessionsView() {
       setTeacherAttendanceRows(bundle.teacherAttendanceRows);
       setAssignments(bundle.assignments);
       setAssignmentsCatalogFallback(bundle.assignmentsCatalogFallback);
+      setSessionsFetchDegraded(bundle.sessionsFetchDegraded ?? false);
     } catch (e) {
       setAssignments([]);
       setSessions([]);
       setTeacherAttendanceRows([]);
       setAssignmentsCatalogFallback(false);
+      setSessionsFetchDegraded(false);
       if (isNetworkFailure(e)) {
         throw new Error(apiUnreachableMessage(apiBase, ar));
       }
@@ -261,35 +301,25 @@ export default function ProfessorSessionsView() {
 
   const todayStr = todayLocalIso();
 
-  /** When the API has no teaching assignments, use a dev-only fake row for the schedule form. */
-  const assignmentsForSchedule = useMemo((): AssignmentApi[] => {
-    if (isDemoTeacherAssignmentsEnabled() && assignments.length === 0) {
-      return buildDemoTeacherAssignments();
-    }
-    return assignments;
-  }, [assignments]);
+  const locallyClosedSessionIds = useMemo(() => {
+    void closedSessionsBump;
+    return readClosedProfessorSessionIds();
+  }, [closedSessionsBump]);
 
-  const scheduleFormUsesApiAssignmentsOnly =
-    assignmentsForSchedule.length === assignments.length;
-
-  /** Merge a dev mock session when there is no real session today (for UI coding). */
-  const sessionsDisplay = useMemo(() => {
-    if (!isProfSessionMockEnabled()) return sessions;
-    const realToday = sessions.filter(
-      (s) => s.date === todayStr && !isMockProfSessionId(s.id)
-    );
-    if (realToday.length > 0) {
-      return sessions.filter((s) => !isMockProfSessionId(s.id));
-    }
-    const rest = sessions.filter((s) => !isMockProfSessionId(s.id));
-    return [buildMockProfSession(), ...rest];
-  }, [sessions, todayStr]);
+  const sessionsWithCatalogLabels = useMemo(
+    () =>
+      sessions.map((s) => applyAssignmentCatalogLabels(s, assignments)),
+    [sessions, assignments]
+  );
 
   const todaySessions = useMemo(() => {
-    return sessionsDisplay
-      .filter((s) => s.date === todayStr)
+    return sessionsWithCatalogLabels
+      .filter(
+        (s) =>
+          s.date === todayStr && !locallyClosedSessionIds.has(s.id)
+      )
       .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)));
-  }, [sessionsDisplay, todayStr]);
+  }, [sessionsWithCatalogLabels, todayStr, locallyClosedSessionIds]);
 
   const highlightSession = todaySessions[0] ?? null;
 
@@ -298,26 +328,6 @@ export default function ProfessorSessionsView() {
     opts?: { resetFeedback?: boolean }
   ) => {
     const resetFeedback = opts?.resetFeedback !== false;
-    if (isMockProfSessionId(s.id)) {
-      const full = buildMockProfSession();
-      setWorkingSession(full);
-      setRowOverrides({});
-      if (resetFeedback) setSaveMsg(null);
-      setTableSearch("");
-      setSheetShowAll(false);
-      if (resetFeedback) {
-        void notifyUser({
-          title: isAr ? "حصة (تجريبي)" : "Session (demo)",
-          body: formatSessionSubtitle(
-            full,
-            locale,
-            isAr ? "التاريخ" : "Date"
-          ),
-          tag: `session-open-${full.id}`,
-        });
-      }
-      return;
-    }
     let full: SessionApi = s;
     try {
       const res = await getAttendanceSessionById(s.id);
@@ -326,6 +336,15 @@ export default function ProfessorSessionsView() {
       }
     } catch {
       /* use list payload */
+    }
+    full = enrichSessionSheetPayload(full, assignments, teacherAttendanceRows);
+    try {
+      const hydrated = await hydrateAttendanceRowsStudentInfo(
+        full.attendances ?? []
+      );
+      full = { ...full, attendances: hydrated };
+    } catch {
+      /* keep enrichment from catalog / flat bundle only */
     }
     setWorkingSession(full);
     setRowOverrides({});
@@ -382,14 +401,6 @@ export default function ProfessorSessionsView() {
 
   const saveAttendance = async () => {
     if (!workingSession) return;
-    if (isMockProfSessionId(workingSession.id)) {
-      setSaveMsg(
-        isAr
-          ? "جلسة تجريبية — لا يُحفظ في الخادم. عطّلها بـ NEXT_PUBLIC_DEV_MOCK_PROF_SESSION=false أو أنشئ حصة حقيقية."
-          : "Demo session — not saved to the server. Set NEXT_PUBLIC_DEV_MOCK_PROF_SESSION=false or create a real session."
-      );
-      return;
-    }
     const rows = workingSession.attendances ?? [];
     setSaving(true);
     setSaveMsg(null);
@@ -421,6 +432,8 @@ export default function ProfessorSessionsView() {
         if (!res.ok) throw new Error(await res.text());
       }
       await refreshData();
+      markProfessorSessionClosedLocally(workingSession.id);
+      setClosedSessionsBump((n) => n + 1);
       setSaveMsg(
         isAr
           ? "تم حفظ الورقة وإنهاء الحصة."
@@ -484,43 +497,6 @@ export default function ProfessorSessionsView() {
   const createSession = async () => {
     if (newAssignmentId === "") return;
 
-    if (
-      isDemoTeacherAssignmentId(newAssignmentId) &&
-      isDemoTeacherAssignmentsEnabled()
-    ) {
-      setCreating(true);
-      try {
-        const id = nextDemoScheduleSessionId();
-        const date = sessionStart.format("YYYY-MM-DD");
-        const startH = sessionStart.format("HH:mm:ss");
-        const endH = sessionEnd.format("HH:mm:ss");
-        const fromCatalog = assignmentsForSchedule.find(
-          (a) => a.id === newAssignmentId
-        );
-        const created = buildDemoScheduleSessionRow({
-          id,
-          date,
-          start_time: startH,
-          end_time: endH,
-          group_name: fromCatalog?.group_name || "G-Demo",
-          module_name: fromCatalog?.module_name || "Module demo",
-        });
-        setSessions((s) => [created, ...s]);
-        setShowScheduleForm(false);
-        toast.success(
-          isAr
-            ? "حصة تجريبية — أُضيفت في الواجهة فقط (بدون حفظ على الخادم)."
-            : "Test session added in the app only (not saved to the server)."
-        );
-        await startWorking(created, { resetFeedback: true });
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setCreating(false);
-      }
-      return;
-    }
-
     setCreating(true);
     try {
       const payload = buildSessionCreateBody(
@@ -554,7 +530,7 @@ export default function ProfessorSessionsView() {
       }
     } catch (e) {
       console.error(e);
-      setLoadError(isAr ? "تعذر إنشاء الحصة." : "Could not create session.");
+      toast.error(isAr ? "تعذر إنشاء الحصة." : "Could not create session.");
     } finally {
       setCreating(false);
     }
@@ -568,10 +544,7 @@ export default function ProfessorSessionsView() {
       isAr ? "التاريخ" : "Date"
     );
 
-  const historyAssignmentList = useMemo((): AssignmentApi[] => {
-    if (assignments.length > 0) return assignments;
-    return assignmentsForSchedule;
-  }, [assignments, assignmentsForSchedule]);
+  const historyAssignmentList = assignments;
 
   if (loading) {
     return (
@@ -689,6 +662,18 @@ export default function ProfessorSessionsView() {
             </div>
           </div>
         </div>
+
+        {(workingSession.attendances?.length ?? 0) === 0 ? (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-950 [&_svg]:text-amber-900">
+            <Info aria-hidden />
+            <AlertTitle>{isAr ? "لا توجد صفوف حضور" : "No attendance rows"}</AlertTitle>
+            <AlertDescription>
+              {isAr
+                ? "لم يُرجع الخادم أي سجل حضور لهذه الحصة. هذا يحدث عادةً عندما لا يوجد طلاب مسجَّلون في شعبة التعيين التدريسي، أو عند تقييد وصول حسابكم لـ«طالب» أو «طلاب». بعد إضافة طلاب للشعبة، أنشئ الحصة من جديد أو أعد ضبط السجلات من الخادم."
+                : "The server returned no attendance records for this session. That usually means there are zero students enrolled in the teaching assignment’s group, or this login cannot retrieve student profiles (needed to show names). Enroll students in that group—then sessions created for this assignment include one row per student."}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="relative overflow-hidden rounded-xl border border-[#74A7BD]/30 bg-gradient-to-br from-[#74A7BD]/12 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
@@ -1079,11 +1064,9 @@ export default function ProfessorSessionsView() {
                 : "default"
             }
             className={
-              saveMsg.includes("تجريبية") || saveMsg.includes("Demo")
-                ? "border-chekin-warning/40 bg-chekin-warning/10"
-                : saveMsg.includes("فشل") || /failed/i.test(saveMsg)
-                  ? undefined
-                  : "border-blue-secondary/35 bg-blue-secondary/10"
+              saveMsg.includes("فشل") || /failed/i.test(saveMsg)
+                ? undefined
+                : "border-blue-secondary/35 bg-blue-secondary/10"
             }
           >
             <Info aria-hidden />
@@ -1093,13 +1076,9 @@ export default function ProfessorSessionsView() {
                   ? isAr
                     ? "خطأ"
                     : "Error"
-                  : saveMsg.includes("تجريبية") || saveMsg.includes("Demo")
-                    ? isAr
-                      ? "تنبيه"
-                      : "Heads up"
-                    : isAr
-                      ? "تم"
-                      : "Done"}
+                  : isAr
+                    ? "تم"
+                    : "Done"}
               </AlertTitle>
               <AlertDescription>{saveMsg}</AlertDescription>
             </div>
@@ -1128,8 +1107,8 @@ export default function ProfessorSessionsView() {
         </h1>
         <p className="text-[15px] text-muted-foreground">
           {isAr
-            ? "أنشئ الحصص وأدر الحضور."
-            : "Create sessions and manage attendance."}
+            ? "أنشئ الحصص من تعييناتك التدريسية واحفظ الحضور. القائمة تأتي من خادم الحضور وليس من ملفات PDF."
+            : "Create sessions from your teaching assignments and save attendance. This list comes from the attendance API—not from PDF timetables."}
         </p>
         <p className="text-xs text-muted-foreground/90">
           <Link
@@ -1137,17 +1116,27 @@ export default function ProfessorSessionsView() {
             className="font-medium text-blue-primary underline-offset-4 hover:underline"
           >
             {isAr
-              ? "جداول PDF: من تبويب «الجداول»"
-              : "PDF timetables: use the Schedules tab"}
+              ? "الجداول: PDF للاطلاع؛ الطلاب والتعيينات التدريسية تُستورد عادةً عبر CSV من المسؤول."
+              : "Schedules: PDFs are for viewing; rosters and teaching assignments usually come from admin CSV import."}
           </Link>
         </p>
       </header>
 
-      {assignmentsCatalogFallback &&
-      !(
-        isDemoTeacherAssignmentsEnabled() &&
-        assignments.length === 0
-      ) ? (
+      {sessionsFetchDegraded ? (
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950 [&_svg]:text-amber-900">
+          <Info aria-hidden />
+          <AlertTitle>
+            {isAr ? "تعذر تحميل قائمة الحصص من الخادم" : "Could not load sessions from the server"}
+          </AlertTitle>
+          <AlertDescription>
+            {isAr
+              ? "نعرض واجهة فارغة بدل رسالة خطأ. تحقق من الاتصال أو من صلاحيات حساب الأستاذ. يمكنك ما زال محاولة إنشاء حصة جديدة إذا ظهرت تعييناتك أدناه."
+              : "Showing an empty list instead of an error page. Check connectivity or your teacher permissions. You can still try creating a session if your assignments appear below."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {assignmentsCatalogFallback ? (
         <Alert className="border-chekin-warning/40 bg-chekin-warning/10">
           <Info aria-hidden />
           <div className="min-w-0 flex-1 space-y-1">
@@ -1200,7 +1189,7 @@ export default function ProfessorSessionsView() {
       <SessionHistorySemesterSection
         isAr={isAr}
         assignments={historyAssignmentList}
-        sessions={sessions}
+        sessions={sessionsWithCatalogLabels}
         teacherAttendanceRows={teacherAttendanceRows}
       />
 
@@ -1253,24 +1242,17 @@ export default function ProfessorSessionsView() {
                 ? "أدخل التفاصيل لبدء الحصة."
                 : "Fill in the details to start your session."}
             </DialogDescription>
-            {assignmentsForSchedule.length === 0 && (
+            {assignments.length === 0 && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
                 {isAr
-                  ? "لا توجد تعيينات تدريس. أضف مدرساً وشعبةً ومادة في الخادم، أو نفّذ: python manage.py seed_schedule_demo"
-                  : "No teaching assignments for your account. Add a teacher, group, and module in the backend, or run: python manage.py seed_schedule_demo"}
-              </p>
-            )}
-            {!scheduleFormUsesApiAssignmentsOnly && (
-              <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-950">
-                {isAr
-                  ? "وضع تجريبي: «إنشاء الحصة» يضيف حصة وهمية في الواجهة فقط (بدون حفظ على الخادم). للإنتاج أضف تعيينات من الخادم."
-                  : "Test mode: Create session adds a mock session in the UI only (not saved to the server). For production, add real teaching assignments on the server."}
+                  ? "لا توجد تعيينات تدريس لهذا الحساب. إنشاء «شعبة» وحدها لا يكفي: اربط حساب الأستاذ بالشعبة والمادة عبر تعيين تدريس (Teaching assignment) في لوحة الإدارة."
+                  : "No teaching assignments for this login. Creating a group alone is not enough: add a Teaching assignment linking your teacher to that group and a module in admin."}
               </p>
             )}
           </DialogHeader>
           <ScheduleSessionForm
             isAr={isAr}
-            assignments={assignmentsForSchedule}
+            assignments={assignments}
             assignmentId={newAssignmentId}
             onAssignmentIdChange={setNewAssignmentId}
             classRoom={classRoom}

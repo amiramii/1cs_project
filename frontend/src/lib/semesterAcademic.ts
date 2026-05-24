@@ -43,6 +43,14 @@ export function isIsoDateInRange(
   return iso >= from && iso <= to;
 }
 
+export function inferSemesterForDate(
+  iso: string,
+  academicStartYear: number
+): "S1" | "S2" {
+  const s1 = semesterBounds("S1", academicStartYear);
+  return isIsoDateInRange(iso, s1.from, s1.to) ? "S1" : "S2";
+}
+
 export function academicStartYearsFromSessions(
   sessionDates: string[]
 ): number[] {

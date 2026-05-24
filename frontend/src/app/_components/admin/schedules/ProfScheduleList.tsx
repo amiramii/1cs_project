@@ -14,6 +14,16 @@ export default function ProfScheduleList({
     <ScheduleListShell
       titleEn={isProfTab ? "Your Schedules" : "Professors Schedules"}
       titleAr={isProfTab ? "جداولك" : "جداول الأساتذة"}
+      subtitleEn={
+        isProfTab
+          ? "PDF timetables for viewing only. Rosters and teaching assignments come from admin CSV import; attendance sessions are managed under Sessions—not generated from these PDFs."
+          : undefined
+      }
+      subtitleAr={
+        isProfTab
+          ? "ملفات PDF للاطلاع فقط. قوائم الطلاب والتعيينات التدريسية تُستورد من CSV في حساب المسؤول؛ حصص الحضور تُدار من تبويب الحصص ولا تُنشأ من هذه PDF."
+          : undefined
+      }
       backHref="/Scheduals"
       nextHref="/Scheduals/Student-Schedules"
       backLabelEn="Back"

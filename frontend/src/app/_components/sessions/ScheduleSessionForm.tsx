@@ -288,11 +288,14 @@ export function buildSessionCreateBody(
     throw new Error("Invalid date/time");
   }
   const d = start.format("YYYY-MM-DD");
+  const room = classRoom.trim() || "—";
   return {
     assignment,
     date: d,
     start_time: start.format("HH:mm:ss"),
     end_time: end.format("HH:mm:ss"),
-    extra_fields: classRoom.trim() ? [classRoom.trim()] : [],
+    room,
+    /** Keys for `Attendance.extra_values` (matches professor sheet PATCH payloads). */
+    extra_fields: ["participation_points", "professor_note"],
   };
 }

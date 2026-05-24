@@ -90,7 +90,7 @@ export default function Sidebar({
           </Link>
       </div>
         <nav className="h-full md:flex md:flex-col md:pt-7">
-          <ul className={`flex h-full w-full items-center justify-center gap-5 px-5 pt-2 md:h-auto md:flex-col md:items-stretch md:justify-center md:gap-6  md:pt-0 md:mt-4 
+          <ul className={`flex h-full w-full items-center justify-center gap-5 px-5 pt-2 md:h-auto md:flex-col md:items-stretch md:justify-center md:gap-0  md:pt-0 md:mt-4 
           ${isRtl ? "md:pr-0" : "md:pl-0"}`}>
               <SideBarItems
                 expanded={expanded}

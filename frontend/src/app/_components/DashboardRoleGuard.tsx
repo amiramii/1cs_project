@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import {
+  ENABLE_AUTH_REDIRECTS,
   DEFAULT_APP_ROLE,
   type AppSidebarRole,
 } from "@/lib/constants"
@@ -24,6 +25,7 @@ export default function DashboardRoleGuard({
   ) as AppSidebarRole
 
   useEffect(() => {
+    if (!ENABLE_AUTH_REDIRECTS) return
     if (isRouteAllowedForRole(pathname, role)) return
     const target = getRoleViolationRedirectPath(role)
     if (target !== pathname) {

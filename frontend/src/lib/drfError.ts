@@ -22,3 +22,41 @@ export function formatDrfError(body: unknown, fallback: string): string {
   }
   return messages[0] ?? fallback
 }
+
+/**
+ * Turns HTML debug pages / JSON bodies into short toast-safe text.
+ * Django `OperationalError` in DEBUG renders as HTML — avoid dumping `<!DOCTYPE…>` into alerts.
+ */
+export function summarizeUpstreamError(text: string, status: number): string {
+  const t = text.trim()
+  if (!t) return `Request failed (${status}).`
+
+  const head = t.slice(0, 800).toLowerCase()
+  if (
+    head.includes("<!doctype html") ||
+    head.includes("<html") ||
+    head.includes("traceback") ||
+    head.includes("operationalerror")
+  ) {
+    const m = t.match(/<title>\s*([\s\S]*?)\s*<\/title>/i)
+    const titleLine = m?.[1]?.replace(/\s+/g, " ").trim()
+
+    const dbHint =
+      status >= 500
+        ? "Often a DB issue: confirm migrations ran (`migrate`), tables exist, and DATABASES matches your engine."
+        : "The server returned an HTML error page instead of JSON."
+
+    if (titleLine) return `${titleLine} ${dbHint}`
+    return `Server error (${status}). ${dbHint}`
+  }
+
+  try {
+    const j = JSON.parse(t) as unknown
+    const parsed = formatDrfError(j, "")
+    if (parsed) return parsed
+  } catch {
+    /* not JSON */
+  }
+
+  return t.length > 280 ? `${t.slice(0, 260)}…` : t
+}

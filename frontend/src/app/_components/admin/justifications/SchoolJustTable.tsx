@@ -1,6 +1,7 @@
-"use client"
-import Link from "next/link"
-import { Fragment, useEffect, useMemo, useState } from "react"
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -8,16 +9,18 @@ import {
   Search,
   Check,
   FileCheck2,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import {
   Pagination,
   PaginationContent,
@@ -26,239 +29,212 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination"
-import { useLanguage } from "@/app/_components/language-provider"
-
-type ApiJustification = {
-  id: number
-  student_name: string
-  student_email: string
-  absence_type: string
-  cause: string
-  file: string
-  status: string
-  created_at: string
-  reviewed_by: string
-
-  attendances: {
-    id: number
-    status: string
-    module: string
-    group: string
-    date: string
-    start_time: string
-    end_time: string
-  }[]
-}
+} from "@/components/ui/pagination";
+import { useLanguage } from "@/app/_components/language-provider";
+import { loadAllJustificationsSchooling } from "@/lib/checkinClient";
 
 type JustificationRow = {
-  id: string
-  name: string
-  email: string
-  year: string
-  group: string
-  justificationCount: number
+  id: string;
+  name: string;
+  email: string;
+  year: string;
+  group: string;
+  justificationCount: number;
+};
+
+type RawJustificationRow = {
+  student_name?: string;
+  student_email?: string;
+  attendances?: { group?: string }[];
+};
+
+function aggregateByStudent(rows: RawJustificationRow[]): JustificationRow[] {
+  const map = new Map<
+    string,
+    { name: string; email: string; group: string; count: number }
+  >();
+
+  for (const j of rows) {
+    const email = typeof j.student_email === "string" ? j.student_email.trim() : "";
+    if (!email) continue;
+
+    const name =
+      typeof j.student_name === "string" && j.student_name.trim()
+        ? j.student_name.trim()
+        : email;
+
+    const firstGroup = Array.isArray(j.attendances)
+      ? j.attendances[0]?.group
+      : undefined;
+    const group =
+      typeof firstGroup === "string" && firstGroup.trim()
+        ? firstGroup.trim()
+        : "—";
+
+    const prev = map.get(email);
+    if (!prev) {
+      map.set(email, { name, email, group, count: 1 });
+    } else {
+      prev.count += 1;
+      if (
+        typeof firstGroup === "string" &&
+        firstGroup.trim() &&
+        prev.group === "—"
+      ) {
+        prev.group = firstGroup.trim();
+      }
+      if (
+        typeof j.student_name === "string" &&
+        j.student_name.trim() &&
+        prev.name === email
+      ) {
+        prev.name = j.student_name.trim();
+      }
+    }
+  }
+
+  return [...map.entries()]
+    .map(([email, v]) => ({
+      id: email,
+      name: v.name,
+      email,
+      year: "—",
+      group: v.group,
+      justificationCount: v.count,
+    }))
+    .sort((a, b) =>
+      b.justificationCount !== a.justificationCount
+        ? b.justificationCount - a.justificationCount
+        : a.name.localeCompare(b.name)
+    );
 }
 
 const controlBtnClass =
-  "h-[43px] min-h-[43px] shrink-0 rounded-lg border border-[#51689A]/35 bg-white px-2.5 text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] sm:h-9 sm:min-h-0"
+  "h-[43px] min-h-[43px] shrink-0 rounded-lg border border-[#51689A]/35 bg-white px-2.5 text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] sm:h-9 sm:min-h-0";
 
-const PAGE_SIZE = 5
+const PAGE_SIZE = 5;
 
 function collectYears(rows: JustificationRow[]) {
-  return Array.from(new Set(rows.map((r) => r.year))).sort()
+  return Array.from(new Set(rows.map((r) => r.year))).sort();
 }
 
-export function SchoolingJustificationsTable() {
-  const { language } = useLanguage()
-  const isArabic = language === "ar"
+export function SchoolingJustificationsTable({
+  studentDetailHrefMode = "schoolingMock",
+}: {
+  /** Schooling uses the mock detail page; admins use the API-backed review screen. */
+  studentDetailHrefMode?: "schoolingMock" | "backendReview"
+} = {}) {
+  const { language } = useLanguage();
+  const isArabic = language === "ar";
 
-  const [search, setSearch] = useState("")
-  const [yearFilter, setYearFilter] = useState("all")
-  const [openFilter, setOpenFilter] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const studentDetailBase =
+    studentDetailHrefMode === "backendReview"
+      ? "/Justifications/Justification-details/live"
+      : "/Justifications/Justification-details";
 
-  const [data, setData] = useState<JustificationRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState("");
+  const [yearFilter, setYearFilter] = useState("all");
+  const [openFilter, setOpenFilter] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<JustificationRow[]>([]);
 
   useEffect(() => {
-    const fetchJustifications = async () => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
       try {
-        setLoading(true)
-
-        const token = localStorage.getItem("accessToken")
-
-        const response = await fetch(
-          "http://127.0.0.1:8000/api/justifications/",
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        )
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch justifications")
-        }
-
-        const result = await response.json()
-
-        const groupedMap = new Map<string, JustificationRow>()
-
-        result.results.forEach((item: ApiJustification) => {
-          const year = new Date(item.created_at)
-            .getFullYear()
-            .toString()
-
-          const group =
-            item.attendances?.[0]?.group || "N/A"
-
-          if (groupedMap.has(item.student_email)) {
-            const existing = groupedMap.get(item.student_email)!
-
-            existing.justificationCount += 1
-          } else {
-            groupedMap.set(item.student_email, {
-              id: item.id.toString(),
-              name: item.student_name,
-              email: item.student_email,
-              year,
-              group,
-              justificationCount: 1,
-            })
-          }
-        })
-
-        setData(Array.from(groupedMap.values()))
-      } catch (error) {
-        console.error("Error fetching justifications:", error)
+        const raw =
+          (await loadAllJustificationsSchooling()) as RawJustificationRow[];
+        const agg = aggregateByStudent(raw);
+        if (!cancelled) setData(agg);
+      } catch {
+        toast.error(
+          isArabic ? "تعذر تحميل طلبات التبرير." : "Could not load justifications."
+        );
+        if (!cancelled) setData([]);
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false);
       }
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isArabic]);
 
-    fetchJustifications()
-  }, [])
-
-  const yearOptions = useMemo(() => collectYears(data), [data])
+  const yearOptions = useMemo(() => collectYears(data), [data]);
 
   const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim().toLowerCase();
     return data.filter((row) => {
       const matchesSearch =
         q.length === 0 ||
         row.name.toLowerCase().includes(q) ||
         row.email.toLowerCase().includes(q) ||
         row.year.toLowerCase().includes(q) ||
-        row.group.toLowerCase().includes(q)
-      if (!matchesSearch) return false
+        row.group.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+      if (yearFilter !== "all" && row.year !== yearFilter) return false;
+      return true;
+    });
+  }, [data, yearFilter, search]);
 
-      if (yearFilter !== "all" && row.year !== yearFilter)
-        return false
-
-      return true
-    })
-  }, [data, yearFilter, search])
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredRows.length / PAGE_SIZE)
-  )
-
-  const currentPageSafe = Math.min(currentPage, totalPages)
-  const pageStart = (currentPageSafe - 1) * PAGE_SIZE
-
-  const visibleRows = filteredRows.slice(
-    pageStart,
-    pageStart + PAGE_SIZE
-  )
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const currentPageSafe = Math.min(currentPage, totalPages);
+  const pageStart = (currentPageSafe - 1) * PAGE_SIZE;
+  const visibleRows = filteredRows.slice(pageStart, pageStart + PAGE_SIZE);
 
   const allVisibleSelected =
-    visibleRows.length > 0 &&
-    visibleRows.every((r) => selectedIds.has(r.id))
+    visibleRows.length > 0 && visibleRows.every((r) => selectedIds.has(r.id));
 
   const toggleSelectAllVisible = () => {
     setSelectedIds((prev) => {
-      const next = new Set(prev)
+      const next = new Set(prev);
       if (allVisibleSelected) {
-        for (const row of visibleRows) {
-          next.delete(row.id)
-        }
+        for (const row of visibleRows) next.delete(row.id);
       } else {
-        for (const row of visibleRows) {
-          next.add(row.id)
-        }
+        for (const row of visibleRows) next.add(row.id);
       }
-      return next
-    })
-  }
+      return next;
+    });
+  };
 
   const toggleRowSelect = (id: string) => {
     setSelectedIds((prev) => {
-      const next = new Set(prev)
-
-      next.has(id)
-        ? next.delete(id)
-        : next.add(id)
-
-      return next
-    })
-  }
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const pageItems = useMemo(() => {
-    if (totalPages <= 5) {
-      return Array.from(
-        { length: totalPages },
-        (_, i) => i + 1
-      )
-    }
-
-    const items: number[] = [1]
-
-    if (currentPageSafe > 3) {
-      items.push(-1)
-    }
-
-    const start = Math.max(2, currentPageSafe - 1)
-    const end = Math.min(totalPages - 1, currentPageSafe + 1)
-
-    for (let p = start; p <= end; p++) {
-      items.push(p)
-    }
-
-    if (currentPageSafe < totalPages - 2) {
-      items.push(-2)
-    }
-
-    items.push(totalPages)
-    return items
-  }, [currentPageSafe, totalPages])
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const items: number[] = [1];
+    if (currentPageSafe > 3) items.push(-1);
+    const start = Math.max(2, currentPageSafe - 1);
+    const end = Math.min(totalPages - 1, currentPageSafe + 1);
+    for (let p = start; p <= end; p++) items.push(p);
+    if (currentPageSafe < totalPages - 2) items.push(-2);
+    items.push(totalPages);
+    return items;
+  }, [currentPageSafe, totalPages]);
 
   const changePage = (page: number) => {
-    if (page < 1 || page > totalPages) return
-    setCurrentPage(page)
-  }
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+  };
 
   const filterLabelText =
-    yearFilter === "all"
-      ? isArabic
-        ? "الكل"
-        : "All years"
-      : yearFilter
-
-  if (loading) {
-    return (
-      <div className="p-6 text-center text-[#1B2065F2]">
-        {isArabic ? "جاري التحميل..." : "Loading..."}
-      </div>
-    )
-  }
+    yearFilter === "all" ? (isArabic ? "الكل" : "All years") : yearFilter;
 
   return (
     <section className="mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm">
+      {loading ? (
+        <p className="text-sm text-[#51689AF2]">
+          {isArabic ? "جاري التحميل…" : "Loading…"}
+        </p>
+      ) : null}
       {/* Header bar */}
       <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30 bg-[#F6F7FE] p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-[#1B2065F2]">
@@ -281,15 +257,12 @@ export function SchoolingJustificationsTable() {
             <Input
               value={search}
               onChange={(e) => {
-                setSearch(e.target.value)
-                setCurrentPage(1)
+                setSearch(e.target.value);
+                setCurrentPage(1);
               }}
-              placeholder={
-                isArabic
-                  ? "ابحث..."
-                  : "Search..."
-              }
+              placeholder={isArabic ? "ابحث..." : "Search..."}
               className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9"
+              disabled={loading}
             />
 
             <Search
@@ -329,34 +302,23 @@ export function SchoolingJustificationsTable() {
                 )}
               </Button>
             </DropdownMenuTrigger>
-
-            <DropdownMenuContent
-              align="end"
-              className="min-w-[10rem] p-0"
-            >
+            <DropdownMenuContent align="end" className="min-w-[10rem] p-0">
               <DropdownMenuItem
                 onClick={() => {
-                  setYearFilter("all")
-                  setCurrentPage(1)
+                  setYearFilter("all");
+                  setCurrentPage(1);
                 }}
               >
-                <span>
-                  {isArabic
-                    ? "كل السنوات"
-                    : "All years"}
-                </span>
-
-                {yearFilter === "all" && (
-                  <Check className="ms-auto size-4" />
-                )}
+                <span>{isArabic ? "كل السنوات" : "All years"}</span>
+                {yearFilter === "all" && <Check className="ms-auto size-4" />}
               </DropdownMenuItem>
 
               {yearOptions.map((y) => (
                 <DropdownMenuItem
                   key={y}
                   onClick={() => {
-                    setYearFilter(y)
-                    setCurrentPage(1)
+                    setYearFilter(y);
+                    setCurrentPage(1);
                   }}
                 >
                   <span>{y}</span>
@@ -419,8 +381,7 @@ export function SchoolingJustificationsTable() {
 
             <tbody>
               {visibleRows.map((row, vIdx) => {
-                const stripe = vIdx % 2 === 0
-
+                const stripe = vIdx % 2 === 0;
                 return (
                   <tr
                     key={row.id}
@@ -447,17 +408,17 @@ export function SchoolingJustificationsTable() {
                     </td>
 
                     <td className="min-w-0 max-w-[min(28vw,8rem)] break-words px-2 py-2.5 align-middle sm:max-w-none">
-
                       <Link
-                        href={`/Justifications/Justification-details/${row.id}`}
+                        href={`${studentDetailBase}?student=${encodeURIComponent(row.email)}`}
                         className="font-medium text-[#1B2065F2] underline decoration-[#51689A]/40 underline-offset-2 hover:text-[#51689A] hover:decoration-[#51689A]"
                       >
                         {row.name}
                       </Link>
-
                     </td>
 
                     <td className="hidden min-w-0 px-2 py-2.5 align-middle md:table-cell">
+                      <a
+                        href={`mailto:${row.email}`}
                       <a
                         href={`mailto:${row.email}`}
                         className="break-all text-[#51689A] underline decoration-[#51689A] underline-offset-2 visited:text-[#51689A] hover:text-[#3d5280]"
@@ -481,13 +442,13 @@ export function SchoolingJustificationsTable() {
                     </td>
 
                   </tr>
-                )
+                );
               })}
             </tbody>
           </table>
         </div>
 
-        {visibleRows.length === 0 && (
+        {!loading && visibleRows.length === 0 && (
           <p className="py-5 text-center text-sm text-[#5D719D]">
             {isArabic
               ? "لا توجد نتائج."
@@ -512,14 +473,10 @@ export function SchoolingJustificationsTable() {
               <PaginationPrevious
                 href="#"
                 text={isArabic ? "السابق" : "Previous"}
-                className={
-                  currentPageSafe === 1
-                    ? "pointer-events-none opacity-50"
-                    : ""
-                }
+                className={currentPageSafe === 1 ? "pointer-events-none opacity-50" : ""}
                 onClick={(e) => {
-                  e.preventDefault()
-                  changePage(currentPageSafe - 1)
+                  e.preventDefault();
+                  changePage(currentPageSafe - 1);
                 }}
               />
             </PaginationItem>
@@ -533,8 +490,8 @@ export function SchoolingJustificationsTable() {
                     href="#"
                     isActive={item === currentPageSafe}
                     onClick={(e) => {
-                      e.preventDefault()
-                      changePage(item)
+                      e.preventDefault();
+                      changePage(item);
                     }}
                   >
                     {item}
@@ -548,13 +505,11 @@ export function SchoolingJustificationsTable() {
                 href="#"
                 text={isArabic ? "التالي" : "Next"}
                 className={
-                  currentPageSafe === totalPages
-                    ? "pointer-events-none opacity-50"
-                    : ""
+                  currentPageSafe === totalPages ? "pointer-events-none opacity-50" : ""
                 }
                 onClick={(e) => {
-                  e.preventDefault()
-                  changePage(currentPageSafe + 1)
+                  e.preventDefault();
+                  changePage(currentPageSafe + 1);
                 }}
               />
             </PaginationItem>
@@ -563,5 +518,5 @@ export function SchoolingJustificationsTable() {
         </Pagination>
       </div>
     </section>
-  )
+  );
 }

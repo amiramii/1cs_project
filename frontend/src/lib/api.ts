@@ -49,7 +49,15 @@ async function tryRefresh(refresh: string): Promise<boolean> {
     typeof data.refresh === "string" ? data.refresh : refresh;
   persistTokens(data.access, nextRefresh, isRememberMeSession());
   return true;
-} 
+}
+
+/** For raw `fetch` callers (not `api()`): refresh access token when possible. */
+export async function attemptTokenRefresh(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  const refresh = getRefreshToken();
+  if (!refresh) return false;
+  return tryRefresh(refresh);
+}
 async function api(url: string, options: RequestInit = {}, apiOptions: ApiOptions = {}) {
   const { withAuth = true } = apiOptions
   const res = await fetch(buildApiUrl(url), {

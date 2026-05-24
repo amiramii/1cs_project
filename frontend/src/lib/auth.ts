@@ -2,12 +2,13 @@ import api from "./api";
 import { checkinPath } from "./checkinApi";
 import {
   clearDevRoleOverride,
+  clearStoredAppRole,
   getRoleFromAccessToken,
+  normalizeRole,
   persistAppRole,
   persistTokens,
   persistUserEmail,
 } from "./tokenStorage";
-import { DEFAULT_APP_ROLE } from "./constants";
 import { formatDrfError } from "./drfError";
 
 async function login(email: string, password: string, remember = false) {
@@ -40,8 +41,14 @@ async function login(email: string, password: string, remember = false) {
   }
 
   persistTokens(data.access, data.refresh, remember);
-  const appRole = getRoleFromAccessToken(data.access) ?? DEFAULT_APP_ROLE;
-  persistAppRole(appRole, remember);
+  const fromJwt = getRoleFromAccessToken(data.access);
+  const fromBody = normalizeRole(data.role as unknown);
+  const appRole = fromJwt ?? fromBody;
+  if (appRole) {
+    persistAppRole(appRole, remember);
+  } else {
+    clearStoredAppRole();
+  }
   persistUserEmail(email, remember);
   if (process.env.NODE_ENV === "development") {
     clearDevRoleOverride();

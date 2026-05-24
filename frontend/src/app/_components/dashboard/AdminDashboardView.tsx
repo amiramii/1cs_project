@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   CalendarCheck2,
   ClipboardClock,
@@ -8,34 +9,55 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/app/_components/language-provider";
 import NotificationPermissionPrompt from "@/app/_components/notifications/NotificationPermissionPrompt";
+import {
+  fetchAdminLikeDashboardMetrics,
+  formatDashboardCount,
+} from "@/lib/dashboardMetrics";
 
 export default function AdminDashboardView() {
   const { language } = useLanguage();
   const isAr = language === "ar";
 
+  const [stats, setStats] = useState<{
+    teachers: number;
+    students: number;
+    schedules: number;
+    sessionsToday: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchAdminLikeDashboardMetrics().then((m) => {
+      if (alive) setStats(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const statCards = [
     {
       id: "professors" as const,
       label: isAr ? "الأساتذة" : "Professors",
-      value: "1,900",
+      value: stats ? formatDashboardCount(stats.teachers) : "—",
       icon: UserRoundPen,
     },
     {
       id: "students" as const,
       label: isAr ? "الطلاب" : "Students",
-      value: "8,450",
+      value: stats ? formatDashboardCount(stats.students) : "—",
       icon: GraduationCap,
     },
     {
       id: "schedules" as const,
       label: isAr ? "الجداول" : "Schedules",
-      value: "326",
+      value: stats ? formatDashboardCount(stats.schedules) : "—",
       icon: CalendarCheck2,
     },
     {
       id: "sessions" as const,
       label: isAr ? "الحصص اليوم" : "Sessions today",
-      value: "42",
+      value: stats ? formatDashboardCount(stats.sessionsToday) : "—",
       icon: ClipboardClock,
     },
   ];

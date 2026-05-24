@@ -2,22 +2,21 @@
 
 /**
  * Justifications workspace — content depends on who is logged in:
- * - `admin`: oversight / moderation view (full queue when API is wired).
- * - `schooling`: academic office (scolarité) — primary workflow per sidebar config.
- * - `student`: personal submissions and statuses.
+ * - `admin`: full review queue from the API (accept / refuse).
+ * - `schooling`: academic office UI — table loads from API; student rows open the mock detail page owned by design.
+ * - `student`: personal submissions and statuses (`my_justifications` API).
  *
  * We surface the Web Notifications permission prompt so each audience can opt in
  * before backend-driven events (new request, status change) arrive.
  */
 
 import { useEffect } from "react"
-import { Info } from "lucide-react"
 
 import { useLanguage } from "@/app/_components/language-provider"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { getNotificationPermission, notifyUser } from "@/lib/utils"
 
 import { SchoolingJustificationsTable } from "../admin/justifications/SchoolJustTable"
+import StudentJustificationsView from "../justifications/StudentJustificationsView"
 
 export type JustificationsViewerRole = "admin" | "student" | "schooling"
 
@@ -67,34 +66,16 @@ export default function JustificationsByRole({
 
   if (role === "admin") {
     return (
-      <div className="w-full max-w-4xl space-y-4">
-        <Alert>
-          <Info aria-hidden />
-          <div className="min-w-0 flex-1 space-y-1">
-            <AlertTitle>
-              {isAr ? "مبررات الغياب — الإشراف" : "Absence justifications — admin"}
-            </AlertTitle>
-            <AlertDescription>
-              {isAr
-                ? "راجع كل الطلبات، غيّر الحالات، وصدّر التقارير. هذه الواجهة للمسؤولين فقط."
-                : "Review all requests, change statuses, and export reports. This workspace is for administrators only."}
-            </AlertDescription>
-          </div>
-        </Alert>
-
-        <Alert variant="default" className="border-dashed border-[#51689A]/35 bg-[#F6F7FE]">
-          <Info aria-hidden />
-          <div className="min-w-0 flex-1 space-y-1">
-            <AlertTitle>
-              {isAr ? "الربط مع الخادم" : "API integration"}
-            </AlertTitle>
-            <AlertDescription>
-              {isAr
-                ? "سيتم ربط هذه الصفحة بقائمة الطلبات من الـ API لاحقًا."
-                : "Connect this view to your API list of justification requests when ready."}
-            </AlertDescription>
-          </div>
-        </Alert>
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold text-[#1B2065F2]">
+          {isAr ? "مبررات الغياب" : "Justifications"}
+        </h1>
+        <p className="text-lg text-[#51689AF2]">
+          {isAr
+            ? "عرض الطلبات المرتبطة بالخادم وقبولها أو رفضها."
+            : "Review justification requests from the server — accept or refuse."}
+        </p>
+        <SchoolingJustificationsTable studentDetailHrefMode="backendReview" />
       </div>
     )
   }
@@ -110,30 +91,8 @@ export default function JustificationsByRole({
   }
 
   return (
-    <div className="w-full max-w-4xl space-y-4">
-      <Alert className="border-[#1B2065]/25 bg-[#1B2065]/10">
-        <Info aria-hidden />
-        <div className="min-w-0 flex-1 space-y-1">
-          <AlertTitle>{isAr ? "مبرراتي" : "My justifications"}</AlertTitle>
-          <AlertDescription>
-            {isAr
-              ? "قدّم طلبًا جديدًا أو تابع حالة طلباتك السابقة."
-              : "Submit a new request or track the status of your previous submissions."}
-          </AlertDescription>
-        </div>
-      </Alert>
-
-      <Alert variant="default" className="border-dashed border-[#51689A]/35 bg-[#F6F7FE]">
-        <Info aria-hidden />
-        <div className="min-w-0 flex-1 space-y-1">
-          <AlertTitle>{isAr ? "النموذج والقائمة" : "Form & list"}</AlertTitle>
-          <AlertDescription>
-            {isAr
-              ? "نموذج الطلب والقائمة ستُربط بالخلفية لاحقًا."
-              : "The submission form and list will be wired to the backend next."}
-          </AlertDescription>
-        </div>
-      </Alert>
+    <div className="w-full max-w-4xl space-y-6">
+      <StudentJustificationsView />
     </div>
   )
 }

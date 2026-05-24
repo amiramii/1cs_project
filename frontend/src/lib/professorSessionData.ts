@@ -1,6 +1,6 @@
 import { getAccessToken, getStoredUserEmail } from "@/lib/tokenStorage";
-import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors";
-import { getApiBaseUrl } from "@/lib/apiBase";
+import { isNetworkFailure } from "@/lib/fetchErrors";
+import { buildApiAbsoluteUrl, getApiBaseUrl } from "@/lib/apiBase";
 import { checkinPath } from "@/lib/checkinApi";
 import {
   drfPaginationNext,
@@ -8,6 +8,7 @@ import {
   resolveAgainstApiBase,
   unwrapList,
 } from "@/lib/drfPaginatedList";
+import { hydrateAttendanceRowsStudentInfo } from "@/lib/attendanceStudentHydrate";
 
 export type AttendanceStatus = "present" | "absent" | "justified";
 
@@ -34,6 +35,8 @@ export type SessionApi = {
   date: string;
   start_time: string;
   end_time: string;
+  room?: string;
+  extra_fields?: string[];
   module_name?: string;
   group_name?: string;
   /** If present on list/detail payloads (for derived assignment labels). */
@@ -44,6 +47,8 @@ export type SessionApi = {
 
 export type AssignmentApi = {
   id: number;
+  /** Teaching-assignment group FK — used for roster / dashboard counts. */
+  group?: number;
   group_name?: string;
   module_name?: string;
   /** From teaching-assignment `year` (module academic year name), e.g. "1CS". */
@@ -65,7 +70,51 @@ type RawTeachingAssignment = {
 
 type GroupRow = { id: number; name: string };
 type ModuleRow = { id: number; name: string };
-type TeacherListRow = { id: number; email?: string };
+/** `/api/teachers/` rows embed `assignments` (same shape as teaching-assignments). */
+type TeacherListRow = {
+  id: number;
+  email?: string;
+  assignments?: RawTeachingAssignment[];
+};
+
+function normalizeEmailForMatch(email: string | null | undefined): string {
+  return (email ?? "").trim().toLowerCase();
+}
+
+/**
+ * Union of `/api/academic/teaching-assignments/` and nested `Teacher.assignments`
+ * so brand-new assignments that only appear on the teacher payload still show up.
+ */
+function mergeTeachingAssignmentsLists(
+  fromEndpoint: RawTeachingAssignment[],
+  fromTeacher?: TeacherListRow | null
+): RawTeachingAssignment[] {
+  const byId = new Map<number, RawTeachingAssignment>();
+  for (const ta of fromEndpoint) {
+    if (typeof ta.id !== "number") continue;
+    byId.set(ta.id, ta);
+  }
+  const embedded = fromTeacher?.assignments;
+  if (fromTeacher && Array.isArray(embedded)) {
+    for (const ta of embedded) {
+      if (!ta || typeof ta.id !== "number") continue;
+      if (byId.has(ta.id)) continue;
+      if (typeof ta.group !== "number" || typeof ta.module !== "number") continue;
+      byId.set(ta.id, {
+        id: ta.id,
+        teacher:
+          typeof ta.teacher === "number" ? ta.teacher : fromTeacher.id,
+        group: ta.group,
+        module: ta.module,
+        year:
+          typeof ta.year === "string" ? ta.year : undefined,
+        semester:
+          typeof ta.semester === "string" ? ta.semester : undefined,
+      });
+    }
+  }
+  return [...byId.values()];
+}
 
 const API_LIST_PAGE_SIZE = 50;
 
@@ -78,19 +127,20 @@ function buildResolvedAssignments(
   for (const ra of rawRows) {
     const gn = groupById.get(ra.group);
     const mn = modById.get(ra.module);
-    if (gn && mn) {
-      out.push({
-        id: ra.id,
-        group_name: gn,
-        module_name: mn,
-        ...(typeof ra.year === "string" && ra.year.trim()
-          ? { year_name: ra.year.trim() }
-          : {}),
-        ...(typeof ra.semester === "string" && ra.semester.trim()
-          ? { semester: ra.semester.trim() }
-          : {}),
-      });
-    }
+    const groupName = gn?.trim() || `Group #${ra.group}`;
+    const moduleName = mn?.trim() || `Module #${ra.module}`;
+    out.push({
+      id: ra.id,
+      group: typeof ra.group === "number" ? ra.group : undefined,
+      group_name: groupName,
+      module_name: moduleName,
+      ...(typeof ra.year === "string" && ra.year.trim()
+        ? { year_name: ra.year.trim() }
+        : {}),
+      ...(typeof ra.semester === "string" && ra.semester.trim()
+        ? { semester: ra.semester.trim() }
+        : {}),
+    });
   }
   return out.sort((a, b) => a.id - b.id);
 }
@@ -116,7 +166,9 @@ function attendanceRowsWithSessionFromSessions(
 
 /**
  * Merges flat `/api/attendance/attendance/` rows with session ids from the
- * session list; nested data wins for duplicate ids.
+ * session list. Flat rows carry the authoritative `status` / `extra_values`
+ * after PATCH; nested session payloads can lag or omit merges — prefer flat,
+ * attach `session` from nested when missing.
  */
 function mergeAttendanceWithSessionInfo(
   flatRows: AttendanceRow[],
@@ -126,8 +178,19 @@ function mergeAttendanceWithSessionInfo(
   const seen = new Set<number>();
   const out: AttendanceRow[] = [];
   for (const r of flatRows) {
-    const merged = fromSessions.get(r.id) ?? r;
-    out.push(merged);
+    const nested = fromSessions.get(r.id);
+    if (!nested) {
+      out.push(r);
+      seen.add(r.id);
+      continue;
+    }
+    out.push({
+      ...nested,
+      ...r,
+      session: nested.session ?? r.session,
+      student_name: r.student_name ?? nested.student_name,
+      student_email: r.student_email ?? nested.student_email,
+    });
     seen.add(r.id);
   }
   for (const [id, row] of fromSessions) {
@@ -139,10 +202,23 @@ function mergeAttendanceWithSessionInfo(
 
 type StudentListRecord = {
   id?: unknown;
+  user_id?: unknown;
   full_name?: unknown;
   email?: unknown;
 };
 
+function coercePosInt(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && Number.isInteger(v) && v > 0
+    ? v
+    : null;
+}
+
+/**
+ * Map Student PK → display fields. Note: list `GET /students/` uses `StudentSerializer`
+ * fields `user_id`, `full_name`, `email` (no Student `id`), while attendance rows use
+ * `student` = Student PK — keys rarely match; callers should hydrate rows via
+ * `hydrateAttendanceRowsStudentInfo` when names/emails are needed.
+ */
 function buildStudentNameEmailLookup(
   students: StudentListRecord[]
 ): Map<number, { student_name: string; student_email: string }> {
@@ -151,12 +227,15 @@ function buildStudentNameEmailLookup(
     { student_name: string; student_email: string }
   >();
   for (const s of students) {
-    if (typeof s.id !== "number") continue;
-    m.set(s.id, {
+    const entry = {
       student_name:
         typeof s.full_name === "string" ? s.full_name : "—",
       student_email: typeof s.email === "string" ? s.email : "",
-    });
+    };
+    const pk = coercePosInt(s.id);
+    const uid = coercePosInt(s.user_id);
+    if (pk != null) m.set(pk, entry);
+    if (uid != null && uid !== pk) m.set(uid, entry);
   }
   return m;
 }
@@ -207,6 +286,24 @@ function deriveAssignmentsFromSessions(
   return [...byId.values()].sort((a, b) => a.id - b.id);
 }
 
+/** When secondary list requests fail, still expose session nested attendances plus derived assignment labels. */
+function buildFallbackProfessorBundle(
+  sessionsList: SessionApi[]
+): ProfessorSessionBundle {
+  const fromSessions = attendanceRowsWithSessionFromSessions(sessionsList);
+  const teacherAttendanceRows = mergeAttendanceWithSessionInfo(
+    [],
+    fromSessions
+  );
+  return {
+    sessions: sessionsList,
+    teacherAttendanceRows,
+    assignments: deriveAssignmentsFromSessions(sessionsList),
+    assignmentsCatalogFallback: true,
+    sessionsFetchDegraded: false,
+  };
+}
+
 async function waitForAccessToken(maxWaitMs = 500): Promise<string | null> {
   const immediate = getAccessToken();
   if (immediate?.trim()) return immediate;
@@ -238,6 +335,8 @@ export type ProfessorSessionBundle = {
   teacherAttendanceRows: AttendanceRow[];
   assignments: AssignmentApi[];
   assignmentsCatalogFallback: boolean;
+  /** True when GET /sessions returned a non-OK response — list is empty but the rest of the dashboard still loads. */
+  sessionsFetchDegraded?: boolean;
 };
 
 /**
@@ -251,10 +350,20 @@ export async function loadProfessorSessionData(
   await deferOneFrame();
   let token = await waitForAccessToken(2500);
   let headers = authHeaders(token);
-  const sessionsUrl = `${apiBase}/${checkinPath.attendance.sessions}/?page_size=${API_LIST_PAGE_SIZE}`;
+  const sessionsParams = new URLSearchParams();
+  sessionsParams.set("page_size", String(API_LIST_PAGE_SIZE));
+  const sessionsUrl = buildApiAbsoluteUrl(
+    checkinPath.attendance.sessions,
+    sessionsParams
+  );
+
+  let sessionsList: SessionApi[] = [];
+  /** True once we get any non-401 response (auth accepted or explicit failure). */
+  let reachedAuthenticatedFetch = false;
+  let sessionsFetchDegraded = false;
 
   try {
-    for (let attempt = 0; attempt < 4; attempt++) {
+    sessionFetch: for (let attempt = 0; attempt < 4; attempt++) {
       const sRes = await fetch(sessionsUrl, { headers });
       if (sRes.status === 401) {
         await new Promise((r) => setTimeout(r, 120 + attempt * 180));
@@ -262,19 +371,34 @@ export async function loadProfessorSessionData(
         headers = authHeaders(token);
         continue;
       }
+      reachedAuthenticatedFetch = true;
+
       if (!sRes.ok) {
-        throw new Error(
-          isAr ? "تعذر تحميل الحصص." : "Could not load sessions."
-        );
+        if (process.env.NODE_ENV === "development") {
+          const errBody = await sRes.text().catch(() => "");
+          console.warn(
+            "[loadProfessorSessionData] GET sessions (degraded to empty list):",
+            sRes.status,
+            errBody.slice(0, 500)
+          );
+        } else {
+          await sRes.text().catch(() => {});
+        }
+        sessionsList = [];
+        sessionsFetchDegraded = true;
+        break sessionFetch;
       }
+
       const sText = await sRes.text();
       let sParsed: unknown = null;
       try {
         sParsed = sText ? JSON.parse(sText) : null;
       } catch {
-        sParsed = null;
+        sessionsList = [];
+        sessionsFetchDegraded = true;
+        break sessionFetch;
       }
-      let sessionsList: SessionApi[] = unwrapList<SessionApi>(sParsed);
+      sessionsList = unwrapList<SessionApi>(sParsed);
       let nextS = drfPaginationNext(sParsed);
       let sGuard = 0;
       while (nextS && sGuard < 40) {
@@ -293,131 +417,162 @@ export async function loadProfessorSessionData(
         nextS = drfPaginationNext(s2p);
       }
 
-      const [
-        attMerged,
-        groupRows,
-        moduleRows,
-        rawTas,
-        teacherRows,
-        studentListRows,
-      ] = await Promise.all([
-        (async () => {
-          const first = await fetch(
-            `${apiBase}/${checkinPath.attendance.attendance}/?page_size=${API_LIST_PAGE_SIZE}`,
-            { headers }
-          );
-          if (!first.ok) return [] as AttendanceRow[];
-          const raw = await first.text();
-          let p0: unknown = null;
-          try {
-            p0 = raw ? JSON.parse(raw) : null;
-          } catch {
-            return [] as AttendanceRow[];
-          }
-          const merged: AttendanceRow[] = [...unwrapList<AttendanceRow>(p0)];
-          let nextA = drfPaginationNext(p0);
-          let g = 0;
-          while (nextA && g < 40) {
-            g += 1;
-            const r2 = await fetch(resolveAgainstApiBase(apiBase, nextA), {
-              headers,
-            });
-            if (!r2.ok) break;
-            const t2 = await r2.text();
-            let p2: unknown = null;
-            try {
-              p2 = t2 ? JSON.parse(t2) : null;
-            } catch {
-              break;
-            }
-            merged.push(...unwrapList<AttendanceRow>(p2));
-            nextA = drfPaginationNext(p2);
-          }
-          return merged;
-        })(),
-        loadDrfListAll<GroupRow>(
-          apiBase,
-          `${checkinPath.academic.groups}/`,
-          headers,
-          {}
-        ),
-        loadDrfListAll<ModuleRow>(
-          apiBase,
-          `${checkinPath.academic.modules}/`,
-          headers,
-          {}
-        ),
-        loadDrfListAll<RawTeachingAssignment>(
-          apiBase,
-          `${checkinPath.academic.teachingAssignments}/`,
-          headers,
-          {}
-        ),
-        loadDrfListAll<TeacherListRow>(apiBase, `${checkinPath.teachers}/`, headers, {}),
-        loadDrfListAll<StudentListRecord>(apiBase, `${checkinPath.students}/`, headers, {}),
-      ]);
+      break sessionFetch;
+    }
 
-      const groupById = new Map(
-        groupRows.map((g) => [g.id, g.name] as [number, string])
+    if (!reachedAuthenticatedFetch) {
+      throw new Error(
+        isAr
+          ? "تعذر التحقق من الجلسة. سجّل الخروج ثم الدخول من جديد."
+          : "Could not verify your session. Please sign in again."
       );
-      const modById = new Map(
-        moduleRows.map((m) => [m.id, m.name] as [number, string])
-      );
-      const email = getStoredUserEmail();
-      const teacherRow = email
-        ? teacherRows.find(
-            (t) => (t.email ?? "").toLowerCase() === email
-          )
-        : undefined;
-      const teacherId = teacherRow?.id;
-      const sessionAssignmentIds = new Set(
-        sessionsList
-          .map((s) => s.assignment)
-          .filter((x): x is number => typeof x === "number")
-      );
-      let rawRows: RawTeachingAssignment[] = [];
-      if (typeof teacherId === "number") {
-        rawRows = rawTas.filter((ta) => ta.teacher === teacherId);
-      } else {
-        rawRows = rawTas.filter((ta) => sessionAssignmentIds.has(ta.id));
-      }
-      let resolved: AssignmentApi[] = buildResolvedAssignments(
-        rawRows,
-        groupById,
-        modById
-      );
-      if (resolved.length === 0) {
-        rawRows = rawTas.filter((ta) => sessionAssignmentIds.has(ta.id));
-        resolved = buildResolvedAssignments(rawRows, groupById, modById);
-      }
-      if (resolved.length === 0) {
-        resolved = deriveAssignmentsFromSessions(sessionsList);
-      }
-      const withSession = mergeAttendanceWithSessionInfo(
-        attMerged,
-        attendanceRowsWithSessionFromSessions(sessionsList)
-      );
-      const studentLookup = buildStudentNameEmailLookup(studentListRows);
-      const teacherAttendanceRows = applyStudentLookup(
-        withSession,
-        studentLookup
-      );
-      return {
-        sessions: sessionsList,
-        teacherAttendanceRows,
-        assignments: resolved,
-        assignmentsCatalogFallback: typeof teacherId !== "number",
-      };
+    }
+
+    try {
+        const [
+          attMerged,
+          groupRows,
+          moduleRows,
+          rawTas,
+          teacherRows,
+          studentListRows,
+        ] = await Promise.all([
+          (async () => {
+            const attParams = new URLSearchParams();
+            attParams.set("page_size", String(API_LIST_PAGE_SIZE));
+            const first = await fetch(
+              buildApiAbsoluteUrl(checkinPath.attendance.attendance, attParams),
+              { headers }
+            );
+            if (!first.ok) return [] as AttendanceRow[];
+            const raw = await first.text();
+            let p0: unknown = null;
+            try {
+              p0 = raw ? JSON.parse(raw) : null;
+            } catch {
+              return [] as AttendanceRow[];
+            }
+            const merged: AttendanceRow[] = [...unwrapList<AttendanceRow>(p0)];
+            let nextA = drfPaginationNext(p0);
+            let g = 0;
+            while (nextA && g < 40) {
+              g += 1;
+              const r2 = await fetch(resolveAgainstApiBase(apiBase, nextA), {
+                headers,
+              });
+              if (!r2.ok) break;
+              const t2 = await r2.text();
+              let p2: unknown = null;
+              try {
+                p2 = t2 ? JSON.parse(t2) : null;
+              } catch {
+                break;
+              }
+              merged.push(...unwrapList<AttendanceRow>(p2));
+              nextA = drfPaginationNext(p2);
+            }
+            return merged;
+          })(),
+          loadDrfListAll<GroupRow>(
+            apiBase,
+            `${checkinPath.academic.groups}/`,
+            headers,
+            {}
+          ),
+          loadDrfListAll<ModuleRow>(
+            apiBase,
+            `${checkinPath.academic.modules}/`,
+            headers,
+            {}
+          ),
+          loadDrfListAll<RawTeachingAssignment>(
+            apiBase,
+            `${checkinPath.academic.teachingAssignments}/`,
+            headers,
+            {}
+          ),
+          loadDrfListAll<TeacherListRow>(
+            apiBase,
+            `${checkinPath.teachers}/`,
+            headers,
+            {}
+          ),
+          loadDrfListAll<StudentListRecord>(
+            apiBase,
+            `${checkinPath.students}/`,
+            headers,
+            {}
+          ),
+        ]);
+
+        const groupById = new Map(
+          groupRows.map((g) => [g.id, g.name] as [number, string])
+        );
+        const modById = new Map(
+          moduleRows.map((m) => [m.id, m.name] as [number, string])
+        );
+        const storedEmailNorm = normalizeEmailForMatch(getStoredUserEmail());
+        const teacherRow = storedEmailNorm
+          ? teacherRows.find(
+              (t) =>
+                normalizeEmailForMatch(t.email) === storedEmailNorm
+            )
+          : undefined;
+        const teacherId = teacherRow?.id;
+        const mergedTas = mergeTeachingAssignmentsLists(rawTas, teacherRow);
+        const sessionAssignmentIds = new Set(
+          sessionsList
+            .map((s) => s.assignment)
+            .filter((x): x is number => typeof x === "number")
+        );
+        let rawRows: RawTeachingAssignment[] = [];
+        if (typeof teacherId === "number") {
+          rawRows = mergedTas.filter((ta) => ta.teacher === teacherId);
+        } else {
+          rawRows = mergedTas.filter((ta) => sessionAssignmentIds.has(ta.id));
+        }
+        let resolved: AssignmentApi[] = buildResolvedAssignments(
+          rawRows,
+          groupById,
+          modById
+        );
+        if (resolved.length === 0) {
+          rawRows = mergedTas.filter((ta) => sessionAssignmentIds.has(ta.id));
+          resolved = buildResolvedAssignments(rawRows, groupById, modById);
+        }
+        if (resolved.length === 0) {
+          resolved = deriveAssignmentsFromSessions(sessionsList);
+        }
+        const withSession = mergeAttendanceWithSessionInfo(
+          attMerged,
+          attendanceRowsWithSessionFromSessions(sessionsList)
+        );
+        const studentLookup = buildStudentNameEmailLookup(studentListRows);
+        const teacherAttendanceRows = await hydrateAttendanceRowsStudentInfo(
+          applyStudentLookup(withSession, studentLookup)
+        );
+        return {
+          sessions: sessionsList,
+          teacherAttendanceRows,
+          assignments: resolved,
+          assignmentsCatalogFallback: typeof teacherId !== "number",
+          sessionsFetchDegraded,
+        };
+    } catch (e) {
+        console.warn("[loadProfessorSessionData] secondary load failed:", e);
+        const fb = buildFallbackProfessorBundle(sessionsList);
+        const teacherAttendanceRows =
+          await hydrateAttendanceRowsStudentInfo(fb.teacherAttendanceRows);
+        return {
+          ...fb,
+          teacherAttendanceRows,
+          sessionsFetchDegraded,
+        };
     }
   } catch (e) {
-    if (isNetworkFailure(e)) {
-      throw new Error(apiUnreachableMessage(apiBase, isAr));
+    if (isNetworkFailure(e) && process.env.NODE_ENV === "development") {
+      console.warn("[loadProfessorSessionData] network error:", e);
     }
     throw e;
   }
-  throw new Error(
-    isAr
-      ? "تعذر التحقق من الجلسة. سجّل الخروج ثم الدخول من جديد."
-      : "Could not verify your session. Please sign in again."
-  );
 }

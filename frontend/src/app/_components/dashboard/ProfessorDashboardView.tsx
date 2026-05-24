@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
-  ArrowRight,
   CalendarCheck2,
   ClipboardClock,
   GraduationCap,
@@ -10,16 +9,54 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/app/_components/language-provider";
 import NotificationPermissionPrompt from "@/app/_components/notifications/NotificationPermissionPrompt";
-import { getSideBarItems, type Language } from "@/lib/constants";
-
-function quickLinksExcludingDashboard(language: Language) {
-  return getSideBarItems(language, "prof").filter((i) => i.href !== "/Dashboard");
-}
+import {
+  fetchProfessorDashboardMetrics,
+  formatDashboardCount,
+} from "@/lib/dashboardMetrics";
 
 export default function ProfessorDashboardView() {
   const { language } = useLanguage();
   const isAr = language === "ar";
-  const links = quickLinksExcludingDashboard(language);
+
+  const [stats, setStats] = useState<{
+    sessionsToday: number;
+    yourStudents: number;
+    activeSchedules: number;
+    roomsInUse: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchProfessorDashboardMetrics(isAr).then((m) => {
+      if (alive) setStats(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isAr]);
+
+  const cards = [
+    {
+      label: isAr ? "حصص اليوم" : "Sessions today",
+      value: stats ? formatDashboardCount(stats.sessionsToday) : "—",
+      icon: ClipboardClock,
+    },
+    {
+      label: isAr ? "طلابك" : "Your students",
+      value: stats ? formatDashboardCount(stats.yourStudents) : "—",
+      icon: GraduationCap,
+    },
+    {
+      label: isAr ? "جداول نشطة" : "Active schedules",
+      value: stats ? formatDashboardCount(stats.activeSchedules) : "—",
+      icon: CalendarCheck2,
+    },
+    {
+      label: isAr ? "قاعات مرتبطة" : "Rooms in use",
+      value: stats ? formatDashboardCount(stats.roomsInUse) : "—",
+      icon: UserRoundPen,
+    },
+  ];
 
   return (
     <div className="w-full max-w-6xl space-y-8">
@@ -29,43 +66,22 @@ export default function ProfessorDashboardView() {
         <div className="pointer-events-none absolute -end-20 top-8 h-48 w-48 rounded-full bg-[#74A7BD]/12 blur-3xl" />
         <div className="pointer-events-none absolute end-8 bottom-0 h-32 w-32 rounded-full bg-sky-200/25 blur-2xl" />
         <div className="relative z-10">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#51689A]">
-          {isAr ? "أستاذ" : "Professor"}
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[#1B2065] md:text-3xl">
-          {isAr ? "مساحة التدريس" : "Teaching workspace"}
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-[#51689A]">
-          {isAr
-            ? "ركّز على حصصك، طلابك، وجدولك دون عناصر إشراف عامة."
-            : "Focus on your sessions, your students, and your schedule—without global admin tools."}
-        </p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#51689A]">
+            {isAr ? "أستاذ" : "Professor"}
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[#1B2065] md:text-3xl">
+            {isAr ? "مساحة التدريس" : "Teaching workspace"}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-[#51689A]">
+            {isAr
+              ? "ركّز على حصصك، طلابك، وجدولك دون عناصر إشراف عامة."
+              : "Focus on your sessions, your students, and your schedule—without global admin tools."}
+          </p>
         </div>
       </header>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
-          {
-            label: isAr ? "حصص اليوم" : "Sessions today",
-            value: "6",
-            icon: ClipboardClock,
-          },
-          {
-            label: isAr ? "طلابك" : "Your students",
-            value: "128",
-            icon: GraduationCap,
-          },
-          {
-            label: isAr ? "جداول نشطة" : "Active schedules",
-            value: "14",
-            icon: CalendarCheck2,
-          },
-          {
-            label: isAr ? "قاعات مرتبطة" : "Rooms in use",
-            value: "3",
-            icon: UserRoundPen,
-          },
-        ].map((card) => (
+        {cards.map((card) => (
           <article
             key={card.label}
             className="rounded-xl border border-[#51689A]/20 bg-[#FEF9F9] p-4 shadow-sm transition-colors hover:border-[#74A7BD]/35 hover:bg-[#F6F7FE]"
@@ -80,8 +96,6 @@ export default function ProfessorDashboardView() {
           </article>
         ))}
       </section>
-
-      
     </div>
   );
 }

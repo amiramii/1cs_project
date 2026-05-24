@@ -115,7 +115,7 @@ export type SidebarIconId =
   | "students"
   | "schedules"
   | "justifications"
-
+  | "absences"
 export type SidebarNavItem = {
   iconId: SidebarIconId
   label: string
@@ -160,6 +160,11 @@ export function getSideBarItems(
       label: t("Students", "الطلاب"),
       href: "/Students",
     },
+    {
+      iconId: "justifications",
+      label: t("Justifications", "مبررات الغياب"),
+      href: "/Justifications",
+    },
   ]
 
   const prof: SidebarNavItem[] = [
@@ -192,9 +197,14 @@ export function getSideBarItems(
       href: "/Dashboard",
     },
     {
-      iconId: "justifications",
-      label: t("Justifications", "مبررات الغياب"),
-      href: "/Justifications",
+      iconId: "sessions",
+      label: t("Sessions", "الحصص"),
+      href: "/Sessions",
+    },
+    {
+      iconId: "absences",
+      label: t("Absences", "الغياب"),
+      href: "/Absences",
     },
     {
       iconId: "schedules",
@@ -202,10 +212,11 @@ export function getSideBarItems(
       href: "/Scheduals",
     },
     {
-      iconId: "sessions",
-      label: t("Sessions", "الحصص"),
-      href: "/Sessions",
+      iconId: "justifications",
+      label: t("Justifications", "مبررات الغياب"),
+      href: "/Justifications",
     },
+    
   ]
 
   /** Academic office: home is intentionally empty; primary workflow is justifications */

@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "./apiBase";
+import { buildApiAbsoluteUrl } from "./apiBase";
 
 /**
  * All HTTP routes exposed by `Checkin_backend` (relative to the API origin, no
@@ -6,8 +6,8 @@ import { getApiBaseUrl } from "./apiBase";
  * DRF’s usual trailing slash, or the `api()` helper in `lib/api.ts` (pass the same
  * string without a leading `/`).
  *
- * The frontend-only notifications feature uses `/api/notifications/` — that route is
- * **not** implemented in this backend; `notificationsApi.ts` handles that separately.
+ * The frontend-only notifications feature uses `/api/notifications/` — that route may
+ * be absent in Django; `notificationsApi.ts` handles that separately.
  *
  * Typed HTTP helpers for every route: `lib/checkinClient.ts` (import from there for calls).
  */
@@ -59,9 +59,33 @@ export const checkinPath = {
     attendanceRow: (id: string | number) =>
       `api/attendance/attendance/${id}` as const,
   },
-  /** `documents` app — schedule PDFs */
-  documents: "api/documents",
-  document: (id: string | number) => `api/documents/${id}` as const,
+  /**
+   * `documents` app — mounted at `/api/documents/`.
+   * DRF router registers the `DocumentViewSet` at `khra/` (see backend `documents/urls.py`).
+   */
+  documents: {
+    khra: "api/documents/khra",
+    khraDetail: (id: string | number) => `api/documents/khra/${id}` as const,
+    /** GET `ProfessorTodayView` — `professor` is the display name from the timetable PDFs. */
+    scheduleToday: (professor: string) =>
+      `api/documents/schedule/today/${encodeURIComponent(professor)}` as const,
+  },
+  /** `justifications` app — router at `/api/` (`justifications/urls.py`). */
+  absences: {
+    /** GET `@action(by_module)` */
+    byModule: "api/absences/by_module",
+    /** GET `@action(by_date)` — returns mini attendance rows (absent slots). */
+    byDate: "api/absences/by_date",
+  },
+  justifications: {
+    /** GET list — schooling office or admin (`IsSchoolingOrAdmin`). Students use `myJustifications`. */
+    collection: "api/justifications",
+    detail: (id: string | number) => `api/justifications/${id}` as const,
+    /** GET — student only; same payload shape as list but scoped server-side */
+    myJustifications: "api/justifications/my_justifications",
+    accept: (id: string | number) => `api/justifications/${id}/accept` as const,
+    refuse: (id: string | number) => `api/justifications/${id}/refuse` as const,
+  },
 } as const;
 
 /** `http(s)://host[:port]/api/.../` with an optional `?` query (DRF-style). */
@@ -69,7 +93,6 @@ export function checkinAbsoluteUrl(
   p: string,
   query?: Record<string, string | number | boolean | undefined>
 ): string {
-  const base = getApiBaseUrl().replace(/\/+$/, "");
   const path = p.replace(/^\//, "").replace(/\/+$/, "");
   const q = new URLSearchParams();
   if (query) {
@@ -78,7 +101,6 @@ export function checkinAbsoluteUrl(
       q.set(k, String(v));
     }
   }
-  const qs = q.toString();
-  const url = `${base}/${path}/`;
-  return qs ? `${url}?${qs}` : url;
+  const hasQ = [...q.keys()].length > 0;
+  return buildApiAbsoluteUrl(path, hasQ ? q : undefined);
 }

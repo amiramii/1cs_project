@@ -79,7 +79,7 @@ function parseJwtPayload(token: string): JwtPayload | null {
   }
 }
 
-function normalizeRole(raw: unknown): StoredAppRole | null {
+export function normalizeRole(raw: unknown): StoredAppRole | null {
   if (typeof raw !== "string") return null;
   const role = raw.toLowerCase().trim();
 
@@ -176,6 +176,13 @@ export function persistTokens(access: string, refresh: string, remember: boolean
   const storage = remember ? localStorage : sessionStorage;
   storage.setItem(ACCESS_KEY, access);
   storage.setItem(REFRESH_KEY, refresh);
+}
+
+/** Clear persisted sidebar role only (tokens unchanged). Next `getCurrentAppRole` reads JWT/storage again. */
+export function clearStoredAppRole() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(APP_ROLE_KEY);
+  localStorage.removeItem(APP_ROLE_KEY);
 }
 
 export function persistAppRole(role: StoredAppRole, remember: boolean) {

@@ -84,6 +84,14 @@ export function NotificationProvider({
   }, [refresh])
 
   useEffect(() => {
+    const onRefresh = () => {
+      void refresh()
+    }
+    window.addEventListener("chekin-notifications-refresh", onRefresh)
+    return () => window.removeEventListener("chekin-notifications-refresh", onRefresh)
+  }, [refresh])
+
+  useEffect(() => {
     const id = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
         return

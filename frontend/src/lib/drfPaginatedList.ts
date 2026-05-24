@@ -3,6 +3,8 @@
  * Uses raw `fetch` + Bearer token (same pattern as session data loading).
  */
 
+import { buildApiAbsoluteUrl, getApiBaseUrl } from "./apiBase"
+
 const DEFAULT_PAGE_SIZE = 50;
 
 export function unwrapList<T>(raw: unknown): T[] {
@@ -28,9 +30,13 @@ export function resolveAgainstApiBase(
 ): string {
   if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
   const base = apiBase.replace(/\/+$/, "");
-  return pathOrUrl.startsWith("/")
+  const joined = pathOrUrl.startsWith("/")
     ? `${base}${pathOrUrl}`
-    : `${base}/${pathOrUrl}`;
+    : `${base}/${pathOrUrl}`
+  if (base.endsWith("/api") && /\/api\/api(\/|$)/.test(joined.replace(/^https?:\/\/[^/]+/i, ""))) {
+    return joined.replace(/\/api\/api\//g, "/api/")
+  }
+  return joined
 }
 
 export async function loadDrfListAll<T>(
@@ -47,10 +53,19 @@ export async function loadDrfListAll<T>(
   const requireFirst = options?.requireFirstOk === true;
   const errMsg = options?.errorMessage ?? "List request failed";
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
-  const base = apiBase.replace(/\/+$/, "");
   const path = relativePath.replace(/^\//, "");
-  const sep = path.includes("?") ? "&" : "?";
-  let url: string | null = `${base}/${path}${sep}page_size=${pageSize}`;
+  const [pathPart, queryStr] = path.includes("?") ? path.split("?", 2) : [path, ""];
+  const params = new URLSearchParams(queryStr);
+  params.set("page_size", String(pageSize));
+  const origin = getApiBaseUrl();
+  const useSharedBuilder = origin.replace(/\/+$/, "") === apiBase.replace(/\/+$/, "");
+  let url: string | null = useSharedBuilder
+    ? buildApiAbsoluteUrl(pathPart.replace(/\/+$/, ""), params)
+    : (() => {
+        const base = apiBase.replace(/\/+$/, "");
+        const sep = path.includes("?") ? "&" : "?";
+        return `${base}/${path}${sep}page_size=${pageSize}`;
+      })();
   const merged: T[] = [];
   let guard = 0;
   while (url && guard < 50) {
