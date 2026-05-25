@@ -419,8 +419,6 @@ export function SchoolingJustificationsTable({
                     <td className="hidden min-w-0 px-2 py-2.5 align-middle md:table-cell">
                       <a
                         href={`mailto:${row.email}`}
-                      <a
-                        href={`mailto:${row.email}`}
                         className="break-all text-[#51689A] underline decoration-[#51689A] underline-offset-2 visited:text-[#51689A] hover:text-[#3d5280]"
                       >
                         {row.email}
