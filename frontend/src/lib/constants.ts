@@ -223,16 +223,6 @@ export function getSideBarItems(
       iconId: "justifications",
       label: t("Justifications", "مبررات الغياب"),
       href: "/Justifications",
-    },
-    {
-      iconId: "requests",
-      label: t("SessionRequests", "الطلبات"),
-      href: "/ProfAuditions/Requests",
-    },
-    {
-      iconId: "profabsences",
-      label: t("ProfessorAbsences", "غياب الأساتذة"),
-      href: "/ProfAuditions/Absences",
     }
   ]
 
