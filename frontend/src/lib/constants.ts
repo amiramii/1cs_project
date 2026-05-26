@@ -117,6 +117,8 @@ export type SidebarIconId =
   | "justifications"
   | "absences"
   | "schooling"
+  | "requests"
+  | "profabsences"
 export type SidebarNavItem = {
   iconId: SidebarIconId
   label: string
@@ -222,7 +224,16 @@ export function getSideBarItems(
       label: t("Justifications", "مبررات الغياب"),
       href: "/Justifications",
     },
-    
+    {
+      iconId: "requests",
+      label: t("SessionRequests", "الطلبات"),
+      href: "/ProfAuditions/Requests",
+    },
+    {
+      iconId: "profabsences",
+      label: t("ProfessorAbsences", "غياب الأساتذة"),
+      href: "/ProfAuditions/Absences",
+    }
   ]
 
   /** Academic office: home is intentionally empty; primary workflow is justifications */
@@ -237,6 +248,16 @@ export function getSideBarItems(
       label: t("Justifications", "مبررات الغياب"),
       href: "/Justifications",
     },
+    {
+      iconId: "requests",
+      label: t("SessionRequests", "الطلبات"),
+      href: "/ProfAuditions/Requests",
+    },
+    {
+      iconId: "profabsences",
+      label: t("ProfessorAbsences", "غياب الأساتذة"),
+      href: "/ProfAuditions/Absences",
+    }
   ]
 
   const byRole: Record<AppSidebarRole, SidebarNavItem[]> = {
