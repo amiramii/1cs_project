@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   UserRoundPen,
   CalendarX2,
+  UserPen,
 
 } from "lucide-react"
 import type { SidebarIconId } from "@/lib/constants"
@@ -19,6 +20,7 @@ const SIDEBAR_ICONS: Record<SidebarIconId, LucideIcon> = {
   justifications: CircleCheckBig,
   absences:CalendarX2,
   professors: UserRoundPen,
+  schooling: UserPen,
 }
 
 type SidebarMenuIconProps = {

@@ -116,6 +116,7 @@ export type SidebarIconId =
   | "schedules"
   | "justifications"
   | "absences"
+  | "schooling"
 export type SidebarNavItem = {
   iconId: SidebarIconId
   label: string
@@ -165,6 +166,11 @@ export function getSideBarItems(
       label: t("Justifications", "مبررات الغياب"),
       href: "/Justifications",
     },
+    {
+      iconId: "schooling",
+      label: t("Schooling", "طاقم التعليم"),
+      href: "/Schooling",
+    }
   ]
 
   const prof: SidebarNavItem[] = [

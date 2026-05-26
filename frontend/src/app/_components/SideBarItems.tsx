@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {SidebarMenuIcon} from '../../components/ui/sidebarMenuIcon'
 import {useLanguage} from './language-provider'
 import { getSideBarItems,AppSidebarRole } from '@/lib/constants'
-const SideBarItems = ({
+const SideBarItems = ({ 
     expanded,
     role,
     onItemClick,
