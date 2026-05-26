@@ -32,68 +32,85 @@ import {
 } from "@/components/ui/pagination";
 import { useLanguage } from "@/app/_components/language-provider";
 import { loadAllJustificationsSchooling } from "@/lib/checkinClient";
+import SessionPopUpWindow from "@/app/_components/admin/sessions/SessionPopUpWindow";
+
+type Semester = "S1" | "S2";
 
 type JustificationRow = {
   id: string;
   name: string;
   email: string;
-  startDate: string;
-  endDate: string;
+  sessionDate: string;
+  yearGroup: string;
+  state: string;
+  sessionDetails?: {
+    date: string;
+    time: string;
+    place: string;
+    groups: string;
+    semester: Semester;
+  };
 };
 
 type RawJustificationRow = {
   student_name?: string;
   student_email?: string;
-  start_date?: string;
-  end_date?: string;
+  session_date?: string;
+  year_group?: string;
+  state?: string;
+  session_time?: string;
+  session_place?: string;
+  session_groups?: string;
+  session_semester?: string;
 };
 
-function aggregateByStudent(rows: RawJustificationRow[]): JustificationRow[] {
-  const map = new Map<
-    string,
-    { name: string; email: string; startDate: string; endDate: string }
-  >();
-
-  for (const j of rows) {
-    const email = typeof j.student_email === "string" ? j.student_email.trim() : "";
-    if (!email) continue;
-
-    const name =
-      typeof j.student_name === "string" && j.student_name.trim()
-        ? j.student_name.trim()
-        : email;
-
-    const startDate =
-      typeof j.start_date === "string" && j.start_date.trim()
-        ? j.start_date.trim()
-        : "—";
-    const endDate =
-      typeof j.end_date === "string" && j.end_date.trim()
-        ? j.end_date.trim()
-        : "—";
-
-    const prev = map.get(email);
-    if (!prev) {
-      map.set(email, { name, email, startDate, endDate });
-    } else {
-      if (
-        typeof j.student_name === "string" &&
-        j.student_name.trim() &&
-        prev.name === email
-      ) {
-        prev.name = j.student_name.trim();
-      }
-    }
+function validateSemester(value: string | undefined): Semester {
+  if (value === "S1" || value === "S2") {
+    return value;
   }
+  return "S1"; // Default to S1
+}
 
-  return [...map.entries()]
-    .map(([email, v]) => ({
-      id: email,
-      name: v.name,
-      email,
-      startDate: v.startDate,
-      endDate: v.endDate,
-    }))
+function aggregateByStudent(rows: RawJustificationRow[]): JustificationRow[] {
+  return rows
+    .map((j) => {
+      const email = typeof j.student_email === "string" ? j.student_email.trim() : "";
+      const name =
+        typeof j.student_name === "string" && j.student_name.trim()
+          ? j.student_name.trim()
+          : email;
+      const sessionDate =
+        typeof j.session_date === "string" && j.session_date.trim()
+          ? j.session_date.trim()
+          : "—";
+      const yearGroup =
+        typeof j.year_group === "string" && j.year_group.trim()
+          ? j.year_group.trim()
+          : "—";
+      const state =
+        typeof j.state === "string" && j.state.trim()
+          ? j.state.trim()
+          : "—";
+
+      const sessionDetails = {
+        date: sessionDate || "—",
+        time: typeof j.session_time === "string" && j.session_time.trim() ? j.session_time.trim() : "—",
+        place: typeof j.session_place === "string" && j.session_place.trim() ? j.session_place.trim() : "—",
+        groups: yearGroup || "—",
+        semester: validateSemester(j.session_semester),
+      };
+
+      return {
+        id: email,
+        name,
+        email,
+        sessionDate,
+        yearGroup,
+        state,
+        sessionDetails,
+      };
+    })
+    .filter((row) => row.email)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -102,9 +119,7 @@ const controlBtnClass =
 
 const PAGE_SIZE = 5;
 
-
-
-export function ProfessorAbsenceTable({
+export function ProfessorSessionTable({
   studentDetailHrefMode = "schoolingMock",
 }: {
   /** Schooling uses the mock detail page; admins use the API-backed review screen. */
@@ -123,6 +138,8 @@ export function ProfessorAbsenceTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<JustificationRow[]>([]);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<JustificationRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,8 +171,9 @@ export function ProfessorAbsenceTable({
         q.length === 0 ||
         row.name.toLowerCase().includes(q) ||
         row.email.toLowerCase().includes(q) ||
-        row.startDate.toLowerCase().includes(q) ||
-        row.endDate.toLowerCase().includes(q);
+        row.sessionDate.toLowerCase().includes(q) ||
+        row.yearGroup.toLowerCase().includes(q) ||
+        row.state.toLowerCase().includes(q);
       return matchesSearch;
     });
   }, [data, search]);
@@ -205,7 +223,25 @@ export function ProfessorAbsenceTable({
     setCurrentPage(page);
   };
 
+  const handleStateClick = (row: JustificationRow) => {
+    setSelectedSession(row);
+    setIsPopupOpen(true);
+  };
 
+  const handlePopupClose = () => {
+    setIsPopupOpen(false);
+    setSelectedSession(null);
+  };
+
+  const handlePopupAccept = (year: string) => {
+    console.log("Accepted with year:", year);
+    handlePopupClose();
+  };
+
+  const handlePopupReject = () => {
+    console.log("Rejected");
+    handlePopupClose();
+  };
 
   return (
     <section className="mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm">
@@ -285,7 +321,15 @@ export function ProfessorAbsenceTable({
                 </th>
 
                 <th className="border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
-                  {isArabic ? "تاريخ الغياب" : "Absence Date"}
+                  {isArabic ? "تاريخ الجلسة" : "Session Date"}
+                </th>
+
+                <th className="border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
+                  {isArabic ? "السنة/المجموعة" : "Year/Group"}
+                </th>
+
+                <th className="border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
+                  {isArabic ? "الحالة" : "State"}
                 </th>
               </tr>
             </thead>
@@ -336,15 +380,21 @@ export function ProfessorAbsenceTable({
                       </a>
                     </td>
 
-                    <td className="px-2 py-2.5 align-middle font-medium text-[#51689A]">
-                      <div className="flex flex-col gap-1">
-                        <div className="text-xs">
-                          <span className="font-semibold">{isArabic ? "من" : "From"}:</span> {row.startDate}
-                        </div>
-                        <div className="text-xs">
-                          <span className="font-semibold">{isArabic ? "إلى" : "To"}:</span> {row.endDate}
-                        </div>
-                      </div>
+                    <td className="px-2 py-2.5 align-middle text-[#51689A]">
+                      {row.sessionDate}
+                    </td>
+
+                    <td className="px-2 py-2.5 align-middle font-medium text-[#6CB4B4]">
+                      {row.yearGroup}
+                    </td>
+
+                    <td className="px-2 py-2.5 align-middle">
+                      <button
+                        onClick={() => handleStateClick(row)}
+                        className="inline-flex cursor-pointer items-center rounded-full bg-[#1B2065]/10 px-2.5 py-0.5 text-xs font-semibold text-[#1B2065F2] transition-colors hover:bg-[#1B2065]/20"
+                      >
+                        {row.state}
+                      </button>
                     </td>
 
                   </tr>
@@ -358,7 +408,7 @@ export function ProfessorAbsenceTable({
           <p className="py-5 text-center text-sm text-[#5D719D]">
             {isArabic
               ? "لا توجد نتائج."
-              : "No absences found."}
+              : "No sessions found."}
           </p>
         )}
       </div>
@@ -423,6 +473,16 @@ export function ProfessorAbsenceTable({
           </PaginationContent>
         </Pagination>
       </div>
+
+      {selectedSession && selectedSession.sessionDetails && (
+        <SessionPopUpWindow
+          open={isPopupOpen}
+          onClose={handlePopupClose}
+          onAccept={handlePopupAccept}
+          onReject={handlePopupReject}
+          session={selectedSession.sessionDetails}
+        />
+      )}
     </section>
   );
 }

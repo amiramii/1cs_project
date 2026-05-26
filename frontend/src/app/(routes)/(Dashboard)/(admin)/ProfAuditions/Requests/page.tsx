@@ -7,8 +7,8 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-import JustificationsByRole from "@/app/_components/role-pages/JustificationsByRole"
-import type { JustificationsViewerRole } from "@/app/_components/role-pages/JustificationsByRole"
+import ProfSessions from "@/app/_components/sessions/SchoolingSessionReq"
+import type { JustificationsViewerRole } from "@/app/_components/absences/ProfAbsence"
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants"
 import { getAccessToken } from "@/lib/tokenStorage"
 import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole"
@@ -26,7 +26,7 @@ export default function Page() {
   }, [router])
 
   const viewRole: JustificationsViewerRole =
-    role === "student" ? "student" : role === "admin" ? "admin" : "schooling"
+    role === "schooling" ? "schooling" : "professor"
 
-  return <JustificationsByRole role={viewRole} />
+  return <ProfSessions role={viewRole} />
 }
