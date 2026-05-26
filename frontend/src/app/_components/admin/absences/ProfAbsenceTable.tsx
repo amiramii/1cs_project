@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/pagination";
 import { useLanguage } from "@/app/_components/language-provider";
 import { loadAllJustificationsSchooling } from "@/lib/checkinClient";
+import ProfAbsencePopUpWindow from "./ProfAbsencePopUpWindow";
 
 type JustificationRow = {
   id: string;
@@ -39,6 +40,9 @@ type JustificationRow = {
   email: string;
   startDate: string;
   endDate: string;
+  state: string;
+  absenceCause: string;
+  justificationImageUrl?: string;
 };
 
 type RawJustificationRow = {
@@ -46,12 +50,23 @@ type RawJustificationRow = {
   student_email?: string;
   start_date?: string;
   end_date?: string;
+  state?: string;
+  absence_cause?: string;
+  justification_image_url?: string;
 };
 
 function aggregateByStudent(rows: RawJustificationRow[]): JustificationRow[] {
   const map = new Map<
     string,
-    { name: string; email: string; startDate: string; endDate: string }
+    {
+      name: string;
+      email: string;
+      startDate: string;
+      endDate: string;
+      state: string;
+      absenceCause: string;
+      justificationImageUrl?: string;
+    }
   >();
 
   for (const j of rows) {
@@ -71,10 +86,30 @@ function aggregateByStudent(rows: RawJustificationRow[]): JustificationRow[] {
       typeof j.end_date === "string" && j.end_date.trim()
         ? j.end_date.trim()
         : "—";
+    const state =
+      typeof j.state === "string" && j.state.trim()
+        ? j.state.trim()
+        : "Pending";
+    const absenceCause =
+      typeof j.absence_cause === "string" && j.absence_cause.trim()
+        ? j.absence_cause.trim()
+        : "Illness (Cold)";
+    const justificationImageUrl =
+      typeof j.justification_image_url === "string" && j.justification_image_url.trim()
+        ? j.justification_image_url.trim()
+        : "/uploads/justification-doc.jpg";
 
     const prev = map.get(email);
     if (!prev) {
-      map.set(email, { name, email, startDate, endDate });
+      map.set(email, {
+        name,
+        email,
+        startDate,
+        endDate,
+        state,
+        absenceCause,
+        justificationImageUrl,
+      });
     } else {
       if (
         typeof j.student_name === "string" &&
@@ -93,6 +128,9 @@ function aggregateByStudent(rows: RawJustificationRow[]): JustificationRow[] {
       email,
       startDate: v.startDate,
       endDate: v.endDate,
+      state: v.state,
+      absenceCause: v.absenceCause,
+      justificationImageUrl: v.justificationImageUrl,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -123,6 +161,8 @@ export function ProfessorAbsenceTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<JustificationRow[]>([]);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<JustificationRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -204,6 +244,27 @@ export function ProfessorAbsenceTable({
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
   };
+
+  const handleStateClick = (row: JustificationRow) => {
+    setSelectedRow(row);
+    setIsPopupOpen(true);
+  };
+
+  const handlePopupClose = () => {
+    setIsPopupOpen(false);
+    setSelectedRow(null);
+  };
+
+  const handlePopupAccept = () => {
+    console.log("Accepted");
+    handlePopupClose();
+  };
+
+  const handlePopupReject = () => {
+    console.log("Rejected");
+    handlePopupClose();
+  };
+
 
 
 
@@ -287,6 +348,10 @@ export function ProfessorAbsenceTable({
                 <th className="border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
                   {isArabic ? "تاريخ الغياب" : "Absence Date"}
                 </th>
+
+                <th className="border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
+                  {isArabic ? "الحالة" : "State"}
+                </th>
               </tr>
             </thead>
 
@@ -345,6 +410,16 @@ export function ProfessorAbsenceTable({
                           <span className="font-semibold">{isArabic ? "إلى" : "To"}:</span> {row.endDate}
                         </div>
                       </div>
+                    </td>
+
+                    <td className="px-2 py-2.5 align-middle">
+                      <button
+                        type="button"
+                        onClick={() => handleStateClick(row)}
+                        className="inline-flex cursor-pointer items-center rounded-full bg-[#1B2065]/10 px-2.5 py-0.5 text-xs font-semibold text-[#1B2065F2] transition hover:bg-[#1B2065]/20"
+                      >
+                        {row.state}
+                      </button>
                     </td>
 
                   </tr>
@@ -423,6 +498,18 @@ export function ProfessorAbsenceTable({
           </PaginationContent>
         </Pagination>
       </div>
+
+      {selectedRow && (
+        <ProfAbsencePopUpWindow
+          open={isPopupOpen}
+          onClose={handlePopupClose}
+          onAccept={handlePopupAccept}
+          onReject={handlePopupReject}
+          absenceDate={selectedRow.startDate}
+          absenceCause={selectedRow.absenceCause}
+          justificationImageUrl={selectedRow.justificationImageUrl}
+        />
+      )}
     </section>
   );
 }
