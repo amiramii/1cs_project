@@ -64,6 +64,20 @@ type RawJustificationRow = {
   session_semester?: string;
 };
 
+function getSessionStateClasses(state: string) {
+  const normalized = state.trim().toLowerCase();
+  if (normalized === "accepted") {
+    return "border-[#74A7BD] bg-[#EEFAFF] text-[#74A7BD]";
+  }
+  if (normalized === "pending") {
+    return "border-[#E7CE51F2] bg-[#FFF5C3F2] text-[#E7CE51F2]";
+  }
+  if (normalized === "rejected") {
+    return "border-[#DF2D3E] bg-[#FFD1D5] text-[#DF2D3E]";
+  }
+  return "border-[#51689A] bg-[#F3F6FF] text-[#1B2065F2]";
+}
+
 function validateSemester(value: string | undefined): Semester {
   if (value === "S1" || value === "S2") {
     return value;
@@ -391,7 +405,7 @@ export function ProfessorSessionTable({
                     <td className="px-2 py-2.5 align-middle">
                       <button
                         onClick={() => handleStateClick(row)}
-                        className="inline-flex cursor-pointer items-center rounded-full bg-[#1B2065]/10 px-2.5 py-0.5 text-xs font-semibold text-[#1B2065F2] transition-colors hover:bg-[#1B2065]/20"
+                        className={`inline-flex cursor-pointer items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition ${getSessionStateClasses(row.state)}`}
                       >
                         {row.state}
                       </button>
