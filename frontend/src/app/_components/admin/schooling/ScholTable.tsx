@@ -32,7 +32,7 @@ type ApiSchoolingRow = {
   id: number
   full_name: string
   email: string
-  department?: string
+  department: string
 }
 
 const controlBtnClass =
@@ -61,7 +61,7 @@ export default function DataTable() {
     try {
       const staff = await loadDrfListAll<ApiSchoolingRow>(
         base,
-        `${checkinPath.teachers}/`,
+        `${checkinPath.schooling}/`,
         headers,
         {}
       )

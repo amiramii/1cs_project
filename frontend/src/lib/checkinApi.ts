@@ -33,6 +33,9 @@ export const checkinPath = {
   /** ModelViewSet — `Teacher` */
   teachers: "api/teachers",
   teacher: (id: string | number) => `api/teachers/${id}` as const,
+  /** ModelViewSet — `Teacher` */
+  schooling: "api/schooling",
+  schooler: (id: string | number) => `api/schooling/${id}` as const,
   /** POST `multipart` — bulk CSV (see `StudMidContainer` / `ProfMidContainer`) */
   upload: "api/upload",
   /** POST (AllowAny) */
