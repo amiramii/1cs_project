@@ -165,14 +165,14 @@ export default function JustifyAbsenceDialog({
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogContent
         showCloseButton
-        className="max-h-[min(90dvh,720px)] overflow-y-auto rounded-2xl border-[#51689A]/20 bg-[#FEF9F9] p-6 shadow-lg sm:max-w-2xl sm:rounded-2xl font-montserrat"
+        className="max-h-[min(90dvh,720px)] overflow-y-auto rounded-2xl border-[#51689A]/20 bg-[#FEF9F9] p-6 shadow-lg sm:max-w-2xl sm:rounded-2xl font-montserrat dark:border-[#383F58] dark:bg-[#1A2036]"
         overlayClassName="bg-[#74A7BDCC] supports-backdrop-filter:backdrop-blur-sm"
       >
         <DialogHeader className="space-y-2 text-start">
-          <DialogTitle className="text-xl font-bold text-[#1B2065]">
+          <DialogTitle className="text-xl font-bold text-[#1B2065] dark:text-[#EEF4F7]">
             {isAr ? "مبرّر غيابك" : "Justify Your Absence"}
           </DialogTitle>
-          <DialogDescription className="text-[15px] text-[#51689A]">
+          <DialogDescription className="text-[15px] text-[#51689A] dark:text-[#9BA8C4]">
             {isAr
               ? "أكمل تفاصيل طلب التبرير."
               : "Fill in the details for your justification"}
@@ -189,7 +189,7 @@ export default function JustifyAbsenceDialog({
         >
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor={`${formId}-type`} className="text-[#1B2065]">
+              <Label htmlFor={`${formId}-type`} className="text-[#1B2065] dark:text-[#EEF4F7]">
                 {isAr ? "نوع الغياب" : "Type of absence"}
               </Label>
               <div className="relative w-full">
@@ -202,7 +202,7 @@ export default function JustifyAbsenceDialog({
                 >
                   <SelectTrigger
                     id={`${formId}-type`}
-                    className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-4 pe-2 text-sm font-medium text-[#1B2065] shadow-sm data-placeholder:text-[#51689A]"
+                    className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-4 pe-2 text-sm font-medium text-[#1B2065] shadow-sm data-placeholder:text-[#51689A] dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:data-placeholder:text-[#9BA8C4]"
                   >
                     <SelectValue
                       placeholder={isAr ? "اختر النوع" : "Select type"}
@@ -231,7 +231,7 @@ export default function JustifyAbsenceDialog({
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${formId}-cause`} className="text-[#1B2065]">
+              <Label htmlFor={`${formId}-cause`} className="text-[#1B2065] dark:text-[#EEF4F7]">
                 {isAr ? "سبب الغياب" : "Absence cause"}
               </Label>
               <Input
@@ -239,13 +239,13 @@ export default function JustifyAbsenceDialog({
                 value={cause}
                 onChange={(e) => setCause(e.target.value)}
                 placeholder={isAr ? "سبب الغياب…" : "Absence cause..."}
-                className="h-10 rounded-xl border border-slate-200/80 bg-[#FEF9F9] shadow-sm"
+                className="h-10 rounded-xl border border-slate-200/80 bg-[#FEF9F9] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-[#1B2065]">
+            <Label className="text-[#1B2065] dark:text-[#EEF4F7]">
               {isAr ? "رفع ملف المبرر" : "Upload Justification File"}
             </Label>
             <input
@@ -269,14 +269,14 @@ export default function JustifyAbsenceDialog({
                 onPickFile(e.dataTransfer.files?.[0] ?? null);
               }}
               className={cn(
-                "flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#51689A]/35 bg-[#FEF9F9]/80 py-10 transition-colors",
+                "flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#51689A]/35 bg-[#FEF9F9]/80 py-10 transition-colors dark:border-[#383F58] dark:bg-[#242A40]/80",
                 isDragging && "border-[#74A7BD] bg-[#74A7BD]/10"
               )}
             >
-              <span className="flex size-10 items-center justify-center rounded-md border border-[#51689A]/30 bg-[#FEF9F9] shadow-sm">
-                <Plus className="size-5 text-[#1B2065]" aria-hidden />
+              <span className="flex size-10 items-center justify-center rounded-md border border-[#51689A]/30 bg-[#FEF9F9] shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]">
+                <Plus className="size-5 text-[#1B2065] dark:text-[#EEF4F7]" aria-hidden />
               </span>
-              <span className="text-sm font-medium text-[#51689A]">
+              <span className="text-sm font-medium text-[#51689A] dark:text-[#9BA8C4]">
                 {file
                   ? file.name
                   : isAr

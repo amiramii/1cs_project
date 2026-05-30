@@ -73,7 +73,7 @@ function DialogContent({
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button
               variant="ghost"
-              className="absolute top-4 end-4 rounded-full hover:bg-[#51689A]/12"
+              className="absolute top-4 end-4 rounded-full text-foreground hover:bg-[#51689A]/12 dark:text-[#EEF4F7] dark:hover:bg-[#383F58]"
               size="icon-sm"
             >
               <XIcon

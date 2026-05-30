@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense } from "react";
-import SemestrialAttendancePage from "@/app/_components/sessions/SemestrialAttendancePage";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/app/_components/language-provider";
 
 function Fallback() {
@@ -14,12 +14,22 @@ function Fallback() {
   );
 }
 
+function RedirectToStudentsSheet() {
+  const router = useRouter();
+  const params = useSearchParams();
+
+  useEffect(() => {
+    const query = params.toString();
+    router.replace(`/Students/semestrial${query ? `?${query}` : ""}`);
+  }, [params, router]);
+
+  return <Fallback />;
+}
+
 export default function SemestrialRoutePage() {
   return (
-    <div className="mx-auto w-full space-y-4 xl:p-5">
-      <Suspense fallback={<Fallback />}>
-        <SemestrialAttendancePage />
-      </Suspense>
-    </div>
+    <Suspense fallback={<Fallback />}>
+      <RedirectToStudentsSheet />
+    </Suspense>
   );
 }

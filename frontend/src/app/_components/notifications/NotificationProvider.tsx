@@ -31,8 +31,8 @@ const NotificationContext = createContext<NotificationContextValue | null>(
   null
 )
 
-/** Background refresh — longer interval + skip when tab hidden to reduce work. */
-const POLL_MS = 120_000
+/** Background refresh — poll server notifications while dashboard is open. */
+const POLL_MS = 60_000
 
 function delay(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms))

@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowUpFromLine,
   CalendarCheck,
+  ChevronDown,
   CirclePlay,
   Info,
   Pencil,
@@ -30,13 +30,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn, notifyUser } from "@/lib/utils";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
 import ScheduleSessionForm, {
   buildSessionCreateBody,
 } from "@/app/_components/sessions/ScheduleSessionForm";
-import SessionHistorySemesterSection from "@/app/_components/sessions/SessionHistorySemesterSection";
 import {
   loadProfessorSessionData,
   type AssignmentApi,
@@ -51,16 +56,30 @@ import {
   patchAttendanceRow,
 } from "@/lib/checkinClient";
 import { hydrateAttendanceRowsStudentInfo } from "@/lib/attendanceStudentHydrate";
+import { checkinPath } from "@/lib/checkinApi";
+import { loadDrfListAll } from "@/lib/drfPaginatedList";
 import {
   markProfessorSessionClosedLocally,
   readClosedProfessorSessionIds,
 } from "@/lib/professorClosedSessions";
+import { getAccessToken, getStoredUserEmail } from "@/lib/tokenStorage";
 
 type RowDraft = {
   status: AttendanceStatus;
   participation_points: number;
   professor_note: string;
 };
+
+type ProfessorOption = {
+  id: number;
+  full_name?: string;
+  email?: string;
+};
+
+function listHeaders(): HeadersInit {
+  const token = getAccessToken();
+  return token?.trim() ? { Authorization: `Bearer ${token.trim()}` } : {};
+}
 
 function readExtraFromRow(row: AttendanceRow): {
   participation_points: number;
@@ -131,7 +150,7 @@ function enrichSessionSheetPayload(
   catalogs: AssignmentApi[],
   teacherFlat: AttendanceRow[]
 ): SessionApi {
-  let next = applyAssignmentCatalogLabels(session, catalogs);
+  const next = applyAssignmentCatalogLabels(session, catalogs);
   const sid = session.id;
   const flatById = new Map(
     teacherFlat.filter((r) => r.session === sid).map((r) => [r.id, r] as const)
@@ -232,6 +251,8 @@ export default function ProfessorSessionsView() {
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [newAssignmentId, setNewAssignmentId] = useState<number | "">("");
   const [classRoom, setClassRoom] = useState("");
+  const [professors, setProfessors] = useState<ProfessorOption[]>([]);
+  const [requestedProfessorId, setRequestedProfessorId] = useState("");
   const [sessionStart, setSessionStart] = useState<Dayjs>(() =>
     dayjs(`${todayLocalIso()}T08:00:00`)
   );
@@ -298,6 +319,33 @@ export default function ProfessorSessionsView() {
       alive = false;
     };
   }, [refreshData]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const rows = await loadDrfListAll<ProfessorOption>(
+          getApiBaseUrl(),
+          `${checkinPath.teachers}/`,
+          listHeaders(),
+          {}
+        );
+        const currentEmail = getStoredUserEmail()?.trim().toLowerCase();
+        const otherProfessors = currentEmail
+          ? rows.filter(
+              (professor) =>
+                professor.email?.trim().toLowerCase() !== currentEmail
+            )
+          : rows;
+        if (alive) setProfessors(otherProfessors);
+      } catch {
+        if (alive) setProfessors([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const todayStr = todayLocalIso();
 
@@ -393,6 +441,18 @@ export default function ProfessorSessionsView() {
       return name.includes(q) || mail.includes(q) || idStr.includes(q);
     });
   }, [workingSession, tableSearch]);
+
+  const requestedProfessorLabel = useMemo(() => {
+    const selected = professors.find(
+      (professor) => String(professor.id) === requestedProfessorId
+    );
+    if (!selected) return isAr ? "اختر أستاذًا" : "Select professor";
+    return (
+      selected.full_name?.trim() ||
+      selected.email?.trim() ||
+      `Professor #${selected.id}`
+    );
+  }, [professors, requestedProfessorId, isAr]);
 
   const sheetRowsVisible = useMemo(() => {
     if (sheetShowAll) return filteredRows;
@@ -544,8 +604,6 @@ export default function ProfessorSessionsView() {
       isAr ? "التاريخ" : "Date"
     );
 
-  const historyAssignmentList = assignments;
-
   if (loading) {
     return (
       <div className="flex min-h-[12rem] items-center justify-center rounded-2xl border border-border bg-card/80">
@@ -664,7 +722,7 @@ export default function ProfessorSessionsView() {
         </div>
 
         {(workingSession.attendances?.length ?? 0) === 0 ? (
-          <Alert className="border-amber-200 bg-amber-50 text-amber-950 [&_svg]:text-amber-900">
+          <Alert className="border-amber-200 bg-amber-50 text-amber-950 [&_svg]:text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100 dark:[&_svg]:text-amber-200">
             <Info aria-hidden />
             <AlertTitle>{isAr ? "لا توجد صفوف حضور" : "No attendance rows"}</AlertTitle>
             <AlertDescription>
@@ -676,7 +734,7 @@ export default function ProfessorSessionsView() {
         ) : null}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="relative overflow-hidden rounded-xl border border-[#74A7BD]/30 bg-gradient-to-br from-[#74A7BD]/12 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+          <div className="relative overflow-hidden rounded-xl border border-[#74A7BD]/30 bg-gradient-to-br from-[#74A7BD]/12 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm dark:border-[#74A7BD]/25 dark:from-[#152A38]/60 dark:via-[#13182A] dark:to-[#13182A]">
             <div className="pointer-events-none absolute -end-10 -top-8 h-24 w-24 rounded-full bg-fuchsia-200/25 blur-2xl" />
             <div className="pointer-events-none absolute -bottom-6 end-4 h-16 w-16 rounded-full bg-[#74A7BD]/20 blur-2xl" />
             <div className="relative">
@@ -694,7 +752,7 @@ export default function ProfessorSessionsView() {
               </p>
             </div>
           </div>
-          <div className="relative overflow-hidden rounded-xl border-2 border-[#C71122]/45 bg-gradient-to-br from-[#C71122]/10 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+          <div className="relative overflow-hidden rounded-xl border-2 border-[#C71122]/45 bg-gradient-to-br from-[#C71122]/10 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm dark:border-[#E85462]/45 dark:from-[#3A1A22]/40 dark:via-[#13182A] dark:to-[#13182A]">
             <div className="pointer-events-none absolute -end-12 top-0 h-28 w-28 rounded-full bg-rose-300/30 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-6 start-0 h-20 w-20 rounded-full bg-[#C71122]/10 blur-2xl" />
             <div className="relative">
@@ -712,7 +770,7 @@ export default function ProfessorSessionsView() {
               </p>
             </div>
           </div>
-          <div className="relative overflow-hidden rounded-xl border border-[#E7CE51]/40 bg-gradient-to-br from-[#E7CE51]/10 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+          <div className="relative overflow-hidden rounded-xl border border-[#E7CE51]/40 bg-gradient-to-br from-[#E7CE51]/10 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm dark:border-[#E7CE51]/40 dark:from-[#3A3420]/40 dark:via-[#13182A] dark:to-[#13182A]">
             <div className="pointer-events-none absolute -end-8 -top-6 h-20 w-20 rounded-full bg-amber-200/35 blur-2xl" />
             <div className="pointer-events-none absolute bottom-0 end-0 h-16 w-16 rounded-full bg-[#E7CE51]/15 blur-2xl" />
             <div className="relative">
@@ -733,10 +791,10 @@ export default function ProfessorSessionsView() {
         </div>
 
         <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between bg-[#F6F7FE]">
+          <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between bg-[#F6F7FE] dark:bg-[#242A40]">
             <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
               <Users
-                className="size-4 shrink-0 text-[#1B2065F2] border border-[#1B2065F2] rounded-sm"
+                className="size-4 shrink-0 text-[#1B2065F2] dark:text-[#EEF4F7] border border-[#1B2065F2] rounded-sm"
                 aria-hidden
               />
               {isAr ? "قائمة الطلاب" : "Student list"}
@@ -747,14 +805,14 @@ export default function ProfessorSessionsView() {
                 value={tableSearch}
                 onChange={(e) => setTableSearch(e.target.value)}
                 placeholder={isAr ? "بحث عن طالب…" : "Search students…"}
-                className="h-10 min-w-0 rounded-full border-border bg-[#FEF9F9] ps-10 pe-4 text-sm text-foreground ring-offset-2 focus-visible:ring-blue-secondary/40"
+                className="h-10 min-w-0 rounded-full border-border bg-[#FEF9F9] dark:bg-[#1A2036] ps-10 pe-4 text-sm text-foreground ring-offset-2 focus-visible:ring-blue-secondary/40"
               />
             </div>
           </div>
           <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
             <table className="w-full min-w-0 text-sm">
               <thead>
-                <tr className="bg-blue-primary text-white-primary">
+                <tr className="bg-blue-primary text-white-primary dark:bg-[#242A40] dark:text-[#EEF4F7]">
                   <th className="px-1.5 py-2 text-start text-[0.7rem] font-semibold sm:px-3 sm:py-3 sm:text-sm">
                     {isAr ? "المعرّف" : "User ID"}
                   </th>
@@ -884,13 +942,13 @@ export default function ProfessorSessionsView() {
           <DialogContent
             showCloseButton={false}
             overlayClassName="fixed inset-0 z-50 bg-[#74A7BDCC] duration-100 supports-backdrop-filter:backdrop-blur-xl data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
-            className="max-h-[min(90dvh,calc(100dvh-0.5rem))] w-full min-w-0 overflow-x-hidden overflow-y-auto border-border bg-[#FEF9F9] p-3 sm:max-w-2xl sm:rounded-xl sm:p-6 shadow-md"
+            className="max-h-[min(90dvh,calc(100dvh-0.5rem))] w-full min-w-0 overflow-x-hidden overflow-y-auto border-border bg-[#FEF9F9] p-3 shadow-md dark:border-[#383F58] dark:bg-[#1A2036] sm:max-w-2xl sm:rounded-xl sm:p-6"
           >
             {rowModal && modalDraft ? (
               <div className="flex w-full min-w-0 flex-col gap-4 sm:gap-5">
                 <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                   <DialogTitle asChild>
-                    <h2 className="w-full min-w-0 text-balance break-words text-start text-lg font-bold leading-tight text-[#1B2065] sm:flex-1 sm:text-xl">
+                    <h2 className="w-full min-w-0 text-balance break-words text-start text-lg font-bold leading-tight text-[#1B2065] dark:text-[#EEF4F7] sm:flex-1 sm:text-xl">
                     {rowModal.student_name ??
                       rowModal.student_email ??
                       "—"}
@@ -915,7 +973,7 @@ export default function ProfessorSessionsView() {
                 </div>
 
                 <DialogDescription asChild>
-                  <p className="min-w-0 break-words text-pretty text-start text-sm leading-relaxed text-[#51689A] sm:text-[15px]">
+                  <p className="min-w-0 break-words text-pretty text-start text-sm leading-relaxed text-[#51689A] dark:text-[#9BA8C4] sm:text-[15px]">
                     {isAr
                       ? "تأكد من الحضور، وأضف النقاط والملاحظات."
                       : "Check attendance, write notes, and set participation points."}
@@ -923,7 +981,7 @@ export default function ProfessorSessionsView() {
                 </DialogDescription>
 
                 {modalDraft.status === "justified" ? (
-                  <p className="rounded-lg border border-chekin-warning/40 bg-chekin-warning/10 px-3 py-2 text-start text-xs text-foreground sm:text-sm">
+                  <p className="rounded-lg border border-chekin-warning/40 bg-chekin-warning/10 px-3 py-2 text-start text-xs text-foreground dark:border-[#E7CE51]/35 dark:bg-[#3A3420]/50 dark:text-[#EEF4F7] sm:text-sm">
                     {isAr
                       ? "حالة «غياب مبرر» تُحدّث تلقائيًا عند موافقة الإدارة على المستندات. يمكنك تعديل النقاط والملاحظات فقط."
                       : "“Justified” is set automatically when the school approves a student’s absence. You can only edit points and notes."}
@@ -931,7 +989,7 @@ export default function ProfessorSessionsView() {
                 ) : null}
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-4">
-                  <span className="shrink-0 pt-0.5 text-sm font-bold text-[#1B2065] sm:min-w-[5.5rem] sm:pt-2.5">
+                  <span className="shrink-0 pt-0.5 text-sm font-bold text-[#1B2065] dark:text-[#EEF4F7] sm:min-w-[5.5rem] sm:pt-2.5">
                     {isAr ? "الحضور" : "Attendance"}
                   </span>
                   <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:gap-4">
@@ -944,7 +1002,7 @@ export default function ProfessorSessionsView() {
                         )
                       }
                       className={cn(
-                        "flex w-full min-w-0 items-center justify-start gap-2 border-0 bg-transparent py-1.5 text-start text-sm font-medium text-[#1B2065] shadow-none ring-0 transition-opacity outline-none min-[400px]:justify-center min-[400px]:gap-2.5 min-[400px]:text-base",
+                        "flex w-full min-w-0 items-center justify-start gap-2 border-0 bg-transparent py-1.5 text-start text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7] shadow-none ring-0 transition-opacity outline-none min-[400px]:justify-center min-[400px]:gap-2.5 min-[400px]:text-base",
                         "hover:opacity-100 focus-visible:ring-2 focus-visible:ring-[#74A7BD]/50 focus-visible:ring-offset-2",
                         modalDraft.status === "justified" &&
                           "pointer-events-none cursor-not-allowed opacity-50",
@@ -975,7 +1033,7 @@ export default function ProfessorSessionsView() {
                         )
                       }
                       className={cn(
-                        "flex w-full min-w-0 items-center justify-start gap-2 border-0 bg-transparent py-1.5 text-start text-sm font-medium text-[#1B2065] shadow-none ring-0 transition-opacity outline-none min-[400px]:justify-center min-[400px]:gap-2.5 min-[400px]:text-base",
+                        "flex w-full min-w-0 items-center justify-start gap-2 border-0 bg-transparent py-1.5 text-start text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7] shadow-none ring-0 transition-opacity outline-none min-[400px]:justify-center min-[400px]:gap-2.5 min-[400px]:text-base",
                         "hover:opacity-100 focus-visible:ring-2 focus-visible:ring-[#C71122]/50 focus-visible:ring-offset-2",
                         modalDraft.status === "justified" &&
                           "pointer-events-none cursor-not-allowed opacity-50",
@@ -1002,7 +1060,7 @@ export default function ProfessorSessionsView() {
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                   <div className="shrink-0 sm:min-w-[5.5rem] sm:max-w-[12rem] sm:flex-1">
-                    <p className="text-sm font-bold text-[#1B2065]">
+                    <p className="text-sm font-bold text-[#1B2065] dark:text-[#EEF4F7]">
                       {isAr ? "نقاط المشاركة" : "Participation points"}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -1031,18 +1089,18 @@ export default function ProfessorSessionsView() {
                             : d
                         );
                       }}
-                      className="h-10 w-full rounded-md border border-[#1B2065]/20 bg-white px-3 text-end text-base tabular-nums text-[#1B2065] shadow-md outline-none transition-[border,box-shadow] focus:border-[#74A7BD] focus:ring-2 focus:ring-[#74A7BD]/25"
+                      className="h-10 w-full rounded-md border border-[#1B2065]/20 bg-white dark:bg-[#1A2036] px-3 text-end text-base tabular-nums text-[#1B2065] dark:text-[#EEF4F7] shadow-md outline-none transition-[border,box-shadow] focus:border-[#74A7BD] focus:ring-2 focus:ring-[#74A7BD]/25"
                     />
                   </div>
                 </div>
 
                 <div className="flex min-w-0 flex-col gap-2">
-                  <p className="text-sm font-bold text-[#1B2065]">
+                  <p className="text-sm font-bold text-[#1B2065] dark:text-[#EEF4F7]">
                     {isAr ? "ملاحظات" : "Notes"}
                   </p>
                   <Textarea
                     placeholder={isAr ? "اكتب ملاحظات…" : "write notes…"}
-                    className="min-h-[120px] w-full max-w-full resize-y rounded-lg border-border text-base sm:min-h-[100px]"
+                    className="min-h-[120px] w-full max-w-full resize-y rounded-lg border-border bg-white text-base text-[#1B2065] placeholder:text-[#51689A]/70 dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:placeholder:text-[#9BA8C4] sm:min-h-[100px]"
                     value={modalDraft.professor_note}
                     onChange={(e) =>
                       setModalDraft((d) =>
@@ -1100,30 +1158,20 @@ export default function ProfessorSessionsView() {
   }
 
   return (
-    <div className="w-full min-w-0 space-y-6 font-montserrat">
-      <header className="min-w-0 space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+    <div className="w-full min-w-0 space-y-5 font-montserrat text-[#1B2065] dark:text-[#EEF4F7]">
+      <header className="min-w-0 space-y-1">
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
           {isAr ? "حصصك" : "Your Sessions"}
         </h1>
-        <p className="text-[15px] text-muted-foreground">
+        <p className="text-[15px] text-[#51689A] dark:text-[#9BA8C4]">
           {isAr
-            ? "أنشئ الحصص من تعييناتك التدريسية واحفظ الحضور. القائمة تأتي من خادم الحضور وليس من ملفات PDF."
-            : "Create sessions from your teaching assignments and save attendance. This list comes from the attendance API—not from PDF timetables."}
-        </p>
-        <p className="text-xs text-muted-foreground/90">
-          <Link
-            href="/Scheduals"
-            className="font-medium text-blue-primary underline-offset-4 hover:underline"
-          >
-            {isAr
-              ? "الجداول: PDF للاطلاع؛ الطلاب والتعيينات التدريسية تُستورد عادةً عبر CSV من المسؤول."
-              : "Schedules: PDFs are for viewing; rosters and teaching assignments usually come from admin CSV import."}
-          </Link>
+            ? "أنشئ الحصص وأدر الحضور"
+            : "Create sessions and manage attendance"}
         </p>
       </header>
 
       {sessionsFetchDegraded ? (
-        <Alert className="border-amber-300 bg-amber-50 text-amber-950 [&_svg]:text-amber-900">
+        <Alert className="border-amber-300 bg-amber-50 text-amber-950 [&_svg]:text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100 dark:[&_svg]:text-amber-200">
           <Info aria-hidden />
           <AlertTitle>
             {isAr ? "تعذر تحميل قائمة الحصص من الخادم" : "Could not load sessions from the server"}
@@ -1152,58 +1200,138 @@ export default function ProfessorSessionsView() {
         </Alert>
       ) : null}
 
-      {highlightSession && (
-        <div className="flex flex-col gap-4 rounded-xl border border-blue-primary/55 bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <p className="font-bold text-foreground">
-              {isAr
-                ? "لديك حصة مجدولة اليوم"
-                : "You have a session scheduled today"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {formatSessionSubtitle(
-                highlightSession,
-                locale,
-                isAr ? "التاريخ" : "Date"
-              )}
-            </p>
+      <section className="rounded-md border border-[#51689A]/35 bg-[#FEF9F9] px-4 py-6 shadow-sm dark:border-[#383F58] dark:bg-[#1A2036] sm:mx-3 sm:px-7">
+        {highlightSession ? (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-3">
+              <p className="font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
+                {isAr
+                  ? "لديك حصة مجدولة اليوم"
+                  : "You have a session scheduled today"}
+              </p>
+              <p className="ps-8 text-xs text-[#51689A] dark:text-[#9BA8C4]">
+                {formatSessionSubtitle(
+                  highlightSession,
+                  locale,
+                  isAr ? "التاريخ" : "Date"
+                )}
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="h-9 shrink-0 rounded-md bg-[#51689A] px-8 text-sm font-medium text-white shadow-md hover:bg-[#51689A]/90"
+              onClick={() => void startWorking(highlightSession)}
+            >
+              <CirclePlay className="me-3 size-4" strokeWidth={2} />
+              {isAr ? "بدء الحصة" : "Start Session"}
+            </Button>
           </div>
+        ) : (
+          <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
+            {isAr
+              ? "لا توجد حصة مجدولة اليوم."
+              : "No session scheduled today."}
+          </p>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <h2 className="text-lg font-bold">
+            {isAr ? "جدولة حصة" : "Schedule session"}
+          </h2>
+          <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
+            {isAr
+              ? "اطلب تعويضًا أو حصة إضافية"
+              : "Request a replacement or extra session"}
+          </p>
+        </div>
+        <div className="flex w-full justify-center">
           <Button
             type="button"
-            className="h-fit py-1 shrink-0 rounded-xl bg-[#51689A] px-8 text-white hover:bg-[#51689A]/90 flex justify-between border border-blue-primary/50"
-            onClick={() => void startWorking(highlightSession)}
+            variant="outline"
+            className="h-10 w-11/12 max-w-xl rounded-md border border-[#1B2065]/70 bg-[#FEF9F9] text-sm font-medium text-[#1B2065] shadow-sm hover:bg-[#F6F7FE] dark:border-[#74A7BD]/70 dark:bg-[#1A2036] dark:text-[#EEF4F7]"
+            onClick={() => setShowScheduleForm(true)}
           >
-            <span className="inline-flex items-center gap-2">
-              <span className="flex size-8 items-center justify-center rounded-sm ">
-                <CirclePlay
-                className="size-5 text-white-primary font-bold"
-                strokeWidth={2}
-              />
-              </span>
-              {isAr ? "بدء الحصة" : "Start Session"}
-            </span>
+            <CalendarCheck className="me-3 size-4" />
+            {isAr ? "جدولة حصة إضافية" : "Schedule Extra Session"}
           </Button>
         </div>
-      )}
+      </section>
 
-      <SessionHistorySemesterSection
-        isAr={isAr}
-        assignments={historyAssignmentList}
-        sessions={sessionsWithCatalogLabels}
-        teacherAttendanceRows={teacherAttendanceRows}
-      />
-
-      <div className="flex w-full justify-center">
-        <Button
-          type="button"
-          variant="outline"
-          className="h-14 w-11/12 max-w-xl rounded-xl border-2 border-blue-primary/50 bg-card text-base font-medium text-blue-primary hover:bg-blue-primary/5 shadow-md"
-          onClick={() => setShowScheduleForm(true)}
-        >
-          <CalendarCheck className="me-2 size-5" />
-          {isAr ? "جدولة حصة إضافية" : "Schedule Extra Session"}
-        </Button>
-      </div>
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <h2 className="text-lg font-bold">
+            {isAr ? "طلب حصة أستاذ" : "Request a professors session"}
+          </h2>
+          <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
+            {isAr
+              ? "اطلب حصة من أستاذ آخر"
+              : "Request a session from a fellow professor"}
+          </p>
+        </div>
+        <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 w-full max-w-xs justify-between rounded-lg border border-[#51689A]/35 bg-white px-3 text-xs font-medium text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7] dark:hover:bg-[#242A40]"
+                aria-label={isAr ? "اختر أستاذًا" : "Professor"}
+              >
+                <span className="min-w-0 truncate text-start">
+                  {requestedProfessorLabel}
+                </span>
+                <ChevronDown className="ms-2 size-4 shrink-0 text-[#51689A] dark:text-[#9BA8C4]" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="center"
+              className="max-h-72 overflow-y-auto border border-slate-200/40 bg-popover shadow-lg backdrop-blur-xl dark:border-[#383F58] dark:bg-[#242A40]"
+            >
+              <DropdownMenuItem
+                onClick={() => setRequestedProfessorId("")}
+                className="text-[#51689A] dark:text-[#9BA8C4]"
+              >
+                {isAr ? "اختر أستاذًا" : "Select professor"}
+              </DropdownMenuItem>
+              {professors.length === 0 ? (
+                <DropdownMenuItem disabled className="text-muted-foreground">
+                  {isAr ? "لا يوجد أساتذة آخرون" : "No other professors"}
+                </DropdownMenuItem>
+              ) : (
+                professors.map((professor) => (
+                  <DropdownMenuItem
+                    key={professor.id}
+                    onClick={() => setRequestedProfessorId(String(professor.id))}
+                    className="text-[#1B2065F2] dark:text-[#EEF4F7]"
+                  >
+                    <span className="min-w-0 truncate">
+                      {professor.full_name?.trim() ||
+                        professor.email?.trim() ||
+                        `Professor #${professor.id}`}
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            type="button"
+            variant="outline"
+            disabled
+            className="h-10 w-11/12 rounded-md border border-[#1B2065]/70 bg-[#FEF9F9] text-sm font-medium text-[#1B2065] opacity-80 shadow-sm disabled:cursor-not-allowed dark:border-[#74A7BD]/70 dark:bg-[#1A2036] dark:text-[#EEF4F7]"
+            title={
+              isAr
+                ? "واجهة فقط إلى أن يصبح المسار الخلفي جاهزًا"
+                : "UI only until the backend endpoint is ready"
+            }
+          >
+            <CirclePlay className="me-3 size-4" />
+            {isAr ? "طلب حصة" : "Request Session"}
+          </Button>
+        </div>
+      </section>
 
       <Dialog
         open={showScheduleForm}
@@ -1221,7 +1349,7 @@ export default function ProfessorSessionsView() {
       >
         <DialogContent
           overlayClassName=" fixed inset-0 z-50 bg-[#1B2065]/80 duration-100 supports-backdrop-filter:backdrop-blur-xl data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
-          className="max-h-[min(92dvh,760px)] w-full min-w-0 overflow-x-hidden overflow-y-auto border-0 bg-white p-4 shadow-xl sm:max-w-lg sm:p-6"
+          className="max-h-[min(92dvh,760px)] w-full min-w-0 overflow-x-hidden overflow-y-auto border-0 border-[#383F58] bg-white p-4 shadow-xl dark:border dark:bg-[#1A2036] sm:max-w-lg sm:p-6"
           showCloseButton
           onPointerDownOutside={(e) => {
             if (isScheduleFormPortaledLayerTarget(e.target)) e.preventDefault();
@@ -1234,16 +1362,16 @@ export default function ProfessorSessionsView() {
           }}
         >
           <DialogHeader className="gap-1">
-            <DialogTitle className="text-lg font-bold text-[#1B2065]">
+            <DialogTitle className="text-lg font-bold text-[#1B2065] dark:text-[#EEF4F7]">
               {isAr ? "جدولة حصتك" : "Schedule your session"}
             </DialogTitle>
-            <DialogDescription className="text-sm text-[#51689A]">
+            <DialogDescription className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
               {isAr
                 ? "أدخل التفاصيل لبدء الحصة."
                 : "Fill in the details to start your session."}
             </DialogDescription>
             {assignments.length === 0 && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100">
                 {isAr
                   ? "لا توجد تعيينات تدريس لهذا الحساب. إنشاء «شعبة» وحدها لا يكفي: اربط حساب الأستاذ بالشعبة والمادة عبر تعيين تدريس (Teaching assignment) في لوحة الإدارة."
                   : "No teaching assignments for this login. Creating a group alone is not enough: add a Teaching assignment linking your teacher to that group and a module in admin."}
@@ -1270,7 +1398,7 @@ export default function ProfessorSessionsView() {
               disabled={creating || newAssignmentId === ""}
             >
               <span className="inline-flex items-center gap-2">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white dark:bg-[#1A2036]/15">
                   <Play className="size-4 fill-white text-white" />
                 </span>
                 {creating

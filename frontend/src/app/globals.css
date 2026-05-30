@@ -15,6 +15,8 @@
   html {
     color: hsl(var(--foreground));
     overflow-x: hidden;
+    /* Prevent tiny horizontal layout jumps when Radix portals toggle scroll locking. */
+    scrollbar-gutter: stable;
   }
   select {
   background-image: none !important;
@@ -55,9 +57,21 @@
     --sidebar-accent-foreground: 236 58% 25%;
     --sidebar-border: 219 28% 82%;
     --sidebar-ring: 197 35% 59%;
+    --status-info-bg: 196 100% 96%;
+    --status-info-fg: 197 35% 59%;
+    --status-info-border: 197 35% 59%;
+    --status-warning-bg: 48 100% 88%;
+    --status-warning-fg: 47 76% 61%;
+    --status-warning-border: 47 76% 61%;
+    --status-danger-bg: 345 100% 91%;
+    --status-danger-fg: 353 84% 42%;
+    --status-danger-border: 353 84% 42%;
+    --status-success-bg: 160 36% 90%;
+    --status-success-fg: 180 32% 56%;
+    --status-success-border: 180 32% 56%;
   }
   .dark {
-    --background: 236 38% 12%;
+    --background: 228 29% 11%;
     --foreground: 228 45% 96%;
     --card: 236 35% 16%;
     --card-foreground: 228 45% 96%;
@@ -81,7 +95,7 @@
     --chart-3: 47 70% 58%;
     --chart-4: 353 75% 55%;
     --chart-5: 219 25% 62%;
-    --sidebar: 236 36% 14%;
+    --sidebar: 228 29% 11%;
     --sidebar-foreground: 228 40% 92%;
     --sidebar-primary: 236 48% 48%;
     --sidebar-primary-foreground: 228 85% 98%;
@@ -89,6 +103,18 @@
     --sidebar-accent-foreground: 228 45% 96%;
     --sidebar-border: 236 22% 26%;
     --sidebar-ring: 197 38% 52%;
+    --status-info-bg: 201 43% 15%;
+    --status-info-fg: 197 38% 55%;
+    --status-info-border: 197 38% 55%;
+    --status-warning-bg: 45 30% 18%;
+    --status-warning-fg: 47 70% 58%;
+    --status-warning-border: 47 70% 58%;
+    --status-danger-bg: 344 38% 16%;
+    --status-danger-fg: 353 75% 55%;
+    --status-danger-border: 353 75% 55%;
+    --status-success-bg: 164 33% 14%;
+    --status-success-fg: 180 32% 56%;
+    --status-success-border: 180 32% 56%;
   }
 }
 

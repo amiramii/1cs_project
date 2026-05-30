@@ -155,7 +155,6 @@ export default function StudentJustificationsView() {
   const isAr = language === "ar";
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [nonce, setNonce] = useState(0);
 
   const [sortedRows, setSortedRows] = useState<StudentJustificationRow[]>([]);
 
@@ -184,7 +183,7 @@ export default function StudentJustificationsView() {
     return () => {
       cancelled = true;
     };
-  }, [isAr, nonce]);
+  }, [isAr]);
 
   const totalPages = Math.max(
     1,
@@ -222,49 +221,29 @@ export default function StudentJustificationsView() {
   return (
     <div className="w-full max-w-4xl space-y-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] md:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] md:text-3xl dark:text-[#EEF4F7]">
           {isAr ? "مبرراتك" : "Your Justifications"}
         </h1>
-        <p className="text-[15px] text-[#51689A]">
-          {isAr ? (
-            <>
-              قائمة مبرراتك من الخادم.{" "}
-              <button
-                type="button"
-                className="underline decoration-[#51689A]/40 underline-offset-2"
-                onClick={() => setNonce((n) => n + 1)}
-              >
-                إعادة التحميل
-              </button>
-            </>
-          ) : (
-            <>
-              Listed from Django.{" "}
-              <button
-                type="button"
-                className="underline decoration-[#51689A]/40 underline-offset-2"
-                onClick={() => setNonce((n) => n + 1)}
-              >
-                Reload
-              </button>
-            </>
-          )}
+        <p className="text-[15px] text-[#51689A] dark:text-[#9BA8C4]">
+          {isAr
+            ? "حالة مبررات غيابك المقدّمة."
+            : "Status of your submitted absence justifications."}
         </p>
       </header>
 
       {loading ? (
-        <p className="text-sm text-[#51689A]">{isAr ? "جاري التحميل…" : "Loading…"}</p>
+        <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">{isAr ? "جاري التحميل…" : "Loading…"}</p>
       ) : null}
 
       <section
-        className="overflow-hidden rounded-2xl border border-[#51689A]/25 bg-white shadow-sm"
+        className="overflow-hidden rounded-2xl border border-[#51689A]/25 bg-white shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]"
         aria-labelledby="justification-list-heading"
       >
-        <div className="flex items-center gap-2 border-b border-[#51689A]/15 bg-[#F6F7FE] px-4 py-4 sm:px-8">
-          <BookA className="size-5 shrink-0 text-[#1B2065]" aria-hidden />
+        <div className="flex items-center gap-2 border-b border-[#51689A]/15 bg-[#F6F7FE] px-4 dark:border-[#383F58] dark:bg-[#242A40] py-4 sm:px-8">
+          <BookA className="size-5 shrink-0 text-[#1B2065] dark:text-[#EEF4F7]" aria-hidden />
           <h2
             id="justification-list-heading"
-            className="text-base font-semibold tracking-tight text-[#1B2065]"
+            className="text-base font-semibold tracking-tight text-[#1B2065] dark:text-[#EEF4F7]"
           >
             {isAr ? "قائمة المبررات" : "Justification list"}
           </h2>
@@ -273,7 +252,7 @@ export default function StudentJustificationsView() {
         <div className="overflow-x-auto ">
           <table className="w-full min-w-[520px] border-collapse text-sm">
             <thead>
-              <tr className="bg-[#51689A] text-white">
+              <tr className="bg-[#51689A] text-white dark:bg-[#242A40] dark:text-[#EEF4F7]">
                 <th className="px-10 py-3 text-center font-semibold">
                   {isAr ? "تاريخ الغياب" : "Absent date"}
                 </th>
@@ -290,7 +269,7 @@ export default function StudentJustificationsView() {
                 <tr>
                   <td
                     colSpan={3}
-                    className="px-4 py-8 text-center text-sm text-[#51689A]"
+                    className="px-4 py-8 text-center text-sm text-[#51689A] dark:text-[#9BA8C4]"
                   >
                     {loading
                       ? isAr ? "جاري التحميل…" : "Loading…"
@@ -305,12 +284,12 @@ export default function StudentJustificationsView() {
                   return (
                     <tr
                       key={row.id}
-                      className="border-b border-[#51689A]/10 last:border-b-0"
+                      className="border-b border-[#51689A]/10 last:border-b-0 dark:border-[#383F58]"
                     >
-                      <td className="px-10 py-4 text-center font-medium tabular-nums text-[#1B2065]">
+                      <td className="px-10 py-4 text-center font-medium tabular-nums text-[#1B2065] dark:text-[#EEF4F7]">
                         {row.justificationDate}
                       </td>
-                      <td className="px-10 py-4 text-center font-medium text-[#1B2065]">
+                      <td className="px-10 py-4 text-center font-medium text-[#1B2065] dark:text-[#EEF4F7]">
                         {row.module}
                       </td>
                       <td className="px-10 py-4 text-center">
@@ -332,8 +311,8 @@ export default function StudentJustificationsView() {
         </div>
 
         {sortedRows.length > 0 && (
-          <div className="flex flex-col items-center justify-between gap-2 border-t border-[#51689A]/15 bg-[#F6F7FE] px-3 py-2 sm:flex-row sm:px-4">
-            <p className="text-xs text-[#51689A]">
+          <div className="flex flex-col items-center justify-between gap-2 border-t border-[#51689A]/15 bg-[#F6F7FE] px-3 dark:border-[#383F58] dark:bg-[#242A40] py-2 sm:flex-row sm:px-4">
+            <p className="text-xs text-[#51689A] dark:text-[#9BA8C4]">
               {isAr
                 ? `الصفحة ${currentPageSafe} من ${totalPages}`
                 : `Page ${currentPageSafe} of ${totalPages}`}

@@ -27,18 +27,27 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`fixed inset-x-0 bottom-0 z-50 h-20 overflow-hidden rounded-t-xl border-t border-[#74A7BD]/20 py-2 shadow-lg md:inset-x-auto md:top-0 md:h-screen md:rounded-t-none md:border-t-0 md:border-e md:border-[#74A7BD]/20 md:py-4 ${sidePositionClass} ${expanded ? "md:w-64" : "md:w-24"} md:translate-x-0 transition-all duration-200 ${
+      className={`fixed inset-x-0 bottom-0 z-50 h-20 overflow-hidden rounded-t-xl border-t border-[#74A7BD]/25 bg-[#FEF9F9]/95 py-2 shadow-[0_-10px_40px_rgba(27,32,89,0.14)] ring-1 ring-inset ring-black/5 backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-[#FEF9F9]/90 dark:border-[#383F58]/55 dark:bg-[#141726]/95 dark:shadow-[0_-12px_44px_rgba(0,0,0,0.55)] dark:ring-white/10 dark:supports-[backdrop-filter]:bg-[#141726]/92 md:inset-x-auto md:top-0 md:h-screen md:rounded-t-none md:border-t-0 md:border-e md:border-[#74A7BD]/20 md:bg-transparent md:py-4 md:shadow-lg md:ring-0 md:backdrop-blur-none md:backdrop-saturate-100 dark:md:border-[#51689A]/20 dark:md:bg-[#141726] ${sidePositionClass} ${expanded ? "md:w-64" : "md:w-24"} md:translate-x-0 transition-all duration-200 ${
         isRtl
           ? "md:right-0 md:rounded-l-2xl"
           : "md:left-0 md:rounded-r-2xl"
       }`}
     >
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className="absolute inset-0 bg-gradient-to-b from-[#74A7BD]/12 via-[#FEF9F9] to-[#F6F7FE]/88" />
-          <div className="absolute -end-3 top-2 h-24 w-24 rounded-full bg-fuchsia-200/30 blur-2xl md:top-6 md:h-32 md:w-32" />
-          <div className="absolute -start-1 bottom-10 h-20 w-20 rounded-full bg-[#74A7BD]/12 blur-2xl md:bottom-20" />
-          <div className="absolute end-1 bottom-1 h-14 w-14 rounded-full bg-sky-200/22 blur-xl md:end-2 md:bottom-2" />
+        <div className="pointer-events-none absolute inset-0 max-md:hidden" aria-hidden>
+          <div className="absolute inset-0 bg-gradient-to-b from-[#74A7BD]/12 via-[#FEF9F9] to-[#F6F7FE]/88 dark:hidden" />
+          <div className="absolute -end-3 top-2 h-28 w-28 rounded-full bg-fuchsia-200/30 blur-2xl md:top-6 md:h-36 md:w-36 dark:hidden" />
+          <div className="absolute -start-2 bottom-12 h-24 w-24 rounded-full bg-[#74A7BD]/12 blur-2xl md:bottom-16 dark:hidden" />
+          <div className="absolute end-2 bottom-2 h-20 w-20 rounded-full bg-sky-200/22 blur-xl md:end-3 md:bottom-3 dark:hidden" />
+
+          <div className="absolute inset-0 hidden bg-gradient-to-b from-[#1B2033] via-[#16192B] to-[#141726] dark:block" />
+          <div className="absolute -end-3 top-2 hidden h-28 w-28 rounded-full bg-[#51689A]/14 blur-2xl md:top-6 md:h-36 md:w-36 dark:block" />
+          <div className="absolute -start-2 bottom-12 hidden h-24 w-24 rounded-full bg-[#74A7BD]/10 blur-2xl md:bottom-16 dark:block" />
+          <div className="absolute end-2 bottom-2 hidden h-20 w-20 rounded-full bg-[#182449]/18 blur-xl md:end-3 md:bottom-3 dark:block" />
         </div>
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/25 via-transparent to-transparent md:hidden dark:from-white/[0.06]"
+          aria-hidden
+        />
         <div className="relative z-10 flex h-full min-h-0 flex-col">
         <div className="hidden items-center justify-center md:flex">
           <Link

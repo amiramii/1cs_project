@@ -31,12 +31,23 @@ import {
   fetchStudentAbsencesByModule,
   loadStudentJustificationsList,
 } from "@/lib/checkinClient";
+import {
+  getAbsenceSeverityColor,
+  getModuleExclusionCountMode,
+  getModuleExclusionAbsenceLimit,
+  getModuleExclusionJustifiedLimit,
+  getModuleExclusionUnjustifiedLimit,
+  isStudentExcludedFromAttendanceCounts,
+  MODULE_EXCLUSION_POLICY_CHANGED_EVENT,
+} from "@/lib/moduleExclusionPolicy";
+import { notifyStudentAbsenceRisk } from "@/lib/studentAbsenceAlerts";
 import { cn } from "@/lib/utils";
 
 type AbsenceRow = {
   id: string;
   module: string;
-  absenceCount: number;
+  absenceCount: number; // unjustified(absent) count from backend by_module
+  justifiedCount: number;
   justificationCount: number;
   excluded: boolean;
 };
@@ -65,10 +76,8 @@ type AttendanceByDateApiEntry = {
 };
 
 type RawJustification = {
-  attendances?: { module?: string }[];
+  attendances?: { module?: string; status?: string }[];
 };
-
-const HIGH_ABSENCE_THRESHOLD = 4;
 
 const PAGE_SIZE = 6;
 
@@ -122,10 +131,19 @@ function justificationRequestsTouchingModule(
   return n;
 }
 
-function absenceCountColor(count: number, excluded: boolean) {
-  if (excluded || count >= HIGH_ABSENCE_THRESHOLD) return "#DF2D3EF2";
-  if (count >= 3) return "#E7CE51F2";
-  return "#74A7BDF2";
+function justifiedAbsencesByModuleFromJustifications(
+  list: RawJustification[]
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const j of list) {
+    const atts = j.attendances ?? [];
+    for (const a of atts) {
+      const module = normalizeModule(a.module).toLowerCase();
+      if (!module || a.status !== "justified") continue;
+      out.set(module, (out.get(module) ?? 0) + 1);
+    }
+  }
+  return out;
 }
 
 function buildDayCards(
@@ -181,6 +199,31 @@ export default function StudentAbsencesView() {
   const [dayCards, setDayCards] = useState<AbsenceDayCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadNonce, setLoadNonce] = useState(0);
+  const [exclusionLimit, setExclusionLimit] = useState(
+    getModuleExclusionAbsenceLimit
+  );
+  const [exclusionMode, setExclusionMode] = useState(getModuleExclusionCountMode);
+  const [justifiedLimit, setJustifiedLimit] = useState(
+    getModuleExclusionJustifiedLimit
+  );
+  const [unjustifiedLimit, setUnjustifiedLimit] = useState(
+    getModuleExclusionUnjustifiedLimit
+  );
+
+  useEffect(() => {
+    const syncLimit = () => {
+      setExclusionLimit(getModuleExclusionAbsenceLimit());
+      setExclusionMode(getModuleExclusionCountMode());
+      setJustifiedLimit(getModuleExclusionJustifiedLimit());
+      setUnjustifiedLimit(getModuleExclusionUnjustifiedLimit());
+    };
+    window.addEventListener(MODULE_EXCLUSION_POLICY_CHANGED_EVENT, syncLimit);
+    return () =>
+      window.removeEventListener(
+        MODULE_EXCLUSION_POLICY_CHANGED_EVENT,
+        syncLimit
+      );
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,6 +260,8 @@ export default function StudentAbsencesView() {
         const modList = Array.isArray(rawMod) ? rawMod : [];
         const dateList = Array.isArray(rawDate) ? rawDate : [];
 
+        const justifiedByModule =
+          justifiedAbsencesByModuleFromJustifications(justifications);
         const nextRows: AbsenceRow[] = modList.map(
           (entry: unknown, idx: number) => {
             const row = entry as ByModuleApiEntry;
@@ -226,7 +271,17 @@ export default function StudentAbsencesView() {
               typeof row.absence_count === "number"
                 ? row.absence_count
                 : Number(row.absence_count) || 0;
-            const excluded = absenceCount >= HIGH_ABSENCE_THRESHOLD;
+            const justifiedCount =
+              justifiedByModule.get(module.trim().toLowerCase()) ?? 0;
+            const excluded = isStudentExcludedFromAttendanceCounts(
+              { justified: justifiedCount, unjustified: absenceCount },
+              {
+                mode: exclusionMode,
+                generalLimit: exclusionLimit,
+                justifiedLimit,
+                unjustifiedLimit,
+              }
+            );
             const justificationCount = justificationRequestsTouchingModule(
               justifications,
               module
@@ -235,6 +290,7 @@ export default function StudentAbsencesView() {
               id: `m-${module}-${idx}`,
               module,
               absenceCount,
+              justifiedCount,
               justificationCount,
               excluded,
             };
@@ -253,6 +309,14 @@ export default function StudentAbsencesView() {
         if (!cancelled) {
           setModuleRows(nextRows);
           setDayCards(cards);
+          notifyStudentAbsenceRisk(
+            nextRows.map((r) => ({
+              name: r.module,
+              unjustified: r.absenceCount,
+              justified: r.justifiedCount,
+            })),
+            isAr
+          );
         }
       } catch (e: unknown) {
         const msg =
@@ -273,7 +337,14 @@ export default function StudentAbsencesView() {
     return () => {
       cancelled = true;
     };
-  }, [isAr, loadNonce]);
+  }, [
+    isAr,
+    loadNonce,
+    exclusionLimit,
+    exclusionMode,
+    justifiedLimit,
+    unjustifiedLimit,
+  ]);
 
   const filteredRows = useMemo(() => {
     let rows = moduleRows;
@@ -344,27 +415,31 @@ export default function StudentAbsencesView() {
   return (
     <div className="w-full max-w-5xl space-y-10 pb-12">
       <header className="space-y-2 ">
-        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] md:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] md:text-3xl dark:text-[#EEF4F7]">
           {isAr ? "غياباتك" : "Your Absences"}
         </h1>
-        <p className="text-[15px] text-[#51689A]">
+        <p className="text-[15px] text-[#51689A] dark:text-[#9BA8C4]">
           {isAr
-            ? "اطّلع على غياباتك حسب كل مادة (من الخادم)."
-            : "absence counts per module from the attendance API"}
+            ? exclusionMode === "general"
+              ? `غياباتك حسب المادة. الاستبعاد من مادة يبدأ من الحد العام (${exclusionLimit}).`
+              : `غياباتك حسب المادة. الاستبعاد يكون عند حد المبرر (${justifiedLimit}) أو غير المبرر (${unjustifiedLimit}).`
+            : exclusionMode === "general"
+              ? `Absences by module. You are excluded from a module after the general limit (${exclusionLimit}).`
+              : `Absences by module. Exclusion uses split limits: justified (${justifiedLimit}) or unjustified (${unjustifiedLimit}).`}
         </p>
       </header>
 
       {loading ? (
-        <p className="text-sm text-[#51689A]">{isAr ? "جاري التحميل…" : "Loading…"}</p>
+        <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">{isAr ? "جاري التحميل…" : "Loading…"}</p>
       ) : null}
 
       <section
-        className="overflow-hidden rounded-2xl border border-[#51689A]/25 bg-white shadow-sm"
+        className="overflow-hidden rounded-2xl border border-[#51689A]/25 bg-white shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]"
         aria-labelledby="absence-list-heading"
       >
-        <div className="flex flex-col gap-3 border-b border-[#51689A]/15 bg-[#F6F7FE] px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-3 border-b border-[#51689A]/15 bg-[#F6F7FE] px-4 dark:border-[#383F58] dark:bg-[#242A40] py-4 sm:px-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ">
-            <div className="flex items-center gap-2 text-[#1B2065]">
+            <div className="flex items-center gap-2 text-[#1B2065] dark:text-[#EEF4F7]">
               <BookA className="size-5 shrink-0 opacity-90" aria-hidden />
               <h2
                 id="absence-list-heading"
@@ -387,7 +462,7 @@ export default function StudentAbsencesView() {
                   }}
                 >
                   <SelectTrigger
-                    className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-sm font-medium text-[#1B2065] shadow-sm"
+                    className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-sm font-medium text-[#1B2065] shadow-sm dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7]"
                     aria-label={
                       isAr ? "تصفية حسب الاستبعاد" : "Filter by exclusion state"
                     }
@@ -411,10 +486,16 @@ export default function StudentAbsencesView() {
                         {isAr ? "الكل" : "All"}
                       </SelectItem>
                       <SelectItem value="excluded">
-                        {isAr ? "مرتفع" : "High (≥4)"}
+                        {isAr
+                          ? exclusionMode === "general"
+                            ? `مستبعد (≥${exclusionLimit})`
+                            : `مستبعد (مبرر ${justifiedLimit} / غير مبرر ${unjustifiedLimit})`
+                          : exclusionMode === "general"
+                            ? `Excluded (≥${exclusionLimit})`
+                            : `Excluded (justified ${justifiedLimit} / unjustified ${unjustifiedLimit})`}
                       </SelectItem>
                       <SelectItem value="nonExcluded">
-                        {isAr ? "أقل" : "Below threshold"}
+                        {isAr ? "ضمن الحد" : "Within limit"}
                       </SelectItem>
                     </SelectGroup>
                   </SelectContent>
@@ -433,7 +514,7 @@ export default function StudentAbsencesView() {
                     setCurrentPage(1);
                   }}
                   placeholder={isAr ? "بحث…" : "Search..."}
-                  className="h-10 rounded-xl border-[#51689A]/25 bg-[#FEF9F9] ps-9 shadow-none"
+                  className="h-10 rounded-xl border-[#51689A]/25 bg-[#FEF9F9] ps-9 shadow-none dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7]"
                   aria-label={isAr ? "بحث في القائمة" : "Search absence list"}
                   disabled={loading}
                 />
@@ -445,7 +526,7 @@ export default function StudentAbsencesView() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
-              <tr className="bg-[#51689A] text-white">
+              <tr className="bg-[#51689A] text-white dark:bg-[#242A40] dark:text-[#EEF4F7]">
                 <th className="px-4 py-3 text-start font-semibold">
                   {isAr ? "المادة" : "Module"}
                 </th>
@@ -465,7 +546,7 @@ export default function StudentAbsencesView() {
                 <tr>
                   <td
                     colSpan={4}
-                    className="px-4 py-8 text-center text-sm text-[#51689A]"
+                    className="px-4 py-8 text-center text-sm text-[#51689A] dark:text-[#9BA8C4]"
                   >
                     {loading
                       ? isAr ? "جاري التحميل…" : "Loading…"
@@ -478,18 +559,26 @@ export default function StudentAbsencesView() {
                 pageRows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b border-[#51689A]/10 last:border-b-0"
+                    className="border-b border-[#51689A]/10 last:border-b-0 dark:border-[#383F58]"
                   >
-                    <td className="px-4 py-4 text-start text-[#1B2065]">
+                    <td className="px-4 py-4 text-start text-[#1B2065] dark:text-[#EEF4F7]">
                       {row.module}
                     </td>
                     <td
                       className="px-4 py-4 text-center font-semibold tabular-nums"
                       style={{
-                        color: absenceCountColor(
-                          row.absenceCount,
-                          row.excluded
-                        ),
+                        color:
+                          exclusionMode === "general"
+                            ? getAbsenceSeverityColor(
+                                row.absenceCount + row.justifiedCount,
+                                exclusionLimit
+                              )
+                            : row.excluded
+                              ? "#DF2D3E"
+                              : getAbsenceSeverityColor(
+                                  row.absenceCount,
+                                  unjustifiedLimit
+                                ),
                       }}
                     >
                       {row.absenceCount}
@@ -499,11 +588,11 @@ export default function StudentAbsencesView() {
                     </td>
                     <td className="px-4 py-4 text-center">
                       {row.excluded ? (
-                        <span className="inline-flex min-w-[5.5rem] justify-center rounded-full border border-[#DF2D3EF2] bg-[#FFD1D5F2] px-3 py-1 text-xs font-semibold text-[#DF2D3EF2]">
-                          {isAr ? "مرتفع" : "High"}
+                        <span className="inline-flex min-w-[5.5rem] justify-center rounded-full border border-[#DF2D3EF2] bg-[#FFD1D5F2] px-3 py-1 text-xs font-semibold text-[#DF2D3EF2] dark:border-[#E85462] dark:bg-[#3A1A22] dark:text-[#F0707A]">
+                          {isAr ? "مستبعد" : "Excluded"}
                         </span>
                       ) : (
-                        <span className="inline-flex min-w-[5.5rem] justify-center rounded-full border border-[#74A7BD] bg-[#EEFAFF] px-3 py-1 text-xs font-semibold text-[#74A7BD]">
+                        <span className="inline-flex min-w-[5.5rem] justify-center rounded-full border border-[#74A7BD] bg-[#EEFAFF] px-3 py-1 text-xs font-semibold text-[#74A7BD] dark:border-[#74A7BD] dark:bg-[#152A38] dark:text-[#74A7BD]">
                           {isAr ? "معتاد" : "Normal"}
                         </span>
                       )}
@@ -516,8 +605,8 @@ export default function StudentAbsencesView() {
         </div>
 
         {filteredRows.length > 0 && (
-          <div className="flex flex-col items-center justify-between gap-2 border-t border-[#51689A]/15 bg-[#F6F7FE] px-3 py-2 sm:flex-row sm:px-4 ">
-            <p className="text-xs text-[#51689A]">
+          <div className="flex flex-col items-center justify-between gap-2 border-t border-[#51689A]/15 bg-[#F6F7FE] px-3 dark:border-[#383F58] dark:bg-[#242A40] py-2 sm:flex-row sm:px-4 ">
+            <p className="text-xs text-[#51689A] dark:text-[#9BA8C4]">
               {isAr
                 ? `الصفحة ${currentPageSafe} من ${totalPages}`
                 : `Page ${currentPageSafe} of ${totalPages}`}
@@ -582,10 +671,10 @@ export default function StudentAbsencesView() {
 
       <section className="space-y-5">
         <header className="space-y-2">
-          <h2 className="text-xl font-bold tracking-tight text-[#1B2065] md:text-2xl">
+          <h2 className="text-xl font-bold tracking-tight text-[#1B2065] md:text-2xl dark:text-[#EEF4F7]">
             {isAr ? "تواريخ غيابك" : "Your Absence Dates"}
           </h2>
-          <p className="text-[15px] text-[#51689A]">
+          <p className="text-[15px] text-[#51689A] dark:text-[#9BA8C4]">
             {isAr
               ? "راجع تواريخ الغياب، ثم اختر اليوم وأرسل طلبًا للشؤون عبر الواجهة."
               : "Select dates (absent slots from the API), then justify with file upload."}
@@ -648,7 +737,7 @@ export default function StudentAbsencesView() {
         </div>
 
         {!loading && dayCards.length === 0 ? (
-          <p className="text-sm text-[#51689A]">
+          <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
             {isAr
               ? "لا توجد سجلات غياب لمختارها من الخادم."
               : "No absent attendance rows returned for your account."}

@@ -6,8 +6,7 @@ import { buildApiAbsoluteUrl } from "./apiBase";
  * DRF’s usual trailing slash, or the `api()` helper in `lib/api.ts` (pass the same
  * string without a leading `/`).
  *
- * The frontend-only notifications feature uses `/api/notifications/` — that route may
- * be absent in Django; `notificationsApi.ts` handles that separately.
+ * Server notifications: `lib/notificationsApi.ts` → `/api/notifications/`.
  *
  * Typed HTTP helpers for every route: `lib/checkinClient.ts` (import from there for calls).
  */
@@ -64,11 +63,11 @@ export const checkinPath = {
   },
   /**
    * `documents` app — mounted at `/api/documents/`.
-   * DRF router registers the `DocumentViewSet` at `khra/` (see backend `documents/urls.py`).
+   * DRF router registers the `DocumentViewSet` at root (`""`) under that prefix.
    */
   documents: {
-    khra: "api/documents/khra",
-    khraDetail: (id: string | number) => `api/documents/khra/${id}` as const,
+    collection: "api/documents",
+    detail: (id: string | number) => `api/documents/${id}` as const,
     /** GET `ProfessorTodayView` — `professor` is the display name from the timetable PDFs. */
     scheduleToday: (professor: string) =>
       `api/documents/schedule/today/${encodeURIComponent(professor)}` as const,
@@ -86,8 +85,42 @@ export const checkinPath = {
     detail: (id: string | number) => `api/justifications/${id}` as const,
     /** GET — student only; same payload shape as list but scoped server-side */
     myJustifications: "api/justifications/my_justifications",
+    /** GET — counters by status for current user scope. */
+    count: "api/justifications/count",
     accept: (id: string | number) => `api/justifications/${id}/accept` as const,
     refuse: (id: string | number) => `api/justifications/${id}/refuse` as const,
+  },
+  /** `extra_sessions` app — router at `/api/extra-sessions/` */
+  extraSessions: {
+    collection: "api/extra-sessions",
+    detail: (id: string | number) => `api/extra-sessions/${id}` as const,
+    myRequests: "api/extra-sessions/my_requests",
+    upcoming: "api/extra-sessions/upcoming",
+    accept: (id: string | number) =>
+      `api/extra-sessions/${id}/accept` as const,
+    refuse: (id: string | number) =>
+      `api/extra-sessions/${id}/refuse` as const,
+    openSession: (id: string | number) =>
+      `api/extra-sessions/${id}/open_session` as const,
+  },
+  /** `teacher_absence` app — router at `/api/teacher-absence/` */
+  teacherAbsence: {
+    collection: "api/teacher-absence",
+    detail: (id: string | number) => `api/teacher-absence/${id}` as const,
+    myRequests: "api/teacher-absence/my_requests",
+    accept: (id: string | number) =>
+      `api/teacher-absence/${id}/accept` as const,
+    refuse: (id: string | number) =>
+      `api/teacher-absence/${id}/refuse` as const,
+  },
+  /** `notifications` app — router at `/api/notifications/` */
+  notifications: {
+    collection: "api/notifications",
+    detail: (id: string | number) => `api/notifications/${id}` as const,
+    markRead: (id: string | number) =>
+      `api/notifications/${id}/mark_read` as const,
+    unreadCount: "api/notifications/unread_count",
+    broadcast: "api/notifications/broadcast",
   },
 } as const;
 

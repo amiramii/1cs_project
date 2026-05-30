@@ -100,6 +100,15 @@ export function loadAllTeachers() {
   )
 }
 
+export function loadAllSchoolingStaff() {
+  return loadDrfListAll(
+    getApiBaseUrl(),
+    `${checkinPath.schooling}/`,
+    listAuthHeaders(),
+    {}
+  )
+}
+
 export async function deleteUserById(
   id: string | number
 ): Promise<Response> {
@@ -126,6 +135,10 @@ export async function getTeacherById(id: string | number): Promise<Response> {
   return api(checkinPath.teacher(id), { method: "GET" })
 }
 
+export async function getSchoolingById(id: string | number): Promise<Response> {
+  return api(checkinPath.schooler(id), { method: "GET" })
+}
+
 /** @see `StudentCreateSerializer` in backend */
 export async function createStudent(body: unknown): Promise<Response> {
   return api(checkinPath.students, {
@@ -142,6 +155,38 @@ export async function createTeacher(body: unknown): Promise<Response> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
+}
+
+export async function createSchooling(body: unknown): Promise<Response> {
+  return api(checkinPath.schooling, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+}
+
+export async function patchSchooling(
+  id: string | number,
+  body: Record<string, unknown>
+): Promise<Response> {
+  return api(checkinPath.schooler(id), {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function putSchooling(
+  id: string | number,
+  body: Record<string, unknown>
+): Promise<Response> {
+  return api(checkinPath.schooler(id), {
+    method: "PUT",
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteSchoolingById(id: string | number): Promise<Response> {
+  return api(checkinPath.schooler(id), { method: "DELETE" })
 }
 
 export async function postResetPasswordRequest(body: { email: string }): Promise<Response> {
@@ -335,6 +380,125 @@ export async function patchAttendanceRow(
     headers: jsonAuthHeaders(),
     body: JSON.stringify(body),
   })
+}
+
+/** Paginated sessions scoped to one teaching assignment. */
+export function loadSessionsByAssignment(assignmentId: number) {
+  return loadDrfListAll<Record<string, unknown>>(
+    getApiBaseUrl(),
+    `${checkinPath.attendance.sessions}/?assignment=${assignmentId}`,
+    listAuthHeaders(),
+    {}
+  )
+}
+
+// --- extra session requests (`extra_sessions` app at `/api/extra-sessions/`) ---
+
+export type ExtraSessionRequestRow = {
+  id: number
+  teacher_name?: string
+  teacher_email?: string
+  module_name?: string
+  group_name?: string
+  date?: string
+  start_time?: string
+  end_time?: string
+  status?: "pending" | "accepted" | "refused"
+  reviewed_by_name?: string | null
+  session_created?: boolean
+  created_at?: string
+}
+
+function parseExtraSessionList(raw: unknown): ExtraSessionRequestRow[] {
+  return unwrapList<ExtraSessionRequestRow>(raw)
+}
+
+async function authorizedFetchJsonList(
+  href: string
+): Promise<ExtraSessionRequestRow[]> {
+  const res = await authorizedFetchBare(href, { method: "GET" })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(summarizeUpstreamError(text, res.status))
+  }
+  let raw: unknown = null
+  try {
+    raw = text ? JSON.parse(text) : null
+  } catch {
+    throw new Error("Invalid response from extra-sessions endpoint")
+  }
+  return parseExtraSessionList(raw)
+}
+
+export async function loadExtraSessionMyRequests(): Promise<
+  ExtraSessionRequestRow[]
+> {
+  return authorizedFetchJsonList(checkinUrl(checkinPath.extraSessions.myRequests))
+}
+
+export async function loadExtraSessionUpcoming(): Promise<
+  ExtraSessionRequestRow[]
+> {
+  return authorizedFetchJsonList(checkinUrl(checkinPath.extraSessions.upcoming))
+}
+
+export function loadExtraSessionSchoolingList() {
+  return loadDrfListAll<ExtraSessionRequestRow>(
+    getApiBaseUrl(),
+    `${checkinPath.extraSessions.collection}/`,
+    listAuthHeaders(),
+    {}
+  )
+}
+
+export async function postExtraSessionRequest(body: {
+  teaching_assignment: number
+  date: string
+  start_time: string
+  end_time: string
+}): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.extraSessions.collection), {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+    body: JSON.stringify(body),
+  })
+}
+
+export async function patchExtraSessionAccept(
+  id: string | number
+): Promise<Response> {
+  return api(checkinPath.extraSessions.accept(id), {
+    method: "PATCH",
+    body: "{}",
+  })
+}
+
+export async function patchExtraSessionRefuse(
+  id: string | number
+): Promise<Response> {
+  return api(checkinPath.extraSessions.refuse(id), {
+    method: "PATCH",
+    body: "{}",
+  })
+}
+
+export async function postExtraSessionOpenSession(
+  id: string | number
+): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.extraSessions.openSession(id)), {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+  })
+}
+
+export async function getExtraSessionById(id: string | number): Promise<Response> {
+  return api(checkinPath.extraSessions.detail(id), { method: "GET" })
+}
+
+export async function deleteExtraSessionById(
+  id: string | number
+): Promise<Response> {
+  return api(checkinPath.extraSessions.detail(id), { method: "DELETE" })
 }
 
 // --- users (`UserViewSet`, admin) ---
@@ -552,7 +716,7 @@ export async function deleteTeachingAssignment(
 export function loadAllDocuments() {
   return loadDrfListAll(
     getApiBaseUrl(),
-    `${checkinPath.documents.khra}/`,
+    `${checkinPath.documents.collection}/`,
     listAuthHeaders(),
     {}
   )
@@ -562,18 +726,29 @@ export function loadAllDocuments() {
 export async function fetchDocumentsByAudience(
   audience: string
 ): Promise<Response> {
-  const href = `${checkinUrl(checkinPath.documents.khra)}?audience=${encodeURIComponent(audience)}`
+  const href = `${checkinUrl(checkinPath.documents.collection)}?audience=${encodeURIComponent(audience)}`
+  const fallbackHref = checkinUrl(checkinPath.documents.collection)
   let res = await fetch(href, { headers: listAuthHeaders() })
 
   // Stale Bearer tokens return 401; `api()` refreshes elsewhere but this used raw fetch.
-  if (res.status === 401 && typeof window !== "undefined") {
+  if ((res.status === 401 || res.status === 403) && typeof window !== "undefined") {
     if (await attemptTokenRefresh()) {
       res = await fetch(href, { headers: listAuthHeaders() })
     }
   }
   // List is intentionally readable without JWT; retry without a bad/expired header.
-  if (res.status === 401) {
+  // Some backends respond 403 (not 401) for invalid Bearer tokens.
+  if (res.status === 401 || res.status === 403) {
     res = await fetch(href, {})
+  }
+
+  // Some backend builds do not implement `?audience=` filtering and return 4xx.
+  // Fallback to the plain list endpoint; caller can filter client-side.
+  if (res.status === 400 || res.status === 404 || res.status === 422) {
+    res = await fetch(fallbackHref, { headers: listAuthHeaders() })
+    if (res.status === 401 || res.status === 403) {
+      res = await fetch(fallbackHref, {})
+    }
   }
 
   return res
@@ -595,13 +770,13 @@ export async function fetchProfessorScheduleToday(
 export async function getDocumentById(
   id: string | number
 ): Promise<Response> {
-  return fetch(checkinUrl(checkinPath.documents.khraDetail(id)), {
+  return fetch(checkinUrl(checkinPath.documents.detail(id)), {
     headers: listAuthHeaders(),
   })
 }
 
 export async function postDocument(formData: FormData): Promise<Response> {
-  return fetch(checkinUrl(checkinPath.documents.khra), {
+  return fetch(checkinUrl(checkinPath.documents.collection), {
     method: "POST",
     headers: listAuthHeaders(),
     body: formData,
@@ -612,7 +787,7 @@ export async function patchDocument(
   id: string | number,
   body: Record<string, unknown>
 ): Promise<Response> {
-  return api(checkinPath.documents.khraDetail(id), {
+  return api(checkinPath.documents.detail(id), {
     method: "PATCH",
     body: JSON.stringify(body),
   })
@@ -622,7 +797,7 @@ export async function putDocument(
   id: string | number,
   body: Record<string, unknown>
 ): Promise<Response> {
-  return api(checkinPath.documents.khraDetail(id), {
+  return api(checkinPath.documents.detail(id), {
     method: "PUT",
     body: JSON.stringify(body),
   })
@@ -631,7 +806,7 @@ export async function putDocument(
 export async function deleteDocument(
   id: string | number
 ): Promise<Response> {
-  return fetch(checkinUrl(checkinPath.documents.khraDetail(id)), {
+  return fetch(checkinUrl(checkinPath.documents.detail(id)), {
     method: "DELETE",
     headers: listAuthHeaders(),
   })
@@ -713,6 +888,12 @@ export async function loadStudentJustificationsList(): Promise<
   return unwrapList<Record<string, unknown>>(raw)
 }
 
+export async function fetchJustificationCount(): Promise<Response> {
+  return authorizedFetchBare(checkinUrl(checkinPath.justifications.count), {
+    method: "GET",
+  })
+}
+
 /**
  * multipart/create — repeats `attendance_ids` keys for DRF `ListField` parsing.
  * @see `JustificationCreateSerializer` in Django.
@@ -774,6 +955,118 @@ export async function getJustificationById(
   id: string | number
 ): Promise<Response> {
   return api(checkinPath.justifications.detail(id), { method: "GET" })
+}
+
+export async function deleteJustificationById(
+  id: string | number
+): Promise<Response> {
+  return api(checkinPath.justifications.detail(id), { method: "DELETE" })
+}
+
+// --- teacher absence (`teacher_absence` app at `/api/teacher-absence/`) ---
+
+export type TeacherAbsenceRequestRow = {
+  id: number
+  teacher_name?: string
+  reason?: string
+  file?: string | null
+  status?: string
+  created_at?: string
+  dates?: { date?: string }[]
+}
+
+function parseTeacherAbsenceList(raw: unknown): TeacherAbsenceRequestRow[] {
+  return unwrapList<TeacherAbsenceRequestRow>(raw)
+}
+
+export async function loadTeacherAbsenceMyRequests(): Promise<
+  TeacherAbsenceRequestRow[]
+> {
+  const href = checkinUrl(checkinPath.teacherAbsence.myRequests)
+  const res = await authorizedFetchBare(href, { method: "GET" })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(summarizeUpstreamError(text, res.status))
+  }
+  let raw: unknown = null
+  try {
+    raw = text ? JSON.parse(text) : null
+  } catch {
+    throw new Error("Invalid response from teacher absence endpoint")
+  }
+  return parseTeacherAbsenceList(raw)
+}
+
+export function loadTeacherAbsenceSchoolingList() {
+  return loadDrfListAll<TeacherAbsenceRequestRow>(
+    getApiBaseUrl(),
+    `${checkinPath.teacherAbsence.collection}/`,
+    listAuthHeaders(),
+    {}
+  )
+}
+
+export async function postTeacherAbsenceCreate(body: {
+  dates: string[]
+  reason: string
+  file?: File | null
+}): Promise<Response> {
+  const buildFd = () => {
+    const fd = new FormData()
+    for (const d of body.dates) {
+      fd.append("dates", d)
+    }
+    fd.append("reason", body.reason)
+    if (body.file) fd.append("file", body.file)
+    return fd
+  }
+  let res = await fetch(checkinUrl(checkinPath.teacherAbsence.collection), {
+    method: "POST",
+    headers: listAuthHeaders(),
+    body: buildFd(),
+  })
+  if (
+    res.status === 401 &&
+    typeof window !== "undefined" &&
+    (await attemptTokenRefresh())
+  ) {
+    res = await fetch(checkinUrl(checkinPath.teacherAbsence.collection), {
+      method: "POST",
+      headers: listAuthHeaders(),
+      body: buildFd(),
+    })
+  }
+  return res
+}
+
+export async function patchTeacherAbsenceAccept(
+  id: string | number
+): Promise<Response> {
+  return api(checkinPath.teacherAbsence.accept(id), {
+    method: "PATCH",
+    body: "{}",
+  })
+}
+
+export async function patchTeacherAbsenceRefuse(
+  id: string | number
+): Promise<Response> {
+  return api(checkinPath.teacherAbsence.refuse(id), {
+    method: "PATCH",
+    body: "{}",
+  })
+}
+
+export async function getTeacherAbsenceById(
+  id: string | number
+): Promise<Response> {
+  return api(checkinPath.teacherAbsence.detail(id), { method: "GET" })
+}
+
+export async function deleteTeacherAbsenceById(
+  id: string | number
+): Promise<Response> {
+  return api(checkinPath.teacherAbsence.detail(id), { method: "DELETE" })
 }
 
 // --- drf-spectacular (read-only) ---

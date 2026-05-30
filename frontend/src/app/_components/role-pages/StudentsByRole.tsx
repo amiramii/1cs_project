@@ -48,14 +48,14 @@ export default function StudentsByRole({
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl space-y-5">
-      <header className="rounded-xl border border-[#51689A]/20 bg-[#51689A]/5 p-5 shadow-sm">
-        <h1 className="text-xl font-semibold text-foreground">
+      <header className="rounded-xl border border-[#51689A]/20 bg-[#51689A]/5 p-5 shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]/80">
+        <h1 className="text-xl font-semibold text-foreground dark:text-[#EEF4F7]">
           {isAr ? "طلابي" : "My students"}
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm text-muted-foreground dark:text-[#9BA8C4]">
           {isAr
-            ? "عرض الطلاب المرتبطين بموادك وحصصك — بدون أدوات إضافة جماعية للمسؤول."
-            : "Students linked to your courses and sessions—without bulk admin import tools."}
+            ? "كل الطلاب المسجّلين في شعبك."
+            : "Everyone enrolled in your classes."}
         </p>
       </header>
       <ProfStudentsRoster />

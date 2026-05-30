@@ -71,8 +71,10 @@ function SessionHistorySemesterSection({
 
     const ay = inferAcademicStartYearFromDate(latest.date);
     const nextSem = inferSemesterForDate(latest.date, ay);
-    setAcademicStartYear(ay);
-    setSem(nextSem);
+    queueMicrotask(() => {
+      setAcademicStartYear(ay);
+      setSem(nextSem);
+    });
   }, [sessions, from, to]);
   const yearLabel = (y: number) => `${y}–${(y + 1).toString().slice(-2)}`;
 
@@ -126,7 +128,7 @@ function SessionHistorySemesterSection({
     p.set("a", String(assignmentId));
     p.set("ay", String(academicStartYear));
     p.set("sem", sem);
-    return `/Sessions/semestrial?${p.toString()}`;
+    return `/Students/semestrial?${p.toString()}`;
   };
 
   return (
@@ -143,22 +145,22 @@ function SessionHistorySemesterSection({
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
-          <p className="text-xs font-medium text-[#51689A]">
+          <p className="text-xs font-medium text-[#51689A] dark:text-[#9BA8C4]">
             {isAr ? "السنة الدراسية" : "Academic year"}
           </p>
-          <div className="flex items-center gap-1 rounded-full border border-[#51689A]/30 bg-white px-1 py-0.5 shadow-sm">
+          <div className="flex items-center gap-1 rounded-full border border-[#51689A]/30 bg-white px-1 py-0.5 shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]">
             <Button
               type="button"
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-[#1B2065]"
+              className="h-8 w-8 text-[#1B2065] dark:text-[#EEF4F7]"
               onClick={() => nudgeYear(-1)}
               aria-label="Previous year"
             >
               <ChevronLeft className="size-4" />
             </Button>
             <span
-              className="min-w-[4.5rem] text-center text-sm font-semibold text-[#1B2065] tabular-nums"
+              className="min-w-[4.5rem] text-center text-sm font-semibold text-[#1B2065] tabular-nums dark:text-[#EEF4F7]"
               dir="ltr"
             >
               {yearLabel(academicStartYear)}
@@ -167,14 +169,14 @@ function SessionHistorySemesterSection({
               type="button"
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-[#1B2065]"
+              className="h-8 w-8 text-[#1B2065] dark:text-[#EEF4F7]"
               onClick={() => nudgeYear(1)}
               aria-label="Next year"
             >
               <ChevronRight className="size-4" />
             </Button>
           </div>
-          <div className="flex gap-1 rounded-lg bg-[#EEF0FB] p-0.5">
+          <div className="flex gap-1 rounded-lg bg-[#EEF0FB] p-0.5 dark:bg-[#242A40]">
             {(["S1", "S2"] as const).map((s) => (
               <button
                 key={s}
@@ -183,8 +185,8 @@ function SessionHistorySemesterSection({
                 className={cn(
                   "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
                   sem === s
-                    ? "bg-[#1B2065] text-white shadow"
-                    : "text-[#51689A] hover:bg-white/60"
+                    ? "bg-[#1B2065] text-white shadow dark:bg-[#74A7BD] dark:text-[#13182A]"
+                    : "text-[#51689A] hover:bg-white/60 dark:text-[#9BA8C4] dark:hover:bg-[#383F58]/60"
                 )}
               >
                 {s}
@@ -211,8 +213,8 @@ function SessionHistorySemesterSection({
       </div>
 
       {assignments.length === 0 ? (
-        <div className="relative rounded-2xl border border-border bg-[#F6F7FE] p-10 text-center">
-          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-white shadow-inner">
+        <div className="relative rounded-2xl border border-border bg-[#F6F7FE] p-10 text-center dark:border-[#383F58] dark:bg-[#1A2036]">
+          <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-white shadow-inner dark:bg-[#242A40]">
             <CalendarRange
               className="size-8 text-blue-primary/70"
               strokeWidth={1.25}
@@ -239,13 +241,13 @@ function SessionHistorySemesterSection({
                     ? `${sessionCount} حصة في هذه الفترة`
                     : `${sessionCount} session(s) in this period`
                 }
-                className="flex w-full items-center justify-between gap-4 rounded-2xl border border-[#C5D4E0] bg-[#FAFBFF] p-4 text-start shadow-sm transition-all hover:border-[#74A7BD]/50 hover:shadow-md sm:gap-6 sm:p-5"
+                className="flex w-full items-center justify-between gap-4 rounded-2xl border border-[#C5D4E0] bg-[#FAFBFF] p-4 text-start shadow-sm transition-all hover:border-[#74A7BD]/50 hover:shadow-md sm:gap-6 sm:p-5 dark:border-[#383F58] dark:bg-[#1A2036] dark:hover:border-[#74A7BD]/25 dark:hover:bg-[#242A40]"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-bold text-[#1B2065] sm:text-lg">
+                  <p className="truncate text-base font-bold text-[#1B2065] sm:text-lg dark:text-[#EEF4F7]">
                     {assignment.module_name ?? "—"}
                   </p>
-                  <p className="mt-0.5 text-sm text-[#51689A]">
+                  <p className="mt-0.5 text-sm text-[#51689A] dark:text-[#9BA8C4]">
                     {assignment.group_name ?? "—"}{" "}
                     <span className="text-[#1B2065]/40">·</span>{" "}
                     {sem} {yearLabel(academicStartYear)}
@@ -259,12 +261,12 @@ function SessionHistorySemesterSection({
                     >
                       {presentPct}%
                     </span>
-                    <span className="text-xs font-medium text-[#51689A] sm:text-sm">
+                    <span className="text-xs font-medium text-[#51689A] sm:text-sm dark:text-[#9BA8C4]">
                       {isAr ? "حاضر" : "Present"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="text-xl font-bold tabular-nums text-[#51689A] sm:text-2xl">
+                    <span className="text-xl font-bold tabular-nums text-[#51689A] sm:text-2xl dark:text-[#9BA8C4]">
                       {participationPct}%
                     </span>
                     <span className="max-w-[5.5rem] text-xs font-medium leading-snug text-[#51689A] sm:max-w-none sm:text-sm">

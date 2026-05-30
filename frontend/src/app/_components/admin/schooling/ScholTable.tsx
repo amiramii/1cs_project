@@ -1,10 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Search, Trash2 } from "lucide-react"
+import { Check, Funnel, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Pagination,
   PaginationContent,
@@ -19,7 +25,8 @@ import { getAccessToken } from "@/lib/tokenStorage"
 import { getApiBaseUrl } from "@/lib/apiBase"
 import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
-import { deleteTeacherById } from "@/lib/checkinClient"
+import { deleteSchoolingById } from "@/lib/checkinClient"
+import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
 
 type StaffRow = {
   id: string
@@ -36,7 +43,7 @@ type ApiSchoolingRow = {
 }
 
 const controlBtnClass =
-  "h-[43px] min-h-[43px] shrink-0 rounded-lg border border-[#51689A]/35 bg-white px-2.5 text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] sm:h-9 sm:min-h-0"
+  "h-[43px] min-h-[43px] shrink-0 rounded-lg border border-[#51689A]/35 bg-white px-2.5 text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] sm:h-9 sm:min-h-0 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7] dark:hover:bg-[#242A40]"
 
 const PAGE_SIZE = 10
 
@@ -47,6 +54,8 @@ export default function DataTable() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [departmentFilter, setDepartmentFilter] = useState("all")
+  const [openFilter, setOpenFilter] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -89,18 +98,40 @@ export default function DataTable() {
     void loadStaff()
   }, [loadStaff])
 
+  useEffect(() => {
+    return subscribeAdminCsvUploadSuccess("schooling", () => {
+      void loadStaff()
+    })
+  }, [loadStaff])
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
     return data.filter((row) => {
-      return (
+      const matchesSearch =
         q.length === 0 ||
         row.id.toLowerCase().includes(q) ||
         row.name.toLowerCase().includes(q) ||
         row.email.toLowerCase().includes(q) ||
         row.department.toLowerCase().includes(q)
-      )
+      if (!matchesSearch) return false
+      if (
+        departmentFilter !== "all" &&
+        row.department.trim().toUpperCase() !== departmentFilter
+      ) {
+        return false
+      }
+      return true
     })
-  }, [data, search])
+  }, [data, search, departmentFilter])
+
+  const departmentOptions = useMemo(() => {
+    const codes = new Set<string>()
+    for (const row of data) {
+      const code = row.department.trim().toUpperCase()
+      if (code === "CS" || code === "CP") codes.add(code)
+    }
+    return [...codes].sort()
+  }, [data])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
   const currentPageSafe = Math.min(currentPage, totalPages)
@@ -137,7 +168,7 @@ export default function DataTable() {
     if (!hasSelection) return
     const ids = [...selectedIds]
     for (const tid of ids) {
-      const res = await deleteTeacherById(tid)
+      const res = await deleteSchoolingById(tid)
       if (!res.ok) {
         setLoadError(
           isArabic
@@ -177,17 +208,17 @@ export default function DataTable() {
     setCurrentPage(page)
   }
 
-  const colCount = 4
+  const colCount = 5
 
   return (
-    <section className="mx-auto w-full max-w-full min-w-0 space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm">
+    <section className="mx-auto w-full max-w-full min-w-0 space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm dark:border-[#383F58] dark:bg-[#13182A]/40">
       {loadError && (
         <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {loadError}
         </p>
       )}
-      <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30  from-white to-[#FEF9F9]/90 p-3 sm:flex-row sm:items-center sm:justify-between bg-[#F6F7FE]">
-        <div className="flex items-center gap-2 text-[#1B2065F2] ">
+      <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30  from-white to-[#FEF9F9]/90 p-3 sm:flex-row sm:items-center sm:justify-between bg-[#F6F7FE] dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
+        <div className="flex items-center gap-2 text-[#1B2065F2] dark:text-[#EEF4F7] ">
           <p className="text-sm font-semibold sm:text-base">
             {isArabic ? "قائمة الموظفين" : "Staff list"}
           </p>
@@ -202,13 +233,52 @@ export default function DataTable() {
                 setCurrentPage(1)
               }}
               placeholder={isArabic ? "ابحث..." : "Search..."}
-              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9 "
+              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7] dark:placeholder:text-[#9BA8C4] "
             />
             <Search
-              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70 "
+              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70 dark:text-[#9BA8C4] "
               strokeWidth={2}
             />
           </div>
+
+          <DropdownMenu open={openFilter} onOpenChange={setOpenFilter}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className={`${controlBtnClass} inline-flex items-center gap-1.5`}
+              >
+                <Funnel className="size-4 shrink-0" />
+                <span>{isArabic ? "القسم" : "Department"}</span>
+                <span className="text-xs text-muted-foreground">
+                  ({departmentFilter === "all" ? (isArabic ? "الكل" : "All") : departmentFilter})
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[10rem] p-0">
+              <DropdownMenuItem
+                onClick={() => {
+                  setDepartmentFilter("all")
+                  setCurrentPage(1)
+                }}
+              >
+                <span>{isArabic ? "كل الأقسام" : "All departments"}</span>
+                {departmentFilter === "all" && <Check className="ms-auto size-4" />}
+              </DropdownMenuItem>
+              {departmentOptions.map((dep) => (
+                <DropdownMenuItem
+                  key={dep}
+                  onClick={() => {
+                    setDepartmentFilter(dep)
+                    setCurrentPage(1)
+                  }}
+                >
+                  <span>{dep}</span>
+                  {departmentFilter === dep && <Check className="ms-auto size-4" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <div className="flex flex-wrap items-center gap-1.5 ">
             {hasSelection && (
@@ -228,31 +298,31 @@ export default function DataTable() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[#74A7BD]/30 bg-white/90">
+      <div className="overflow-hidden rounded-lg border border-[#74A7BD]/30 bg-white/90 dark:border-[#74A7BD]/25 dark:bg-[#1A2036]/90">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-xs sm:text-sm">
             <thead>
-              <tr className="border-b-2 border-[#51689A]/20 bg-gradient-to-r from-white to-[#F6F8FF] text-[#1B2065F2]">
-                <th className="w-12 min-w-12 border-b border-[#D6DEEF] px-1 py-2.5 text-center sm:px-2">
+              <tr className="border-b-2 border-[#51689A]/20 bg-gradient-to-r from-white to-[#F6F8FF] text-[#1B2065F2] dark:border-[#383F58] dark:bg-gradient-to-r dark:from-[#1A2036] dark:to-[#242A40] dark:text-[#EEF4F7]">
+                <th className="w-12 min-w-12 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-center sm:px-2">
                   <div className="flex items-center justify-center">
                     <Checkbox
                       checked={allVisibleSelected}
                       onCheckedChange={toggleSelectAllVisible}
                       aria-label={isArabic ? "تحديد الصفحة" : "Select page"}
-                      className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white appearance-none rounded-full"
+                      className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white appearance-none rounded-full dark:border-[#74A7BD] dark:data-[state=checked]:bg-[#74A7BD]"
                     />
                   </div>
                 </th>
-                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "الرقم" : "User ID"}
                 </th>
-                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "الاسم" : "Name"}
                 </th>
-                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "البريد الإلكتروني" : "Email"}
                 </th>
-                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "القسم" : "Department"}
                 </th>
               </tr>
@@ -260,23 +330,26 @@ export default function DataTable() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={colCount} className="px-2 py-8 text-center text-sm text-[#5D719D]">
+                  <td colSpan={colCount} className="px-2 py-8 text-center text-sm text-[#5D719D] dark:text-[#9BA8C4]">
                     {isArabic ? "جارٍ التحميل…" : "Loading…"}
                   </td>
                 </tr>
               )}
               {!loading &&
                 visibleRows.map((row) => (
-                  <tr key={row.id} className="border-b border-[#D6DEEF] bg-gradient-to-r from-white to-[#FFF5F0]/75 text-[#1B2065F2]">
+                  <tr key={row.id} className="border-b border-[#D6DEEF] dark:border-[#383F58] bg-gradient-to-r from-white to-[#FFF5F0]/75 text-[#1B2065F2] dark:bg-gradient-to-r dark:from-[#1A2036] dark:to-[#242A40]/85 dark:text-[#EEF4F7]">
                     <td className="w-12 min-w-12 align-middle">
                       <div className="flex min-h-[2.75rem] items-center justify-center gap-0.5 px-0.5 py-1.5 sm:px-1">
                         <Checkbox
                           checked={selectedIds.has(row.id)}
                           onCheckedChange={() => toggleRowSelect(row.id)}
                           aria-label={`${isArabic ? "تحديد" : "Select"} ${row.name}`}
-                          className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white appearance-none rounded-full"
+                          className="border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white appearance-none rounded-full dark:border-[#74A7BD] dark:data-[state=checked]:bg-[#74A7BD]"
                         />
                       </div>
+                    </td>
+                    <td className="min-w-0 max-w-24 font-mono text-[10px] align-middle sm:max-w-none sm:px-1 sm:py-2.5 sm:text-xs">
+                      {row.id}
                     </td>
                     <td className="min-w-0 break-words align-middle pe-0.5 sm:px-1 sm:py-2.5">
                       {row.name}
@@ -284,13 +357,13 @@ export default function DataTable() {
                     <td className="min-w-0 align-middle sm:px-1 sm:py-2.5">
                       <a
                         href={`mailto:${row.email}`}
-                        className="break-all text-[#51689A] underline decoration-[#51689A] underline-offset-2 visited:text-[#51689A] hover:text-[#3d5280]"
+                        className="break-all text-[#51689A] underline decoration-[#51689A] underline-offset-2 visited:text-[#51689A] hover:text-[#3d5280] dark:text-[#74A7BD] dark:visited:text-[#74A7BD] dark:hover:text-[#EEF4F7]"
                       >
                         {row.email}
                       </a>
                     </td>
                     <td className="min-w-0 align-middle sm:px-1 sm:py-2.5">
-                      <span className="inline-flex items-center rounded-full border border-[#74A7BD]/50 bg-[#51689A]/10 px-2.5 py-0.5 text-xs font-medium text-[#51689A]">
+                      <span className="inline-flex items-center rounded-full border border-[#74A7BD]/50 bg-[#51689A]/10 px-2.5 py-0.5 text-xs font-medium text-[#51689A] dark:text-[#74A7BD]">
                         {row.department}
                       </span>
                     </td>
@@ -301,14 +374,14 @@ export default function DataTable() {
         </div>
 
         {!loading && visibleRows.length === 0 && (
-          <p className="py-5 text-center text-sm text-[#5D719D]">
+          <p className="py-5 text-center text-sm text-[#5D719D] dark:text-[#9BA8C4]">
             {isArabic ? "لا توجد نتائج." : "No matching staff found."}
           </p>
         )}
       </div>
 
-      <div className="flex flex-col items-center justify-between gap-2 rounded-lg border border-[#51689A]/40 bg-white px-3 py-2 sm:flex-row">
-        <p className="text-xs text-[#5D719D]">
+      <div className="flex flex-col items-center justify-between gap-2 rounded-lg border border-[#51689A]/40 bg-white px-3 py-2 sm:flex-row dark:border-[#383F58] dark:bg-[#1A2036]">
+        <p className="text-xs text-[#5D719D] dark:text-[#9BA8C4]">
           {isArabic
             ? `الصفحة ${currentPageSafe} من ${totalPages}`
             : `Page ${currentPageSafe} of ${totalPages}`}

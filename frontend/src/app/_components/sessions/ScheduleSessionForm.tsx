@@ -20,17 +20,19 @@ import type { AssignmentApi } from "@/lib/professorSessionData";
 
 const UNSET = "__schedule_unset__";
 
-const fieldLabelClass = "text-sm font-semibold text-[#1B2065F2]";
+const fieldLabelClass =
+  "text-sm font-semibold text-[#1B2065F2] dark:text-[#EEF4F7]";
 
 const selectTriggerClass =
   "h-11 w-full min-w-0 cursor-pointer rounded-lg border border-[#51689A]/45 bg-white px-3 text-sm text-[#1B2065F2] shadow-none " +
   "hover:bg-[#FEF9F9] focus-visible:border-[#1B2065] focus-visible:ring-2 focus-visible:ring-[#1B2065]/25 " +
-  "data-[placeholder]:text-[#51689A]/80 [&_[data-slot=select-value]]:w-full [&_[data-slot=select-value]]:text-start";
+  "data-[placeholder]:text-[#51689A] dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:hover:bg-[#383F58] dark:data-[placeholder]:text-[#9BA8C4] " +
+  "dark:focus-visible:border-[#74A7BD] dark:focus-visible:ring-[#74A7BD]/25 [&_[data-slot=select-value]]:w-full [&_[data-slot=select-value]]:text-start";
 
 const textInputClass =
   "h-11 w-full min-w-0 rounded-lg border border-[#51689A]/45 bg-white px-3 text-sm text-[#1B2065F2] shadow-none " +
-  "hover:bg-[#FEF9F9] placeholder:text-[#51689A]/80 " +
-  "focus:outline-none focus:border-[#1B2065] focus:ring-2 focus:ring-[#1B2065]/25 " +
+  "hover:bg-[#FEF9F9] placeholder:text-[#51689A] dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:placeholder:text-[#9BA8C4] " +
+  "focus:outline-none focus:border-[#1B2065] focus:ring-2 focus:ring-[#1B2065]/25 dark:focus:border-[#74A7BD] dark:focus:ring-[#74A7BD]/25 " +
   "transition-colors";
 
 function assignmentLabelLine(a: AssignmentApi): string {
@@ -161,17 +163,21 @@ export default function ScheduleSessionForm({
             className={cn(
               "z-[400] max-h-72 w-[var(--radix-select-trigger-width)]",
               "border border-[#51689A]/25 bg-white/55 shadow-lg ring-1 ring-white/40",
-              "backdrop-blur-2xl backdrop-saturate-150 dark:bg-popover/50 dark:ring-white/10"
+              "backdrop-blur-2xl backdrop-saturate-150 dark:border-[#383F58] dark:bg-[#242A40]/95 dark:text-[#EEF4F7] dark:ring-white/10"
             )}
             position="popper"
             sideOffset={4}
             align="start"
           >
-            <SelectItem value={UNSET} className="text-[#51689A] focus:text-[#1B2065F2]">
+            <SelectItem value={UNSET} className="text-[#51689A] dark:text-[#9BA8C4] focus:text-[#1B2065F2] dark:text-[#9BA8C4] dark:focus:text-[#EEF4F7]">
               {isAr ? "اختر…" : "Select…"}
             </SelectItem>
             {assignments.map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>
+              <SelectItem
+                key={a.id}
+                value={String(a.id)}
+                className="text-[#1B2065F2] focus:text-[#1B2065F2] dark:text-[#EEF4F7] dark:focus:text-[#EEF4F7]"
+              >
                 {assignmentLabelLine(a)}
               </SelectItem>
             ))}
@@ -209,10 +215,10 @@ export default function ScheduleSessionForm({
                   "h-11 w-full min-w-0 justify-between font-normal"
                 )}
               >
-                <span className="min-w-0 flex-1 truncate text-start text-[#1B2065F2]">
+                <span className="min-w-0 flex-1 truncate text-start text-[#1B2065F2] dark:text-[#EEF4F7]">
                   {formatDateTimeButton(isAr, sessionStart, sessionEnd)}
                 </span>
-                <div className="ms-1 flex shrink-0 items-center gap-1.5 text-[#51689A]">
+                <div className="ms-1 flex shrink-0 items-center gap-1.5 text-[#51689A] dark:text-[#9BA8C4]">
                   <Calendar className="size-4" strokeWidth={1.75} />
                   <ChevronDown className="size-4 opacity-70" />
                 </div>
@@ -220,7 +226,7 @@ export default function ScheduleSessionForm({
             </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content
-                className="z-[400] w-[min(100vw-2rem,20rem)] rounded-xl border border-[#51689A]/30 bg-white p-4 shadow-lg outline-none"
+                className="z-[400] w-[min(100vw-2rem,20rem)] rounded-xl border border-[#51689A]/30 bg-white p-4 shadow-lg outline-none dark:border-[#383F58] dark:bg-[#1A2036]"
                 side="bottom"
                 sideOffset={6}
                 align="end"
@@ -228,14 +234,14 @@ export default function ScheduleSessionForm({
               >
                 <div className="space-y-3">
                   <div>
-                    <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#51689A]">
+                    <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-[#51689A] dark:text-[#9BA8C4]">
                       {isAr ? "التاريخ" : "Date"}
                     </span>
                     <input
                       type="date"
                       className={cn(
                         textInputClass,
-                        "h-9 [color-scheme:light]"
+                        "h-9 [color-scheme:light] dark:[color-scheme:dark]"
                       )}
                       value={dateStr}
                       onChange={(e) => applyDate(e.target.value)}
@@ -243,24 +249,30 @@ export default function ScheduleSessionForm({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="mb-1 block text-xs text-[#51689A]">
+                      <span className="mb-1 block text-xs text-[#51689A] dark:text-[#9BA8C4]">
                         {isAr ? "بداية" : "Start"}
                       </span>
                       <input
                         type="time"
-                        className={cn(textInputClass, "h-9 [color-scheme:light]")}
+                        className={cn(
+                          textInputClass,
+                          "h-9 [color-scheme:light] dark:[color-scheme:dark]"
+                        )}
                         value={startTimeStr}
                         onChange={(e) => applyStartTime(e.target.value)}
                         step={60}
                       />
                     </div>
                     <div>
-                      <span className="mb-1 block text-xs text-[#51689A]">
+                      <span className="mb-1 block text-xs text-[#51689A] dark:text-[#9BA8C4]">
                         {isAr ? "نهاية" : "End"}
                       </span>
                       <input
                         type="time"
-                        className={cn(textInputClass, "h-9 [color-scheme:light]")}
+                        className={cn(
+                          textInputClass,
+                          "h-9 [color-scheme:light] dark:[color-scheme:dark]"
+                        )}
                         value={endTimeStr}
                         onChange={(e) => applyEndTime(e.target.value)}
                         step={60}

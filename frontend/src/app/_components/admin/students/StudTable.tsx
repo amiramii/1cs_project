@@ -37,6 +37,7 @@ import { getApiBaseUrl } from "@/lib/apiBase"
 import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
 import { deleteUserById, loadAllAcademicSections } from "@/lib/checkinClient"
+import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
 
 type JustifiedSemester = {
   id: string
@@ -66,7 +67,7 @@ type ApiStudentRow = {
 }
 
 const controlBtnClass =
-  "h-[43px] min-h-[43px] shrink-0 rounded-lg border border-[#51689A]/35 bg-white px-2.5 text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] sm:h-9 sm:min-h-0"
+  "h-[43px] min-h-[43px] shrink-0 rounded-lg border border-[#51689A]/35 bg-white px-2.5 text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] sm:h-9 sm:min-h-0 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7] dark:hover:bg-[#242A40]"
 
 const PAGE_SIZE = 5
 
@@ -150,6 +151,12 @@ export default function StudTable() {
 
   useEffect(() => {
     void loadStudents()
+  }, [loadStudents])
+
+  useEffect(() => {
+    return subscribeAdminCsvUploadSuccess("student", () => {
+      void loadStudents()
+    })
   }, [loadStudents])
 
   const yearOptions = useMemo(() => collectYears(data), [data])
@@ -263,16 +270,16 @@ export default function StudTable() {
   const colCount = 7
 
   return (
-    <section className="mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm">
+    <section className="mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm dark:border-[#383F58] dark:bg-[#13182A]/40">
       {loadError && (
         <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {loadError}
         </p>
       )}
-      <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30 bg-[#F6F7FE] p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-[#1B2065F2]">
-          <span className="flex h-fit w-fit items-center justify-center rounded-sm border border-[#51689A] bg-white shadow-sm ">
-            <Users size={18} className="text-[#1B2065F2]" strokeWidth={1.75} />
+      <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30 bg-[#F6F7FE] p-3 sm:flex-row sm:items-center sm:justify-between dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
+        <div className="flex items-center gap-2 text-[#1B2065F2] dark:text-[#EEF4F7]">
+          <span className="flex h-fit w-fit items-center justify-center rounded-sm border border-[#51689A] bg-white shadow-sm dark:border-[#383F58] dark:bg-[#242A40] ">
+            <Users size={18} className="text-[#1B2065F2] dark:text-[#EEF4F7]" strokeWidth={1.75} />
           </span>
           <p className="text-sm font-semibold sm:text-base">
             {isArabic ? "قائمة الطلاب" : "Student list"}
@@ -288,10 +295,10 @@ export default function StudTable() {
                 setCurrentPage(1)
               }}
               placeholder={isArabic ? "ابحث..." : "Search..."}
-              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9"
+              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7] dark:placeholder:text-[#9BA8C4]"
             />
             <Search
-              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70"
+              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70 dark:text-[#9BA8C4]"
               strokeWidth={2}
             />
           </div>
@@ -308,7 +315,7 @@ export default function StudTable() {
                   <span className="font-medium">
                     {isArabic ? "تصفية" : "Filter"}
                   </span>
-                  <span className="max-w-[5rem] truncate text-xs text-[#1B2065F2]/80 sm:max-w-none sm:inline">
+                  <span className="max-w-[5rem] truncate text-xs text-[#1B2065F2]/80 dark:text-[#9BA8C4] sm:max-w-none sm:inline">
                     ({filterLabelText})
                   </span>
                   {openFilter ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -339,7 +346,7 @@ export default function StudTable() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="flex items-center gap-1 border-[#51689A]/30 sm:gap-1.5 sm:border-s sm:ps-2">
+            <div className="flex items-center gap-1 border-[#51689A]/30 dark:border-[#383F58] sm:gap-1.5 sm:border-s sm:ps-2">
               <Button
                 type="button"
                 variant="outline"
@@ -349,7 +356,7 @@ export default function StudTable() {
                 title={isArabic ? "تعديل (قريباً)" : "Edit (coming soon)"}
                 aria-label={isArabic ? "تعديل" : "Edit"}
               >
-                <Pencil size={18} strokeWidth={1.5} className="text-[#1B2065F2]" />
+                <Pencil size={18} strokeWidth={1.5} className="text-[#1B2065F2] dark:text-[#EEF4F7]" />
               </Button>
               <Button
                 type="button"
@@ -360,7 +367,7 @@ export default function StudTable() {
                 title={isArabic ? "إضافة (قريباً)" : "Add (coming soon)"}
                 aria-label={isArabic ? "إضافة طالب" : "Add student"}
               >
-                <UserPlus size={18} strokeWidth={1.5} className="text-[#1B2065F2]" />
+                <UserPlus size={18} strokeWidth={1.5} className="text-[#1B2065F2] dark:text-[#EEF4F7]" />
               </Button>
               {hasSelection && (
                 <Button
@@ -380,38 +387,38 @@ export default function StudTable() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[#74A7BD]/30 bg-white/90">
+      <div className="overflow-hidden rounded-lg border border-[#74A7BD]/30 bg-white/90 dark:border-[#74A7BD]/25 dark:bg-[#1A2036]/90">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-xs sm:text-sm">
             <thead>
-              <tr className="border-b-2 border-[#51689A]/20 bg-gradient-to-r from-white to-[#F6F8FF] text-[#1B2065F2]">
-                <th className="w-12 min-w-12 border-b border-[#D6DEEF] px-1 py-2.5 text-center sm:px-2">
+              <tr className="border-b-2 border-[#51689A]/20 bg-gradient-to-r from-white to-[#F6F8FF] text-[#1B2065F2] dark:border-[#383F58] dark:bg-gradient-to-r dark:from-[#1A2036] dark:to-[#242A40] dark:text-[#EEF4F7]">
+                <th className="w-12 min-w-12 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-center sm:px-2">
                   <div className="flex items-center justify-center gap-0.5">
                     <Checkbox
                       checked={allVisibleSelected}
                       onCheckedChange={toggleSelectAllVisible}
                       aria-label={isArabic ? "تحديد الصفحة" : "Select page"}
-                      className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
+                      className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white dark:border-[#74A7BD] dark:data-[state=checked]:bg-[#74A7BD]"
                     />
                     <span className="inline-block w-6 shrink-0" aria-hidden />
                   </div>
                 </th>
-                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "الرقم" : "User ID"}
                 </th>
-                <th className="min-w-0 max-w-[min(28vw,8rem)] border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:max-w-none sm:px-2 sm:text-sm">
+                <th className="min-w-0 max-w-[min(28vw,8rem)] border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:max-w-none sm:px-2 sm:text-sm">
                   {isArabic ? "الاسم" : "Name"}
                 </th>
-                <th className="hidden min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide md:table-cell sm:px-2 sm:text-sm">
+                <th className="hidden min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide md:table-cell sm:px-2 sm:text-sm">
                   {isArabic ? "البريد" : "Email Address"}
                 </th>
-                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "السنة" : "Year"}
                 </th>
-                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "الشعبة" : "Section"}
                 </th>
-                <th className="min-w-0 border-b border-[#D6DEEF] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "المجموعة" : "Group"}
                 </th>
               </tr>
@@ -419,7 +426,7 @@ export default function StudTable() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={colCount} className="px-2 py-8 text-center text-sm text-[#5D719D]">
+                  <td colSpan={colCount} className="px-2 py-8 text-center text-sm text-[#5D719D] dark:text-[#9BA8C4]">
                     {isArabic ? "جارٍ التحميل…" : "Loading…"}
                   </td>
                 </tr>
@@ -431,10 +438,10 @@ export default function StudTable() {
                 return (
                   <Fragment key={row.id}>
                     <tr
-                      className={`border-b border-[#D6DEEF] text-[#1B2065F2] ${
+                      className={`border-b border-[#D6DEEF] dark:border-[#383F58] text-[#1B2065F2] dark:text-[#EEF4F7] ${
                         stripe
-                          ? "bg-gradient-to-r from-white to-[#EEF3FB]/80"
-                          : "bg-gradient-to-r from-[#F5F8FD]/90 to-white"
+                          ? "bg-gradient-to-r from-white to-[#EEF3FB]/80 dark:from-[#1A2036] dark:to-[#242A40]/80"
+                          : "bg-gradient-to-r from-[#F5F8FD]/90 to-white dark:from-[#242A40]/90 dark:to-[#1A2036]"
                       }`}
                     >
                       <td className="w-12 min-w-12 align-middle">
@@ -443,12 +450,12 @@ export default function StudTable() {
                             checked={selectedIds.has(row.id)}
                             onCheckedChange={() => toggleRowSelect(row.id)}
                             aria-label={`${isArabic ? "تحديد" : "Select"} ${row.name}`}
-                            className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
+                            className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white dark:border-[#74A7BD] dark:data-[state=checked]:bg-[#74A7BD]"
                           />
                           <button
                             type="button"
                             onClick={() => toggleExpand(row.id)}
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#1B2065F2] hover:bg-[#E8ECF4]/80"
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#1B2065F2] hover:bg-[#E8ECF4]/80 dark:text-[#EEF4F7] dark:hover:bg-[#242A40]/80"
                             aria-expanded={isOpen}
                             aria-label={
                               isArabic
@@ -473,34 +480,34 @@ export default function StudTable() {
                       <td className="hidden min-w-0 align-middle md:table-cell sm:px-1 sm:py-2.5">
                         <a
                           href={`mailto:${row.email}`}
-                          className="break-all text-[#51689A] underline decoration-[#51689A] underline-offset-2 visited:text-[#51689A] hover:text-[#3d5280]"
+                          className="break-all text-[#51689A] underline decoration-[#51689A] underline-offset-2 visited:text-[#51689A] hover:text-[#3d5280] dark:text-[#74A7BD] dark:visited:text-[#74A7BD] dark:hover:text-[#EEF4F7]"
                         >
                           {row.email}
                         </a>
                       </td>
-                      <td className="min-w-0 align-middle text-[#51689A] sm:px-1 sm:py-2.5">
+                      <td className="min-w-0 align-middle text-[#51689A] dark:text-[#74A7BD] sm:px-1 sm:py-2.5">
                         {row.year}
                       </td>
-                      <td className="min-w-0 align-middle text-[#51689A] sm:px-1 sm:py-2.5">
+                      <td className="min-w-0 align-middle text-[#51689A] dark:text-[#74A7BD] sm:px-1 sm:py-2.5">
                         {row.section}
                       </td>
                       <td className="min-w-0 align-middle sm:px-1 sm:py-2.5">
-                        <span className="font-medium text-[#6CB4B4]">{row.group}</span>
+                        <span className="font-medium text-[#6CB4B4] dark:text-[#6CB4B4]">{row.group}</span>
                       </td>
                     </tr>
                     {isOpen && (
-                      <tr className="border-b border-[#D6DEEF] bg-[#E0E4F0]/50">
+                      <tr className="border-b border-[#D6DEEF] dark:border-[#383F58] bg-[#E0E4F0]/50 dark:bg-[#242A40]/50">
                         <td colSpan={colCount} className="p-0">
                           <div
                             className="px-2 py-3 sm:px-4 sm:py-4"
                             dir={isArabic ? "rtl" : "ltr"}
                           >
-                            <p className="mb-3 text-xs font-medium text-[#51689A] sm:text-sm">
+                            <p className="mb-3 text-xs font-medium text-[#51689A] sm:text-sm dark:text-[#74A7BD]">
                               {isArabic ? "الغيابات المبررة" : "Justified Absences"}
                             </p>
                             <ul className="space-y-2.5">
                               {row.justifiedSemesters.length === 0 ? (
-                                <li className="text-sm text-[#5D719D]">
+                                <li className="text-sm text-[#5D719D] dark:text-[#9BA8C4]">
                                   {isArabic
                                     ? "لا بيانات غياب مبرر من الخادم على هذا المقتطف."
                                     : "No justified-absence data from the server for this list."}
@@ -509,12 +516,12 @@ export default function StudTable() {
                                 row.justifiedSemesters.map((j) => (
                                   <li
                                     key={j.id}
-                                    className="relative flex min-h-[3rem] items-center rounded-lg border border-[#74A7BD]/45 bg-white px-4 py-3 shadow-sm"
+                                    className="relative flex min-h-[3rem] items-center rounded-lg border border-[#74A7BD]/45 bg-white px-4 py-3 shadow-sm dark:border-[#74A7BD]/25 dark:bg-[#242A40]"
                                   >
-                                    <span className="text-sm font-medium text-[#51689A]">
+                                    <span className="text-sm font-medium text-[#51689A] dark:text-[#74A7BD]">
                                       {isArabic ? j.labelAr : j.labelEn}
                                     </span>
-                                    <span className="absolute start-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm font-semibold tabular-nums text-[#1B2065F2]">
+                                    <span className="absolute start-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm font-semibold tabular-nums text-[#1B2065F2] dark:text-[#EEF4F7]">
                                       {j.count}/{j.max}
                                     </span>
                                   </li>
@@ -533,14 +540,14 @@ export default function StudTable() {
         </div>
 
         {!loading && visibleRows.length === 0 && (
-          <p className="py-5 text-center text-sm text-[#5D719D]">
+          <p className="py-5 text-center text-sm text-[#5D719D] dark:text-[#9BA8C4]">
             {isArabic ? "لا توجد نتائج." : "No matching students found."}
           </p>
         )}
       </div>
 
-      <div className="flex flex-col items-center justify-between gap-2 rounded-lg border border-[#51689A]/40 bg-white px-3 py-2 sm:flex-row">
-        <p className="text-xs text-[#5D719D]">
+      <div className="flex flex-col items-center justify-between gap-2 rounded-lg border border-[#51689A]/40 bg-white px-3 py-2 sm:flex-row dark:border-[#383F58] dark:bg-[#1A2036]">
+        <p className="text-xs text-[#5D719D] dark:text-[#9BA8C4]">
           {isArabic
             ? `الصفحة ${currentPageSafe} من ${totalPages}`
             : `Page ${currentPageSafe} of ${totalPages}`}

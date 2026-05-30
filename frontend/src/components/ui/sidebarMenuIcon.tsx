@@ -5,9 +5,9 @@ import {
   CircleCheckBig,
   GraduationCap,
   LayoutDashboard,
+  School,
   UserRoundPen,
   CalendarX2,
-  UserPen,
   MailQuestionMark,
 
 } from "lucide-react"
@@ -22,7 +22,7 @@ const SIDEBAR_ICONS: Record<SidebarIconId, LucideIcon> = {
   absences:CalendarX2,
   profabsences: CalendarX2,
   professors: UserRoundPen,
-  schooling: UserPen,
+  schooling: School,
   requests: MailQuestionMark,
 }
 

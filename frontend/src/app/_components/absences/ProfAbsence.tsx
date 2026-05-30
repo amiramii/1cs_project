@@ -55,8 +55,14 @@ export default function ProfAbsence({
   if (role === "schooling") {
     return (
     <div className=" space-y-4">
-      <h1 className="text-2xl font-semibold text-[#1B2065F2]">Absences</h1>
-      <p className="text-lg text-[#51689AF2]">Professor Absence justifications</p>
+      <h1 className="text-2xl font-semibold text-[#1B2065F2] dark:text-[#EEF4F7]">
+        {isAr ? "غياب الأساتذة" : "Professor Absences"}
+      </h1>
+      <p className="text-lg text-[#51689AF2] dark:text-[#9BA8C4]">
+        {isAr
+          ? "مراجعة مبررات غياب الأساتذة."
+          : "Review professor absence justifications."}
+      </p>
       <ProfessorAbsenceTable />
     </div>
     );

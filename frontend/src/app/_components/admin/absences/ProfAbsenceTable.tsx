@@ -1,26 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ChevronDown,
-  ChevronUp,
-  Funnel,
+  Trash2,
   Search,
-  Check,
   FileCheck2,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import {
   Pagination,
   PaginationContent,
@@ -31,11 +21,20 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useLanguage } from "@/app/_components/language-provider";
-import { loadAllJustificationsSchooling } from "@/lib/checkinClient";
+import { getApiBaseUrl } from "@/lib/apiBase";
+import {
+  loadTeacherAbsenceSchoolingList,
+  deleteTeacherAbsenceById,
+  patchTeacherAbsenceAccept,
+  patchTeacherAbsenceRefuse,
+  type TeacherAbsenceRequestRow,
+} from "@/lib/checkinClient";
+import { emitTeacherAbsenceSync } from "@/lib/absenceSync";
 import ProfAbsencePopUpWindow from "./ProfAbsencePopUpWindow";
 
 type JustificationRow = {
   id: string;
+  requestId: number;
   name: string;
   email: string;
   startDate: string;
@@ -45,112 +44,85 @@ type JustificationRow = {
   justificationImageUrl?: string;
 };
 
-type RawJustificationRow = {
-  student_name?: string;
-  student_email?: string;
-  start_date?: string;
-  end_date?: string;
-  state?: string;
-  absence_cause?: string;
-  justification_image_url?: string;
-};
-
 function getAbsenceStateClasses(state: string) {
   const normalized = state.trim().toLowerCase();
   if (normalized === "accepted") {
-    return "border-[#74A7BD] bg-[#EEFAFF] text-[#74A7BD]";
+    return "border-[#74A7BD] bg-[#EEFAFF] text-[#74A7BD] dark:border-[#74A7BD] dark:bg-[#152A38] dark:text-[#74A7BD]";
   }
   if (normalized === "pending") {
-    return "border-[#E7CE51F2] bg-[#FFF5C3F2] text-[#E7CE51F2]";
+    return "border-[#E7CE51F2] bg-[#FFF5C3F2] text-[#E7CE51F2] dark:border-[#E7CE51] dark:bg-[#3A3420] dark:text-[#E7CE51]";
   }
   if (normalized === "rejected") {
-    return "border-[#DF2D3E] bg-[#FFD1D5] text-[#DF2D3E]";
+    return "border-[#DF2D3E] bg-[#FFD1D5] text-[#DF2D3E] dark:border-[#E85462] dark:bg-[#3A1A22] dark:text-[#F0707A]";
   }
-  return "border-[#51689A] bg-[#F3F6FF] text-[#1B2065F2]";
+  return "border-[#51689A] bg-[#F3F6FF] text-[#1B2065F2] dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]";
 }
 
-function aggregateByStudent(rows: RawJustificationRow[]): JustificationRow[] {
-  const map = new Map<
-    string,
-    {
-      name: string;
-      email: string;
-      startDate: string;
-      endDate: string;
-      state: string;
-      absenceCause: string;
-      justificationImageUrl?: string;
-    }
-  >();
-
-  for (const j of rows) {
-    const email = typeof j.student_email === "string" ? j.student_email.trim() : "";
-    if (!email) continue;
-
-    const name =
-      typeof j.student_name === "string" && j.student_name.trim()
-        ? j.student_name.trim()
-        : email;
-
-    const startDate =
-      typeof j.start_date === "string" && j.start_date.trim()
-        ? j.start_date.trim()
-        : "—";
-    const endDate =
-      typeof j.end_date === "string" && j.end_date.trim()
-        ? j.end_date.trim()
-        : "—";
-    const state =
-      typeof j.state === "string" && j.state.trim()
-        ? j.state.trim()
-        : "Pending";
-    const absenceCause =
-      typeof j.absence_cause === "string" && j.absence_cause.trim()
-        ? j.absence_cause.trim()
-        : "Illness (Cold)";
-    const justificationImageUrl =
-      typeof j.justification_image_url === "string" && j.justification_image_url.trim()
-        ? j.justification_image_url.trim()
-        : "/uploads/justification-doc.jpg";
-
-    const prev = map.get(email);
-    if (!prev) {
-      map.set(email, {
-        name,
-        email,
-        startDate,
-        endDate,
-        state,
-        absenceCause,
-        justificationImageUrl,
-      });
-    } else {
-      if (
-        typeof j.student_name === "string" &&
-        j.student_name.trim() &&
-        prev.name === email
-      ) {
-        prev.name = j.student_name.trim();
-      }
-    }
+function resolveMediaUrl(file?: string | null): string | undefined {
+  if (!file || typeof file !== "string") return undefined;
+  const trimmed = file.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
   }
+  const base = getApiBaseUrl().replace(/\/+$/, "");
+  return trimmed.startsWith("/") ? `${base}${trimmed}` : `${base}/${trimmed}`;
+}
 
-  return [...map.entries()]
-    .map(([email, v]) => ({
-      id: email,
-      name: v.name,
-      email,
-      startDate: v.startDate,
-      endDate: v.endDate,
-      state: v.state,
-      absenceCause: v.absenceCause,
-      justificationImageUrl: v.justificationImageUrl,
-    }))
+function formatIsoDate(iso: string, isAr: boolean): string {
+  const [y, m, day] = iso.split("-").map(Number);
+  if (!y || !m || !day) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, day));
+  return new Intl.DateTimeFormat(isAr ? "ar-DZ" : "en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(dt);
+}
+
+function mapTeacherAbsenceRows(
+  rows: TeacherAbsenceRequestRow[],
+  isAr: boolean
+): JustificationRow[] {
+  return rows
+    .map((row) => {
+      const dates = (row.dates ?? [])
+        .map((d) => d.date)
+        .filter((d): d is string => typeof d === "string" && d.length > 0)
+        .sort();
+      const startIso = dates[0];
+      const endIso = dates[dates.length - 1];
+      const name =
+        typeof row.teacher_name === "string" && row.teacher_name.trim()
+          ? row.teacher_name.trim()
+          : "—";
+      const status =
+        typeof row.status === "string" && row.status.trim()
+          ? row.status.trim()
+          : "pending";
+      const displayStatus =
+        status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+
+      return {
+        id: String(row.id),
+        requestId: row.id,
+        name,
+        email: `prof-${row.id}@local`,
+        startDate: startIso ? formatIsoDate(startIso, isAr) : "—",
+        endDate: endIso ? formatIsoDate(endIso, isAr) : "—",
+        state: displayStatus,
+        absenceCause:
+          typeof row.reason === "string" && row.reason.trim()
+            ? row.reason.trim()
+            : "—",
+        justificationImageUrl: resolveMediaUrl(row.file),
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 const controlBtnClass =
-  "h-[43px] min-h-[43px] shrink-0 rounded-lg border border-[#51689A]/35 bg-white px-2.5 text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] sm:h-9 sm:min-h-0";
+  "h-[43px] min-h-[43px] shrink-0 rounded-lg border border-[#51689A]/35 bg-white px-2.5 text-[#1B2065F2] shadow-sm hover:bg-[#FDFDFF] sm:h-9 sm:min-h-0 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7] dark:hover:bg-[#242A40]";
 
 const PAGE_SIZE = 5;
 
@@ -165,11 +137,6 @@ export function ProfessorAbsenceTable({
   const { language } = useLanguage();
   const isArabic = language === "ar";
 
-  const studentDetailBase =
-    studentDetailHrefMode === "backendReview"
-      ? "/Justifications/Justification-details/live"
-      : "/Justifications/Justification-details";
-
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -177,16 +144,16 @@ export function ProfessorAbsenceTable({
   const [data, setData] = useState<JustificationRow[]>([]);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<JustificationRow | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const raw =
-          (await loadAllJustificationsSchooling()) as RawJustificationRow[];
-        const agg = aggregateByStudent(raw);
-        if (!cancelled) setData(agg);
+        const raw = await loadTeacherAbsenceSchoolingList();
+        const mapped = mapTeacherAbsenceRows(raw, isArabic);
+        if (!cancelled) setData(mapped);
       } catch {
         toast.error(
           isArabic ? "تعذر تحميل طلبات التبرير." : "Could not load Absences."
@@ -199,7 +166,7 @@ export function ProfessorAbsenceTable({
     return () => {
       cancelled = true;
     };
-  }, [isArabic]);
+  }, [isArabic, reloadNonce]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -242,6 +209,36 @@ export function ProfessorAbsenceTable({
     });
   };
 
+  const hasSelection = selectedIds.size > 0;
+
+  const handleDeleteSelected = async () => {
+    if (!hasSelection) return;
+    const selectedRows = data.filter((row) => selectedIds.has(row.id));
+    if (selectedRows.length === 0) return;
+    setLoading(true);
+    try {
+      for (const row of selectedRows) {
+        const res = await deleteTeacherAbsenceById(row.requestId);
+        if (!res.ok) {
+          const t = await res.text().catch(() => "");
+          throw new Error(t.trim() || `HTTP ${res.status}`);
+        }
+      }
+      setData((prev) => prev.filter((row) => !selectedIds.has(row.id)));
+      setSelectedIds(new Set());
+      emitTeacherAbsenceSync();
+      toast.success(
+        isArabic ? "تم حذف الصفوف المحددة." : "Selected rows were deleted."
+      );
+    } catch {
+      toast.error(
+        isArabic ? "تعذر حذف بعض الصفوف." : "Could not delete some rows."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const pageItems = useMemo(() => {
     if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const items: number[] = [1];
@@ -269,33 +266,57 @@ export function ProfessorAbsenceTable({
     setSelectedRow(null);
   };
 
-  const handlePopupAccept = () => {
-    console.log("Accepted");
-    handlePopupClose();
+  const handlePopupAccept = async () => {
+    if (!selectedRow) return;
+    try {
+      const res = await patchTeacherAbsenceAccept(selectedRow.requestId);
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(t.trim() || `HTTP ${res.status}`);
+      }
+      toast.success(isArabic ? "تم قبول الطلب." : "Request accepted.");
+      emitTeacherAbsenceSync();
+      setReloadNonce((n) => n + 1);
+      handlePopupClose();
+    } catch {
+      toast.error(isArabic ? "تعذر قبول الطلب." : "Could not accept request.");
+    }
   };
 
-  const handlePopupReject = () => {
-    console.log("Rejected");
-    handlePopupClose();
+  const handlePopupReject = async () => {
+    if (!selectedRow) return;
+    try {
+      const res = await patchTeacherAbsenceRefuse(selectedRow.requestId);
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(t.trim() || `HTTP ${res.status}`);
+      }
+      toast.success(isArabic ? "تم رفض الطلب." : "Request refused.");
+      emitTeacherAbsenceSync();
+      setReloadNonce((n) => n + 1);
+      handlePopupClose();
+    } catch {
+      toast.error(isArabic ? "تعذر رفض الطلب." : "Could not refuse request.");
+    }
   };
 
 
 
 
   return (
-    <section className="mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm">
+    <section className="mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm dark:border-[#383F58] dark:bg-[#13182A]/40">
       {loading ? (
-        <p className="text-sm text-[#51689AF2]">
+        <p className="text-sm text-[#51689AF2] dark:text-[#9BA8C4]">
           {isArabic ? "جاري التحميل…" : "Loading…"}
         </p>
       ) : null}
       {/* Header bar */}
-      <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30 bg-[#F6F7FE] p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-[#1B2065F2]">
-          <span className="flex h-fit w-fit items-center justify-center rounded-sm border border-[#51689A] bg-white shadow-sm">
+      <div className="flex flex-col gap-3 rounded-lg border border-[#74A7BD]/30 bg-[#F6F7FE] p-3 sm:flex-row sm:items-center sm:justify-between dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
+        <div className="flex items-center gap-2 text-[#1B2065F2] dark:text-[#EEF4F7]">
+          <span className="flex h-fit w-fit items-center justify-center rounded-sm border border-[#51689A] bg-white shadow-sm dark:border-[#383F58] dark:bg-[#242A40]">
             <FileCheck2
               size={18}
-              className="text-[#1B2065F2]"
+              className="text-[#1B2065F2] dark:text-[#EEF4F7]"
               strokeWidth={1.75}
             />
           </span>
@@ -315,28 +336,39 @@ export function ProfessorAbsenceTable({
                 setCurrentPage(1);
               }}
               placeholder={isArabic ? "ابحث..." : "Search..."}
-              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9"
+              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7] dark:placeholder:text-[#9BA8C4]"
               disabled={loading}
             />
 
             <Search
-              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70"
+              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70 dark:text-[#9BA8C4]"
               strokeWidth={2}
             />
           </div>
-
-
+          {hasSelection && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className={`${controlBtnClass} text-destructive hover:text-destructive`}
+              onClick={() => void handleDeleteSelected()}
+              title={isArabic ? "حذف المحدد" : "Delete selected"}
+              aria-label={isArabic ? "حذف المحدد" : "Delete selected"}
+            >
+              <Trash2 size={18} strokeWidth={1.5} />
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-[#74A7BD]/30 bg-white/90">
+      <div className="overflow-hidden rounded-lg border border-[#74A7BD]/30 bg-white/90 dark:border-[#74A7BD]/25 dark:bg-[#1A2036]/90">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[700px] text-xs sm:text-sm">
             <thead>
-              <tr className="border-b-2 border-[#51689A]/20 bg-gradient-to-r from-white to-[#F6F8FF] text-[#1B2065F2]">
+              <tr className="border-b-2 border-[#51689A]/20 bg-gradient-to-r from-white to-[#F6F8FF] text-[#1B2065F2] dark:border-[#383F58] dark:bg-gradient-to-r dark:from-[#1A2036] dark:to-[#242A40] dark:text-[#EEF4F7]">
 
-                <th className="w-10 min-w-10 border-b border-[#D6DEEF] px-2 py-2.5 text-center">
+                <th className="w-10 min-w-10 border-b border-[#D6DEEF] dark:border-[#383F58] px-2 py-2.5 text-center">
                   <Checkbox
                     checked={allVisibleSelected}
                     onCheckedChange={toggleSelectAllVisible}
@@ -345,25 +377,19 @@ export function ProfessorAbsenceTable({
                         ? "تحديد الصفحة"
                         : "Select page"
                     }
-                    className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
+                    className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white dark:border-[#74A7BD] dark:data-[state=checked]:bg-[#74A7BD]"
                   />
                 </th>
 
-                <th className="border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
+                <th className="border-b border-[#D6DEEF] dark:border-[#383F58] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
                   {isArabic ? "الاسم" : "Name"}
                 </th>
 
-                <th className="hidden border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide md:table-cell sm:text-sm">
-                  {isArabic
-                    ? "البريد"
-                    : "Email Address"}
-                </th>
-
-                <th className="border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
+                <th className="border-b border-[#D6DEEF] dark:border-[#383F58] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
                   {isArabic ? "تاريخ الغياب" : "Absence Date"}
                 </th>
 
-                <th className="border-b border-[#D6DEEF] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
+                <th className="border-b border-[#D6DEEF] dark:border-[#383F58] px-2 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:text-sm">
                   {isArabic ? "الحالة" : "State"}
                 </th>
               </tr>
@@ -375,10 +401,10 @@ export function ProfessorAbsenceTable({
                 return (
                   <tr
                     key={row.id}
-                    className={`border-b border-[#D6DEEF] text-[#1B2065F2] ${
+                    className={`border-b border-[#D6DEEF] dark:border-[#383F58] text-[#1B2065F2] dark:text-[#EEF4F7] ${
                       stripe
-                        ? "bg-gradient-to-r from-white to-[#EEF3FB]/80"
-                        : "bg-gradient-to-r from-[#F5F8FD]/90 to-white"
+                        ? "bg-gradient-to-r from-white to-[#EEF3FB]/80 dark:bg-gradient-to-r dark:from-[#1A2036] dark:to-[#242A40]/80"
+                        : "bg-gradient-to-r from-[#F5F8FD]/90 to-white dark:bg-gradient-to-r dark:from-[#242A40]/90 dark:to-[#1A2036]"
                     }`}
                   >
 
@@ -393,29 +419,21 @@ export function ProfessorAbsenceTable({
                             ? "تحديد"
                             : "Select"
                         } ${row.name}`}
-                        className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white"
+                        className="appearance-none rounded-full border-[#51689A] data-[state=checked]:bg-[#51689A] data-[state=checked]:text-white dark:border-[#74A7BD] dark:data-[state=checked]:bg-[#74A7BD]"
                       />
                     </td>
 
                     <td className="min-w-0 max-w-[min(28vw,8rem)] break-words px-2 py-2.5 align-middle sm:max-w-none">
-                      <Link
-                        href={`${studentDetailBase}?student=${encodeURIComponent(row.email)}`}
-                        className="font-medium text-[#1B2065F2] underline decoration-[#51689A]/40 underline-offset-2 hover:text-[#51689A] hover:decoration-[#51689A]"
+                      <button
+                        type="button"
+                        onClick={() => handleStateClick(row)}
+                        className="font-medium text-[#1B2065F2] underline decoration-[#51689A]/40 underline-offset-2 hover:text-[#51689A] dark:text-[#EEF4F7] dark:hover:text-[#74A7BD]"
                       >
                         {row.name}
-                      </Link>
+                      </button>
                     </td>
 
-                    <td className="hidden min-w-0 px-2 py-2.5 align-middle md:table-cell">
-                      <a
-                        href={`mailto:${row.email}`}
-                        className="break-all text-[#51689A] underline decoration-[#51689A] underline-offset-2 visited:text-[#51689A] hover:text-[#3d5280]"
-                      >
-                        {row.email}
-                      </a>
-                    </td>
-
-                    <td className="px-2 py-2.5 align-middle font-medium text-[#51689A]">
+                    <td className="px-2 py-2.5 align-middle font-medium text-[#51689A] dark:text-[#74A7BD]">
                       <div className="flex flex-col gap-1">
                         <div className="text-xs">
                           <span className="font-semibold">{isArabic ? "من" : "From"}:</span> {row.startDate}
@@ -444,7 +462,7 @@ export function ProfessorAbsenceTable({
         </div>
 
         {!loading && visibleRows.length === 0 && (
-          <p className="py-5 text-center text-sm text-[#5D719D]">
+          <p className="py-5 text-center text-sm text-[#5D719D] dark:text-[#9BA8C4]">
             {isArabic
               ? "لا توجد نتائج."
               : "No absences found."}
@@ -453,9 +471,9 @@ export function ProfessorAbsenceTable({
       </div>
 
       {/* Pagination */}
-      <div className="flex flex-col items-center justify-between gap-2 rounded-lg border border-[#51689A]/40 bg-white px-3 py-2 sm:flex-row">
+      <div className="flex flex-col items-center justify-between gap-2 rounded-lg border border-[#51689A]/40 bg-white px-3 py-2 sm:flex-row dark:border-[#383F58] dark:bg-[#1A2036]">
 
-        <p className="text-xs text-[#5D719D]">
+        <p className="text-xs text-[#5D719D] dark:text-[#9BA8C4]">
           {isArabic
             ? `الصفحة ${currentPageSafe} من ${totalPages}`
             : `Page ${currentPageSafe} of ${totalPages}`}

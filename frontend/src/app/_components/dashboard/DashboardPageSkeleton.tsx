@@ -46,8 +46,8 @@ export function DashboardPageSkeleton({ variant = "default", className }: Props)
           <Skeleton className="h-6 w-32 max-w-[60%] rounded-md bg-muted sm:h-7 sm:w-48 xl:w-56" />
           <Skeleton className="h-10 w-24 shrink-0 rounded-md bg-muted sm:w-28" />
         </div>
-        <div className="flex w-full min-w-0 max-w-none flex-1 flex-col rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 min-h-0">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between bg-[#F6F9FB] p-4 rounded-xl">
+        <div className="flex w-full min-w-0 max-w-none flex-1 flex-col rounded-xl border border-border/80 bg-card p-4 shadow-sm sm:p-5 min-h-0">
+          <div className="flex flex-col gap-4 rounded-xl bg-muted/35 p-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
               <Skeleton className="h-10 w-10 shrink-0 rounded-sm bg-muted ring-1 ring-border/40" />
               <div className="space-y-2">
@@ -56,8 +56,8 @@ export function DashboardPageSkeleton({ variant = "default", className }: Props)
               </div>
             </div>
             <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto lg:max-w-2xl">
-              <Skeleton className="h-10 w-full flex-1 rounded-xl bg-[#FEF9F9] ring-1 ring-slate-200/80" />
-              <Skeleton className="h-10 w-full rounded-xl bg-[#FEF9F9] ring-1 ring-slate-200/80 sm:min-w-[10.5rem]" />
+              <Skeleton className="h-10 w-full flex-1 rounded-xl bg-muted/75 ring-1 ring-border/60" />
+              <Skeleton className="h-10 w-full rounded-xl bg-muted/75 ring-1 ring-border/60 sm:min-w-[10.5rem]" />
             </div>
           </div>
           <div className="mt-4 grid min-h-[8rem] w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 lg:gap-4">
@@ -66,9 +66,9 @@ export function DashboardPageSkeleton({ variant = "default", className }: Props)
                 key={i}
                 className="min-w-0"
               >
-                <div className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
                   <Skeleton className="h-[168px] w-full rounded-none bg-muted/80" />
-                  <div className="grid grid-cols-2 divide-x divide-slate-200 bg-white py-2">
+                  <div className="grid grid-cols-2 divide-x divide-border bg-card py-2">
                     <Skeleton className="mx-2 h-3 justify-self-center bg-muted/90" />
                     <Skeleton className="mx-2 h-3 justify-self-center bg-muted/90" />
                   </div>

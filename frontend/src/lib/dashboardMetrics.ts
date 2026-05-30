@@ -3,11 +3,53 @@ import {
   fetchStudentAbsencesByModule,
   loadStudentJustificationsList,
 } from "@/lib/checkinClient";
+import { fetchAdminTotalsStats } from "@/lib/adminTotalsMetrics";
 import { getApiBaseUrl } from "@/lib/apiBase";
 import { checkinPath } from "@/lib/checkinApi";
 import { loadDrfListAll, unwrapList } from "@/lib/drfPaginatedList";
-import { loadProfessorSessionData } from "@/lib/professorSessionData";
+import {
+  loadProfessorSessionData,
+  type AttendanceStatus,
+} from "@/lib/professorSessionData";
+import { getAbsenceSeverity, type AbsenceSeverity } from "@/lib/moduleExclusionPolicy";
 import { getAccessToken } from "@/lib/tokenStorage";
+
+export type DashboardChartPoint = {
+  key: string;
+  label: string;
+  value: number;
+  severity?: AbsenceSeverity;
+};
+
+export type DashboardTrendPoint = {
+  day: string;
+  date: string;
+  value: number;
+};
+
+export type AdminLikeDashboardCharts = {
+  overview: DashboardChartPoint[];
+  sessionsTrend: DashboardTrendPoint[];
+  attendanceByStatus: DashboardChartPoint[];
+};
+
+export type SchoolingDashboardCharts = {
+  reviewWorkload: DashboardChartPoint[];
+  justificationsByStatus: DashboardChartPoint[];
+  teacherAbsenceByStatus: DashboardChartPoint[];
+};
+
+export type ProfessorDashboardCharts = {
+  overview: DashboardChartPoint[];
+  sessionsTrend: DashboardTrendPoint[];
+  attendanceToday: DashboardChartPoint[];
+};
+
+export type StudentDashboardCharts = {
+  justificationsByStatus: DashboardChartPoint[];
+  absencesTrend: DashboardTrendPoint[];
+  absencesByModule: DashboardChartPoint[];
+};
 
 function listHeaders(): HeadersInit {
   const t = getAccessToken();
@@ -60,7 +102,7 @@ export async function fetchAdminLikeDashboardMetrics(): Promise<{
       ),
       loadDrfListAll<DocRow>(
         apiBase,
-        `${checkinPath.documents.khra}/`,
+        `${checkinPath.documents.collection}/`,
         headers,
         {}
       ),
@@ -96,7 +138,7 @@ export async function fetchProfessorDashboardMetrics(isAr: boolean): Promise<{
       loadProfessorSessionData(isAr),
       loadDrfListAll<DocRow>(
         apiBase,
-        `${checkinPath.documents.khra}/?audience=teacher`,
+        `${checkinPath.documents.collection}/?audience=teacher`,
         headers,
         {}
       ),
@@ -162,57 +204,481 @@ function sundayStartWeekIsoBounds(): { start: string; end: string } {
   return { start: iso(start), end: iso(end) };
 }
 
-export async function fetchStudentDashboardMetrics(): Promise<{
-  pendingJustifications: number;
-  schedulesOnFile: number;
-  absenceMarksTotal: number;
-  absentSlotsThisWeek: number;
-}> {
+type StudentSessionSlotRow = {
+  date?: string;
+  module?: string;
+  start_time?: string;
+};
+
+function studentSessionSlotKey(row: StudentSessionSlotRow): string {
+  return `${row.date ?? ""}|${row.module ?? ""}|${row.start_time ?? ""}`;
+}
+
+/**
+ * Best-effort count of today's class slots for the signed-in student (frontend only).
+ * Derives from attendance sessions, then falls back to absence + justification-linked slots.
+ */
+async function countStudentSessionsToday(): Promise<number> {
+  const today = todayLocalIso();
   const apiBase = getApiBaseUrl();
   const headers = listHeaders();
-  const { start: wStart, end: wEnd } = sundayStartWeekIsoBounds();
+
   try {
-    const [justRows, docs, modRes, dateRes] = await Promise.all([
+    const sessions = await loadDrfListAll<{ date?: string }>(
+      apiBase,
+      `${checkinPath.attendance.sessions}/`,
+      headers,
+      {}
+    );
+    if (sessions.length > 0) {
+      return sessions.filter((s) => s.date === today).length;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const slotKeys = new Set<string>();
+
+  try {
+    const dateRes = await fetchStudentAbsencesByDate();
+    if (dateRes.ok) {
+      const raw: unknown = await dateRes.json();
+      const arr = unwrapList<StudentSessionSlotRow>(raw);
+      for (const row of arr) {
+        if (row.date === today) slotKeys.add(studentSessionSlotKey(row));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const justRows = await loadStudentJustificationsList();
+    for (const row of justRows) {
+      const atts = row.attendances;
+      if (!Array.isArray(atts)) continue;
+      for (const att of atts) {
+        const slot = att as StudentSessionSlotRow;
+        if (slot.date === today) slotKeys.add(studentSessionSlotKey(slot));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return slotKeys.size;
+}
+
+export async function fetchStudentDashboardMetrics(): Promise<{
+  pendingJustifications: number;
+  sessionsToday: number;
+}> {
+  try {
+    const [justRows, sessionsToday] = await Promise.all([
       loadStudentJustificationsList().catch(() => [] as Record<string, unknown>[]),
-      loadDrfListAll<DocRow>(
-        apiBase,
-        `${checkinPath.documents.khra}/?audience=student`,
-        headers,
-        {}
-      ).catch(() => [] as DocRow[]),
-      fetchStudentAbsencesByModule().catch(() => null as Response | null),
-      fetchStudentAbsencesByDate().catch(() => null as Response | null),
+      countStudentSessionsToday(),
     ]);
 
     const pendingJustifications = justRows.filter(
       (j) => String(j.status ?? "").toLowerCase() === "pending"
     ).length;
 
-    let absenceMarksTotal = 0;
-    if (modRes?.ok) {
-      try {
-        const raw: unknown = await modRes.json();
-        const arr = Array.isArray(raw) ? raw : [];
-        for (const row of arr) {
-          const rec = row as { absence_count?: unknown };
-          const c = rec.absence_count;
-          if (typeof c === "number" && Number.isFinite(c))
-            absenceMarksTotal += c;
-        }
-      } catch {
-        /* ignore */
+    return { pendingJustifications, sessionsToday };
+  } catch {
+    return { pendingJustifications: 0, sessionsToday: 0 };
+  }
+}
+
+const WEEKDAY_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const WEEKDAY_AR = [
+  "الأحد",
+  "الإثنين",
+  "الثلاثاء",
+  "الأربعاء",
+  "الخميس",
+  "الجمعة",
+  "السبت",
+] as const;
+
+function last7DayIsoDates(): string[] {
+  const out: string[] = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    out.push(`${y}-${m}-${day}`);
+  }
+  return out;
+}
+
+function weekdayLabel(dateIso: string, isAr: boolean): string {
+  const d = new Date(`${dateIso}T12:00:00`);
+  const idx = d.getDay();
+  return isAr ? WEEKDAY_AR[idx] : WEEKDAY_EN[idx];
+}
+
+export function buildLast7DayTrend(
+  dateCounts: Map<string, number>,
+  isAr: boolean
+): DashboardTrendPoint[] {
+  return last7DayIsoDates().map((date) => ({
+    date,
+    day: weekdayLabel(date, isAr),
+    value: dateCounts.get(date) ?? 0,
+  }));
+}
+
+function statusToChartPoints(
+  counts: Record<string, number>,
+  labelMap: Record<string, { en: string; ar: string }>,
+  isAr: boolean,
+  order: string[]
+): DashboardChartPoint[] {
+  return order
+    .filter((key) => (counts[key] ?? 0) > 0)
+    .map((key) => ({
+      key,
+      label: isAr ? labelMap[key].ar : labelMap[key].en,
+      value: counts[key] ?? 0,
+    }));
+}
+
+const ATTENDANCE_STATUS_LABELS: Record<
+  string,
+  { en: string; ar: string }
+> = {
+  present: { en: "Present", ar: "حاضر" },
+  absent: { en: "Absent", ar: "غائب" },
+  justified: { en: "Justified", ar: "مبرر" },
+};
+
+const JUSTIFICATION_STATUS_LABELS: Record<
+  string,
+  { en: string; ar: string }
+> = {
+  pending: { en: "Pending", ar: "قيد المراجعة" },
+  accepted: { en: "Accepted", ar: "مقبول" },
+  refused: { en: "Refused", ar: "مرفوض" },
+};
+
+function countSessionsByDate(
+  sessions: { date?: string }[]
+): Map<string, number> {
+  const map = new Map<string, number>();
+  const allowed = new Set(last7DayIsoDates());
+  for (const s of sessions) {
+    const d = s.date;
+    if (typeof d !== "string" || !allowed.has(d)) continue;
+    map.set(d, (map.get(d) ?? 0) + 1);
+  }
+  return map;
+}
+
+function countAttendanceByStatus(
+  rows: { status?: string }[]
+): Record<string, number> {
+  const counts: Record<string, number> = {
+    present: 0,
+    absent: 0,
+    justified: 0,
+  };
+  for (const row of rows) {
+    const s = String(row.status ?? "").toLowerCase();
+    if (s in counts) counts[s] += 1;
+  }
+  return counts;
+}
+
+function countJustificationsByStatus(
+  rows: Record<string, unknown>[]
+): Record<string, number> {
+  const counts: Record<string, number> = {
+    pending: 0,
+    accepted: 0,
+    refused: 0,
+  };
+  for (const row of rows) {
+    const s = String(row.status ?? "").toLowerCase();
+    if (s in counts) counts[s] += 1;
+  }
+  return counts;
+}
+
+export async function fetchAdminDashboardCharts(
+  isAr: boolean
+): Promise<AdminLikeDashboardCharts> {
+  const apiBase = getApiBaseUrl();
+  const headers = listHeaders();
+  const empty: AdminLikeDashboardCharts = {
+    overview: [],
+    sessionsTrend: buildLast7DayTrend(new Map(), isAr),
+    attendanceByStatus: [],
+  };
+
+  try {
+    const [metrics, sessions, attendance] = await Promise.all([
+      fetchAdminLikeDashboardMetrics(),
+      loadDrfListAll<{ date?: string }>(
+        apiBase,
+        `${checkinPath.attendance.sessions}/`,
+        headers,
+        {}
+      ).catch(() => [] as { date?: string }[]),
+      loadDrfListAll<{ status?: string }>(
+        apiBase,
+        `${checkinPath.attendance.attendance}/`,
+        headers,
+        {}
+      ).catch(() => [] as { status?: string }[]),
+    ]);
+
+    return {
+      overview: [
+        {
+          key: "teachers",
+          label: isAr ? "الأساتذة" : "Professors",
+          value: metrics.teachers,
+        },
+        {
+          key: "students",
+          label: isAr ? "الطلاب" : "Students",
+          value: metrics.students,
+        },
+        {
+          key: "schedules",
+          label: isAr ? "الجداول" : "Schedules",
+          value: metrics.schedules,
+        },
+        {
+          key: "sessionsToday",
+          label: isAr ? "حصص اليوم" : "Sessions today",
+          value: metrics.sessionsToday,
+        },
+      ],
+      sessionsTrend: buildLast7DayTrend(
+        countSessionsByDate(sessions),
+        isAr
+      ),
+      attendanceByStatus: statusToChartPoints(
+        countAttendanceByStatus(attendance),
+        ATTENDANCE_STATUS_LABELS,
+        isAr,
+        ["present", "absent", "justified"]
+      ),
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export async function fetchSchoolingDashboardCharts(
+  isAr: boolean
+): Promise<SchoolingDashboardCharts> {
+  const empty: SchoolingDashboardCharts = {
+    reviewWorkload: [],
+    justificationsByStatus: [],
+    teacherAbsenceByStatus: [],
+  };
+
+  try {
+    const stats = await fetchAdminTotalsStats();
+    if (!stats?.schooling) return empty;
+
+    const { justifications: just, teacher_absence_requests: prof } =
+      stats.schooling;
+
+    return {
+      reviewWorkload: [
+        {
+          key: "justPending",
+          label: isAr ? "مبررات معلّقة" : "Pending justifications",
+          value: just.pending,
+        },
+        {
+          key: "profPending",
+          label: isAr ? "غياب أساتذة معلّق" : "Pending prof. absences",
+          value: prof.pending,
+        },
+        {
+          key: "justAccepted",
+          label: isAr ? "مبررات مقبولة" : "Accepted justifications",
+          value: just.accepted,
+        },
+        {
+          key: "justRefused",
+          label: isAr ? "مبررات مرفوضة" : "Refused justifications",
+          value: just.refused,
+        },
+      ].filter((p) => p.value > 0),
+      justificationsByStatus: statusToChartPoints(
+        {
+          pending: just.pending,
+          accepted: just.accepted,
+          refused: just.refused,
+        },
+        JUSTIFICATION_STATUS_LABELS,
+        isAr,
+        ["pending", "accepted", "refused"]
+      ),
+      teacherAbsenceByStatus: statusToChartPoints(
+        {
+          pending: prof.pending,
+          accepted: prof.accepted,
+          refused: prof.refused,
+        },
+        JUSTIFICATION_STATUS_LABELS,
+        isAr,
+        ["pending", "accepted", "refused"]
+      ),
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export async function fetchProfessorDashboardCharts(
+  isAr: boolean
+): Promise<ProfessorDashboardCharts> {
+  const today = todayLocalIso();
+  const empty: ProfessorDashboardCharts = {
+    overview: [],
+    sessionsTrend: buildLast7DayTrend(new Map(), isAr),
+    attendanceToday: [],
+  };
+
+  try {
+    const [metrics, bundle] = await Promise.all([
+      fetchProfessorDashboardMetrics(isAr),
+      loadProfessorSessionData(isAr),
+    ]);
+
+    const todaySessions = bundle.sessions.filter((s) => s.date === today);
+    const attendanceRows: { status?: AttendanceStatus }[] = [];
+    for (const session of todaySessions) {
+      if (Array.isArray(session.attendances)) {
+        attendanceRows.push(...session.attendances);
       }
     }
 
-    let absentSlotsThisWeek = 0;
+    return {
+      overview: [
+        {
+          key: "sessionsToday",
+          label: isAr ? "حصص اليوم" : "Sessions today",
+          value: metrics.sessionsToday,
+        },
+        {
+          key: "yourStudents",
+          label: isAr ? "طلابك" : "Your students",
+          value: metrics.yourStudents,
+        },
+        {
+          key: "activeSchedules",
+          label: isAr ? "جداول نشطة" : "Active schedules",
+          value: metrics.activeSchedules,
+        },
+        {
+          key: "roomsInUse",
+          label: isAr ? "قاعات مرتبطة" : "Rooms in use",
+          value: metrics.roomsInUse,
+        },
+      ],
+      sessionsTrend: buildLast7DayTrend(
+        countSessionsByDate(bundle.sessions),
+        isAr
+      ),
+      attendanceToday: statusToChartPoints(
+        countAttendanceByStatus(attendanceRows),
+        ATTENDANCE_STATUS_LABELS,
+        isAr,
+        ["present", "absent", "justified"]
+      ),
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export async function fetchStudentDashboardCharts(
+  isAr: boolean
+): Promise<StudentDashboardCharts> {
+  const { start: wStart, end: wEnd } = sundayStartWeekIsoBounds();
+  const empty: StudentDashboardCharts = {
+    justificationsByStatus: [],
+    absencesTrend: [],
+    absencesByModule: [],
+  };
+
+  try {
+    const [justRows, modRes, dateRes] = await Promise.all([
+      loadStudentJustificationsList().catch(
+        () => [] as Record<string, unknown>[]
+      ),
+      fetchStudentAbsencesByModule().catch(() => null as Response | null),
+      fetchStudentAbsencesByDate().catch(() => null as Response | null),
+    ]);
+
+    const justificationsByStatus = statusToChartPoints(
+      countJustificationsByStatus(justRows),
+      JUSTIFICATION_STATUS_LABELS,
+      isAr,
+      ["pending", "accepted", "refused"]
+    );
+
+    const weekDates = last7DayIsoDates().filter(
+      (d) => d >= wStart && d <= wEnd
+    );
+    const absencesByDay = new Map<string, number>();
+    for (const d of weekDates) absencesByDay.set(d, 0);
+
     if (dateRes?.ok) {
       try {
         const raw: unknown = await dateRes.json();
         const arr = unwrapList<{ date?: string }>(raw);
         for (const row of arr) {
           const d = row.date;
-          if (typeof d !== "string") continue;
-          if (d >= wStart && d <= wEnd) absentSlotsThisWeek += 1;
+          if (typeof d !== "string" || d < wStart || d > wEnd) continue;
+          absencesByDay.set(d, (absencesByDay.get(d) ?? 0) + 1);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const absencesTrend: DashboardTrendPoint[] = weekDates.map((date) => ({
+      date,
+      day: weekdayLabel(date, isAr),
+      value: absencesByDay.get(date) ?? 0,
+    }));
+
+    const moduleRows: DashboardChartPoint[] = [];
+    if (modRes?.ok) {
+      try {
+        const raw: unknown = await modRes.json();
+        const arr = Array.isArray(raw) ? raw : [];
+        const sorted = [...arr].sort((a, b) => {
+          const ac = (a as { absence_count?: number }).absence_count ?? 0;
+          const bc = (b as { absence_count?: number }).absence_count ?? 0;
+          return bc - ac;
+        });
+        for (const row of sorted.slice(0, 6)) {
+          const rec = row as {
+            session__assignment__module__name?: string;
+            absence_count?: number;
+          };
+          const name = rec.session__assignment__module__name;
+          const count = rec.absence_count;
+          if (typeof name !== "string" || typeof count !== "number") continue;
+          const key = name.replace(/\s+/g, "_").slice(0, 24);
+          moduleRows.push({
+            key,
+            label: name,
+            value: count,
+            severity: getAbsenceSeverity(count),
+          });
         }
       } catch {
         /* ignore */
@@ -220,17 +686,11 @@ export async function fetchStudentDashboardMetrics(): Promise<{
     }
 
     return {
-      pendingJustifications,
-      schedulesOnFile: docs.length,
-      absenceMarksTotal,
-      absentSlotsThisWeek,
+      justificationsByStatus,
+      absencesTrend,
+      absencesByModule: moduleRows,
     };
   } catch {
-    return {
-      pendingJustifications: 0,
-      schedulesOnFile: 0,
-      absenceMarksTotal: 0,
-      absentSlotsThisWeek: 0,
-    };
+    return empty;
   }
 }

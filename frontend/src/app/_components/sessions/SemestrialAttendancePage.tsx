@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowUpFromLine,
   FileText,
   Search,
-  Star,
   Users,
   X,
 } from "lucide-react";
@@ -31,6 +30,10 @@ import {
   shortDateHeader,
 } from "@/lib/sessionHistoryMatrix";
 import { cn } from "@/lib/utils";
+import { getApiBaseUrl } from "@/lib/apiBase";
+import { checkinPath } from "@/lib/checkinApi";
+import { loadDrfListAll } from "@/lib/drfPaginatedList";
+import { getAccessToken } from "@/lib/tokenStorage";
 
 const STATUS_HEX = {
   present: "#74A7BD",
@@ -131,13 +134,36 @@ type HistoryMatrixRow = {
   id: number;
   name: string;
   email: string;
+  cells: (AttendanceStatus | null)[];
   present: number;
   absent: number;
   justified: number;
 };
 
+type StudentRosterRow = {
+  id?: number;
+  user_id?: string | number;
+  full_name?: string;
+  email?: string;
+  group?: number;
+};
+
+function listHeaders(): HeadersInit {
+  const token = getAccessToken();
+  return token?.trim() ? { Authorization: `Bearer ${token.trim()}` } : {};
+}
+
+function coerceStudentId(row: StudentRosterRow, index: number): number {
+  if (typeof row.id === "number" && Number.isFinite(row.id)) return row.id;
+  if (typeof row.user_id === "number" && Number.isFinite(row.user_id)) {
+    return row.user_id;
+  }
+  return -(index + 1);
+}
+
 export default function SemestrialAttendancePage() {
   const router = useRouter();
+  const pathname = usePathname();
   const sp = useSearchParams();
   const { language } = useLanguage();
   const isAr = language === "ar";
@@ -150,6 +176,7 @@ export default function SemestrialAttendancePage() {
     return currentAcademicStartYear();
   }, [sp]);
   const sem = (sp.get("sem") === "S2" ? "S2" : "S1") as "S1" | "S2";
+  const backPath = pathname?.startsWith("/Students") ? "/Students" : "/Sessions";
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -164,6 +191,7 @@ export default function SemestrialAttendancePage() {
   const [bundle, setBundle] = useState<
     Awaited<ReturnType<typeof loadProfessorSessionData>> | null
   >(null);
+  const [rosterRows, setRosterRows] = useState<HistoryMatrixRow[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -212,6 +240,49 @@ export default function SemestrialAttendancePage() {
     return bundle.assignments.find((a) => a.id === assignmentId) ?? null;
   }, [bundle, assignmentId]);
 
+  useEffect(() => {
+    let alive = true;
+    const groupId = openAssignment?.group;
+    if (typeof groupId !== "number") {
+      setRosterRows([]);
+      return;
+    }
+    (async () => {
+      try {
+        const students = await loadDrfListAll<StudentRosterRow>(
+          getApiBaseUrl(),
+          `${checkinPath.students}/`,
+          listHeaders(),
+          {}
+        );
+        if (!alive) return;
+        setRosterRows(
+          students
+            .filter((student) => student.group === groupId)
+            .map((student, index) => ({
+              id: coerceStudentId(student, index),
+              name: student.full_name?.trim() || "—",
+              email: student.email?.trim() || "",
+              cells: [],
+              present: 0,
+              absent: 0,
+              justified: 0,
+            }))
+            .sort((a, b) =>
+              a.name.localeCompare(b.name, isAr ? "ar" : "en", {
+                sensitivity: "base",
+              })
+            )
+        );
+      } catch {
+        if (alive) setRosterRows([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [openAssignment?.group, isAr]);
+
   const dist = useMemo(() => {
     if (!matrix || matrix.courseSessions.length === 0) {
       return { present: 0, absent: 0, justified: 0 };
@@ -251,17 +322,21 @@ export default function SemestrialAttendancePage() {
     }));
   }, [studentModal, matrix, bundle?.teacherAttendanceRows, locale, isAr]);
 
+  const displayRows = useMemo(() => {
+    if (matrix?.rows.length) return matrix.rows;
+    return rosterRows;
+  }, [matrix?.rows, rosterRows]);
+
   const filtered = useMemo(() => {
-    if (!matrix) return [];
     const q = search.trim().toLowerCase();
-    if (!q) return matrix.rows;
-    return matrix.rows.filter(
+    if (!q) return displayRows;
+    return displayRows.filter(
       (r) =>
         r.name.toLowerCase().includes(q) ||
         r.email.toLowerCase().includes(q) ||
         userIdFromEmail(r.email).toLowerCase().includes(q)
     );
-  }, [matrix, search]);
+  }, [displayRows, search]);
 
   const visible = useMemo(
     () => (showAll ? filtered : filtered.slice(0, SHEET_PAGE)),
@@ -351,50 +426,49 @@ export default function SemestrialAttendancePage() {
   }
 
   const sub = [
-    openAssignment.group_name?.trim() || "—",
     openAssignment.year_name?.trim() || "—",
+    openAssignment.group_name?.trim() || "—",
     openAssignment.semester?.trim() || sem,
-    openAssignment.module_name?.trim() || "—",
   ].join(" - ");
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-0 pb-10 pt-2 font-montserrat sm:px-1">
-      <div className="flex flex-col gap-4 border-b border-border/60 pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
+    <div className="mx-auto w-full max-w-6xl space-y-5 px-0 pb-10 pt-2 font-montserrat sm:px-1">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-3">
+          <div className="space-y-2">
+            <h1 className="text-xl font-bold tracking-tight text-[#1B2065] sm:text-2xl dark:text-[#EEF4F7]">
+              {isAr ? "ورقة حضور طلابك" : "Your Students Attendance sheet"}
+            </h1>
+            <p className="ps-8 text-lg font-bold text-[#74A7BD] dark:text-[#9BA8C4]">
+              {openAssignment.module_name?.trim() || "—"}
+              <span className="ms-8 text-sm font-bold text-[#1B2065] dark:text-[#EEF4F7]">
+                {sub}
+              </span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="shrink-0"
-              onClick={() => router.push("/Sessions")}
+              className="size-8 shrink-0 text-[#1B2065] hover:bg-[#51689A]/10 dark:text-[#EEF4F7]"
+              onClick={() => router.push(backPath)}
               aria-label={isAr ? "رجوع" : "Back"}
             >
               <ArrowLeft className="size-5 rtl:rotate-180" />
             </Button>
-            <h2 className="text-lg font-bold tracking-tight text-[#1B2065] sm:text-xl">
+            <h2 className="text-lg font-bold tracking-tight text-[#1B2065] sm:text-xl dark:text-[#EEF4F7]">
               {isAr ? "ورقة التحصي النصفي" : "Semestrial Attendance Sheet"}
             </h2>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl">
-            {isAr ? "سجل الحصص" : "Your Session History"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isAr
-              ? "أنشئ الحصص وأدر الحضور."
-              : "Create sessions and manage attendance."}
-          </p>
-          <p className="text-sm font-medium text-[#51689A]">
-            {sub}
-            <span className="ms-1 block text-xs text-[#7A87A5] sm:inline" dir="ltr">
-              {yearLabel(academicYear)} · {from} – {to}
-            </span>
+          <p className="sr-only" dir="ltr">
+            {yearLabel(academicYear)} · {from} – {to}
           </p>
         </div>
         <Button
           type="button"
           variant="outline"
-          className="h-10 shrink-0 self-start rounded-lg border-2 border-primary/40 bg-card px-4 text-primary shadow-md hover:bg-primary/5"
+          className="h-9 shrink-0 self-start rounded-md border border-[#1B2065]/50 bg-[#FEF9F9] px-4 text-sm text-[#1B2065] shadow-sm hover:bg-[#F6F7FE] dark:border-[#74A7BD]/60 dark:bg-[#1A2036] dark:text-[#EEF4F7]"
           onClick={exportCsv}
         >
           <ArrowUpFromLine className="size-4" />
@@ -402,8 +476,8 @@ export default function SemestrialAttendancePage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="relative overflow-hidden rounded-2xl border border-[#74A7BD]/30 bg-gradient-to-br from-[#74A7BD]/12 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+      <div className="grid grid-cols-1 gap-10 sm:grid-cols-3">
+        <div className="relative overflow-hidden rounded border border-[#51689A]/35 bg-[#FEF9F9] px-4 py-5 text-center shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]">
           <div className="pointer-events-none absolute -end-10 -top-8 h-28 w-28 rounded-full bg-fuchsia-200/25 blur-2xl" />
           <div className="pointer-events-none absolute -bottom-6 end-4 h-20 w-20 rounded-full bg-[#74A7BD]/20 blur-2xl" />
           <div className="relative">
@@ -421,7 +495,7 @@ export default function SemestrialAttendancePage() {
             </p>
           </div>
         </div>
-        <div className="relative overflow-hidden rounded-2xl border-2 border-[#C71122]/45 bg-gradient-to-br from-[#C71122]/10 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+        <div className="relative overflow-hidden rounded border border-[#51689A]/35 bg-[#FEF9F9] px-4 py-5 text-center shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]">
           <div className="pointer-events-none absolute -end-12 top-0 h-32 w-32 rounded-full bg-rose-300/30 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-8 start-0 h-24 w-24 rounded-full bg-[#C71122]/10 blur-2xl" />
           <div className="relative">
@@ -439,7 +513,7 @@ export default function SemestrialAttendancePage() {
             </p>
           </div>
         </div>
-        <div className="relative overflow-hidden rounded-2xl border border-[#E7CE51]/40 bg-gradient-to-br from-[#E7CE51]/10 via-[#FEF9F9] to-[#FEF9F9] px-4 py-4 text-center shadow-sm">
+        <div className="relative overflow-hidden rounded border border-[#51689A]/35 bg-[#FEF9F9] px-4 py-5 text-center shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]">
           <div className="pointer-events-none absolute -end-8 -top-6 h-24 w-24 rounded-full bg-amber-200/35 blur-2xl" />
           <div className="pointer-events-none absolute bottom-0 end-0 h-20 w-20 rounded-full bg-[#E7CE51]/15 blur-2xl" />
           <div className="relative">
@@ -459,16 +533,17 @@ export default function SemestrialAttendancePage() {
         </div>
       </div>
 
-      {!matrix || matrix.courseSessions.length === 0 ? (
+      {(!matrix || matrix.courseSessions.length === 0) &&
+      filtered.length === 0 ? (
         <p className="text-center text-sm text-muted-foreground">
           {isAr
-            ? "لا توجد حصص في هذه الفترة."
-            : "No sessions in this period."}
+            ? "لا توجد حصص أو طلاب في هذه الفترة."
+            : "No sessions or students in this period."}
         </p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-[#D8DDF5] bg-card shadow-sm">
-          <div className="flex flex-col gap-2 border-b border-border bg-[#F6F7FE] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#1B2065] ">
+        <div className="overflow-hidden rounded border border-[#51689A]/35 bg-[#FEF9F9] shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]">
+          <div className="flex flex-col gap-2 bg-[#F6F7FE] px-4 py-2 sm:flex-row sm:items-center sm:justify-between dark:bg-[#242A40]">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#1B2065] dark:text-[#EEF4F7] ">
               <Users className="size-4 text-primary border border-blue-primary rounded-sm" />
               {isAr ? "قائمة الطلاب" : "Student list"}
             </div>
@@ -478,7 +553,7 @@ export default function SemestrialAttendancePage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={isAr ? "بحث…" : "Search…"}
-                className="h-9 border-[#51689A]/30 bg-[#FEF9F9] ps-9"
+                className="h-8 rounded border-[#51689A]/30 bg-[#FEF9F9] ps-9 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7]"
               />
             </div>
           </div>
@@ -488,14 +563,14 @@ export default function SemestrialAttendancePage() {
               dir="ltr"
             >
               <thead>
-                <tr className=" bg-[#51689A] text-white">
-                  <th className="sticky start-0 z-20 min-w-[5.5rem]  bg-[#51689A] px-2 py-2.5 text-left text-xs font-bold">
+                <tr className="bg-[#51689A] text-white dark:bg-[#242A40] dark:text-[#EEF4F7]">
+                  <th className="sticky start-0 z-20 min-w-[5.5rem]  bg-[#51689A] px-2 py-2.5 dark:bg-[#242A40] text-left text-xs font-bold">
                     {isAr ? "المعرّف" : "User ID"}
                   </th>
-                  <th className="sticky start-[5.5rem] z-20 min-w-[11rem] bg-[#51689A] px-2 py-2.5 text-left text-xs font-bold">
+                  <th className="sticky start-[5.5rem] z-20 min-w-[11rem] bg-[#51689A] px-2 py-2.5 dark:bg-[#242A40] text-left text-xs font-bold">
                     {isAr ? "الاسم" : "Name"}
                   </th>
-                  {matrix.courseSessions.map((s) => (
+                  {(matrix?.courseSessions ?? []).map((s) => (
                     <th
                       key={s.id}
                       className="min-w-[4rem] border-e border-white/15 px-1 py-2 text-center text-[10px] font-semibold sm:text-xs"
@@ -503,14 +578,11 @@ export default function SemestrialAttendancePage() {
                       {shortDateHeader(s, locale)}
                     </th>
                   ))}
-                  <th className="min-w-[4rem] bg-[#51689A] px-1 py-2 text-center text-xs font-bold">
+                  <th className="min-w-[4rem] bg-[#51689A] px-1 py-2 text-center text-xs font-bold dark:bg-[#242A40]">
                     {isAr ? "غياب" : "Absence count"}
                   </th>
-                  <th className="min-w-[3.5rem] bg-[#51689A] px-1 py-2 text-center text-xs font-bold">
-                    {isAr ? "نقاط" : "Points"}
-                  </th>
-                  <th className="min-w-[3rem] bg-[#51689A] px-1 py-2 text-center text-xs font-bold">
-                    {isAr ? "ملاحظات" : "Notes"}
+                  <th className="min-w-[3rem] bg-[#51689A] px-1 py-2 text-center text-xs font-bold dark:bg-[#242A40]">
+                    ›
                   </th>
                 </tr>
               </thead>
@@ -519,7 +591,7 @@ export default function SemestrialAttendancePage() {
                   <tr
                     key={r.id}
                     tabIndex={0}
-                    className="cursor-pointer border-b border-[#EEF0F7] transition-colors odd:bg-white even:bg-[#FAFBFF] hover:bg-[#EEF1FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#74A7BD]"
+                    className="cursor-pointer border-b border-[#EEF0F7] transition-colors odd:bg-white even:bg-[#FAFBFF] hover:bg-[#EEF1FC] dark:border-[#383F58] dark:odd:bg-[#1A2036] dark:even:bg-[#242A40]/50 dark:hover:bg-[#383F58] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#74A7BD]"
                     onClick={() => setStudentModal(r)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -533,35 +605,29 @@ export default function SemestrialAttendancePage() {
                         : `Details for ${r.name || "student"}`
                     }
                   >
-                    <td className="sticky start-0 z-10 min-w-[5.5rem] border-e border-[#D8DDF5] bg-inherit px-2 py-2 font-mono text-xs text-[#1B2065]">
+                    <td className="sticky start-0 z-10 min-w-[5.5rem] border-e border-[#D8DDF5] bg-inherit px-2 py-2 font-mono text-xs text-[#1B2065] dark:border-[#383F58] dark:text-[#EEF4F7]">
                       {userIdFromEmail(r.email)}
                     </td>
                     <td className="sticky start-[5.5rem] z-10 min-w-[11rem] border-e border-[#D8DDF5] bg-inherit px-2 py-2">
-                      <p className="font-medium text-[#1B2065]">{r.name}</p>
+                      <p className="font-medium text-[#1B2065] dark:text-[#EEF4F7]">{r.name}</p>
                     </td>
                     {r.cells.map((c, j) => (
                       <td
-                        key={matrix.courseSessions[j]?.id ?? j}
-                        className="border-e border-[#EEF0F7] px-0.5 py-2 text-center"
+                        key={matrix?.courseSessions[j]?.id ?? j}
+                        className="border-e border-[#EEF0F7] px-0.5 py-2 text-center dark:border-[#383F58]"
                       >
                         <StatusCell s={c} isAr={isAr} />
                       </td>
                     ))}
-                    <td className="border-s border-[#D8DDF5] bg-[#FDECEC]/20 px-1 text-center text-sm font-semibold text-[#C71122]">
+                    <td className="border-s border-[#D8DDF5] bg-[#FDECEC]/20 dark:border-[#383F58] dark:bg-[#3A1A22]/30 px-1 text-center text-sm font-semibold text-[#C71122]">
                       {r.absent}
-                    </td>
-                    <td className="bg-[#E8F3F6]/20 px-1 text-center text-sm">
-                      <span className="inline-flex items-center justify-center gap-0.5 font-semibold text-[#1B2065]">
-                        <Star className="size-3.5 fill-primary/30 text-primary" />
-                        {r.present}
-                      </span>
                     </td>
                     <td className="px-1 text-center">
                       <Button
                         type="button"
                         size="icon"
                         variant="ghost"
-                        className="size-8 text-[#51689A] hover:text-[#1B2065]"
+                        className="size-8 text-[#51689A] hover:text-[#1B2065] dark:text-[#9BA8C4] dark:hover:text-[#EEF4F7]"
                         aria-label={
                           isAr
                             ? "فتح تفاصيل الملاحظات"
@@ -612,18 +678,18 @@ export default function SemestrialAttendancePage() {
         <DialogContent
           showCloseButton
           overlayClassName="fixed inset-0 z-50 bg-[#74A7BDCC] duration-100 supports-backdrop-filter:backdrop-blur-xl data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
-          className="w-full sm:w-2/3 xl:w-full  gap-0 border-0 bg-white p-6 shadow-lg sm:max-w-3xl sm:rounded-xl font-montserrat sm:p-8"
+          className="w-full gap-0 border-0 bg-white p-6 font-montserrat shadow-lg dark:border-[#383F58] dark:bg-[#1A2036] sm:w-2/3 sm:max-w-3xl sm:rounded-xl sm:p-8 xl:w-full"
         >
           {studentModal ? (
             <>
               <div className="flex flex-col gap-1 pe-8 sm:pe-10">
                 <DialogTitle asChild>
-                  <h2 className="text-start text-xl font-bold leading-tight text-[#1B2065] sm:text-2xl">
+                  <h2 className="text-start text-xl font-bold leading-tight text-[#1B2065] sm:text-2xl dark:text-[#EEF4F7]">
                     {studentModal.name || "—"}
                   </h2>
                 </DialogTitle>
                 <DialogDescription asChild>
-                  <p className="text-start text-sm leading-relaxed text-[#51689A] sm:text-[15px]">
+                  <p className="text-start text-sm leading-relaxed text-[#51689A] sm:text-[15px] dark:text-[#9BA8C4]">
                     {isAr
                       ? "اكتب الملاحظات وسجّل نقاط المشاركة."
                       : "Write notes and mark participation points."}
@@ -632,7 +698,7 @@ export default function SemestrialAttendancePage() {
               </div>
 
               <div className="mt-6 space-y-3">
-                <p className="text-start text-base font-semibold text-[#1B2065]">
+                <p className="text-start text-base font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
                   {isAr ? "معدّل الغياب" : "Absence rate"}
                 </p>
                 <div className="flex flex-wrap gap-10 sm:gap-14 items-center justify-center">
@@ -643,7 +709,7 @@ export default function SemestrialAttendancePage() {
                     >
                       {studentAbsencePcts.absent}%
                     </span>
-                    <span className="text-sm text-[#7A87A5]">
+                    <span className="text-sm text-[#7A87A5] dark:text-[#9BA8C4]">
                       {isAr ? "غائب" : "Absent"}
                     </span>
                   </div>
@@ -654,7 +720,7 @@ export default function SemestrialAttendancePage() {
                     >
                       {studentAbsencePcts.justified}%
                     </span>
-                    <span className="text-sm text-[#7A87A5]">
+                    <span className="text-sm text-[#7A87A5] dark:text-[#9BA8C4]">
                       {isAr ? "مبرر" : "Justified"}
                     </span>
                   </div>
@@ -662,7 +728,7 @@ export default function SemestrialAttendancePage() {
               </div>
 
               <div className="mt-8 space-y-3">
-                <p className="text-start text-base font-semibold text-[#1B2065]">
+                <p className="text-start text-base font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
                   {isAr ? "ملاحظات" : "Notes"}
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -680,8 +746,8 @@ export default function SemestrialAttendancePage() {
                         className={cn(
                           "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
                           active
-                            ? "border-[#51689AF2] bg-[#51689AF2] text-white"
-                            : "border-[#1B2065]/35 bg-white text-[#1B2065] hover:bg-[#F6F7FE]"
+                            ? "border-[#51689AF2] bg-[#51689AF2] text-white dark:border-[#74A7BD] dark:bg-[#74A7BD] dark:text-[#13182A]"
+                            : "border-[#1B2065]/35 bg-white text-[#1B2065] hover:bg-[#F6F7FE] dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:hover:bg-[#383F58]"
                         )}
                       >
                         {pill.label}
@@ -697,10 +763,10 @@ export default function SemestrialAttendancePage() {
                       );
                       if (!pill) return null;
                       return (
-                        <div className="relative mt-4 rounded-2xl border border-[#C5D4E0]/80 bg-[#E8F2F6] p-4 pe-10 text-start">
+                        <div className="relative mt-4 rounded-2xl border border-[#C5D4E0]/80 bg-[#E8F2F6] p-4 pe-10 text-start dark:border-[#383F58] dark:bg-[#242A40]">
                           <button
                             type="button"
-                            className="absolute end-2 top-2 rounded-full p-1.5 text-[#51689A] hover:bg-white/60"
+                            className="absolute end-2 top-2 rounded-full p-1.5 text-[#51689A] hover:bg-white/60 dark:text-[#9BA8C4] dark:hover:bg-[#383F58]"
                             aria-label={isAr ? "إغلاق الملاحظة" : "Close note"}
                             onClick={() => setOpenNoteSessionId(null)}
                           >
@@ -710,7 +776,7 @@ export default function SemestrialAttendancePage() {
                             className={cn(
                               "text-pretty text-sm sm:text-base",
                               pill.note
-                                ? "text-[#51689A]"
+                                ? "text-[#51689A] dark:text-[#9BA8C4]"
                                 : "italic text-muted-foreground"
                             )}
                           >

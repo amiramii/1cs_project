@@ -130,7 +130,7 @@ export default function DevRoleSwitcher() {
   return (
     <div
       ref={panelRef}
-      className="fixed z-[100] max-w-[min(100vw-2rem,22rem)] rounded-xl border border-[#E7CE51]/50 bg-[#FEF9F9]/95 text-xs text-[#1B2065] shadow-lg backdrop-blur-md dark:border-[#51689A]/40 dark:bg-[#1B2065]/95 dark:text-[#FEF9F9]"
+      className="fixed z-[100] max-w-[min(100vw-2rem,22rem)] rounded-xl border border-[#E7CE51]/50 bg-[#FEF9F9]/95 text-xs text-[#1B2065] shadow-lg backdrop-blur-md dark:border-[#51689A]/40 dark:bg-[#182449]/95 dark:text-[#EEF4F7]"
       style={{ left: pos.x, top: pos.y }}
       role="region"
       aria-label="Development role preview"
@@ -139,7 +139,7 @@ export default function DevRoleSwitcher() {
         ref={dragHandleRef}
         data-dev-role-drag-handle
         onPointerDown={onHandlePointerDown}
-        className="flex cursor-grab select-none items-center gap-2 rounded-t-xl border-b border-[#E7CE51]/40 bg-[#E7CE51]/20 px-2 py-2 active:cursor-grabbing dark:border-[#51689A]/40 dark:bg-[#1B2065]/80"
+        className="flex cursor-grab select-none items-center gap-2 rounded-t-xl border-b border-[#E7CE51]/40 bg-[#E7CE51]/20 px-2 py-2 active:cursor-grabbing dark:border-[#51689A]/40 dark:bg-[#182449]/80"
         title="Drag to move"
       >
         <GripVertical

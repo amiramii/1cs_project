@@ -34,46 +34,46 @@ function AbsenceDetailsModal({ justification, onClose }: ModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-[820px] max-w-[95vw] flex flex-row overflow-hidden relative">
+      <div className="bg-white dark:bg-[#1A2036] rounded-2xl shadow-2xl w-[820px] max-w-[95vw] flex flex-row overflow-hidden relative">
 
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 bg-white border border-[#e0e7f0] rounded-full p-1.5 shadow hover:bg-gray-100 transition z-10"
+          className="absolute top-3 right-3 bg-white dark:bg-[#1A2036] border border-[#e0e7f0] rounded-full p-1.5 shadow hover:bg-gray-100 transition z-10"
         >
-          <X size={18} className="text-[#1B2065]" />
+          <X size={18} className="text-[#1B2065] dark:text-[#EEF4F7]" />
         </button>
 
         {/* Left: Document preview */}
         <div className="w-[48%] bg-[#f4f6fb] flex items-center justify-center p-6">
           <iframe
             src="/justmed.pdf"
-            className="w-full h-full rounded-xl shadow-md bg-white"
+            className="w-full h-full rounded-xl shadow-md bg-white dark:bg-[#1A2036]"
           />
         </div>
 
         {/* Right: Details */}
         <div className="w-[52%] flex flex-col p-8 gap-5">
-          <h2 className="text-2xl font-bold text-[#1B2065]">Absences details</h2>
+          <h2 className="text-2xl font-bold text-[#1B2065] dark:text-[#EEF4F7]">Absences details</h2>
 
           <div>
-            <p className="text-sm text-[#51689A] mb-1">Absence date :</p>
+            <p className="text-sm text-[#51689A] dark:text-[#9BA8C4] mb-1">Absence date :</p>
             <p className="text-lg font-semibold text-[#4e7de0]">
               {justification.startDate} - {justification.endDate}
             </p>
           </div>
 
           <div>
-            <p className="text-sm text-[#51689A] mb-1">Absence cause :</p>
-            <p className="text-base font-semibold text-[#1B2065]">{justification.cause}</p>
+            <p className="text-sm text-[#51689A] dark:text-[#9BA8C4] mb-1">Absence cause :</p>
+            <p className="text-base font-semibold text-[#1B2065] dark:text-[#EEF4F7]">{justification.cause}</p>
           </div>
 
           <hr className="border-[#e8edf5]" />
 
           <div className="flex flex-col gap-2">
-            <h3 className="text-lg font-bold text-[#1B2065]">Notes</h3>
+            <h3 className="text-lg font-bold text-[#1B2065] dark:text-[#EEF4F7]">Notes</h3>
             <p className="text-sm text-[#4e7de0]">Mention rejection reasons</p>
             <textarea
-              className="w-full border border-[#c5d0e8] rounded-xl p-3 text-sm text-[#1B2065] placeholder-[#b0bcd4] resize-none focus:outline-none focus:ring-2 focus:ring-[#4e7de0]/30 transition min-h-[100px]"
+              className="w-full border border-[#c5d0e8] rounded-xl p-3 text-sm text-[#1B2065] dark:text-[#EEF4F7] placeholder-[#b0bcd4] resize-none focus:outline-none focus:ring-2 focus:ring-[#4e7de0]/30 transition min-h-[100px]"
               placeholder="Leave note.."
               value={note}
               onChange={e => setNote(e.target.value)}
@@ -110,16 +110,16 @@ export default function JustificationDetails() {
   return (
     <div className="space-y-8 gap-4">
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold text-[#1B2065]">Students</h1>
-        <p className="text-lg text-[#51689A]">
+        <h1 className="text-2xl font-semibold text-[#1B2065] dark:text-[#EEF4F7]">Students</h1>
+        <p className="text-lg text-[#51689A] dark:text-[#9BA8C4]">
           check student justifications, refuse or accept them
         </p>
       </div>
 
       <div className="flex flex-row items-center gap-12">
-        <ArrowLeft className="text-[#1B2065] cursor-pointer" size={36} />
-        <h1 className="text-3xl font-semibold text-[#1B2065]">Bensaber Mohammed</h1>
-        <div className="flex flex-row gap-6 text-sm text-[#51689A]">
+        <ArrowLeft className="text-[#1B2065] dark:text-[#EEF4F7] cursor-pointer" size={36} />
+        <h1 className="text-3xl font-semibold text-[#1B2065] dark:text-[#EEF4F7]">Bensaber Mohammed</h1>
+        <div className="flex flex-row gap-6 text-sm text-[#51689A] dark:text-[#9BA8C4]">
           <p>2CS</p>
           <p>-</p>
           <p>G2</p>

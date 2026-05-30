@@ -55,8 +55,14 @@ export default function ProfSessions({
   if (role === "schooling") {
     return (
     <div className=" space-y-4">
-      <h1 className="text-2xl font-semibold text-[#1B2065F2]">Session Requests</h1>
-      <p className="text-lg text-[#51689AF2]">Professors additional session requests</p>
+      <h1 className="text-2xl font-semibold text-[#1B2065F2] dark:text-[#EEF4F7]">
+        {isAr ? "طلبات الحصص" : "Session Requests"}
+      </h1>
+      <p className="text-lg text-[#51689AF2] dark:text-[#9BA8C4]">
+        {isAr
+          ? "طلبات الأساتذة لإضافة حصص إضافية."
+          : "Professors' additional session requests."}
+      </p>
       <ProfessorSessionTable />
     </div>
     );

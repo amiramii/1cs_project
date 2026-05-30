@@ -142,10 +142,10 @@ function ScheduleGridSkeleton({ cards = 6 }: { cards?: number }) {
       {Array.from({ length: cards }).map((_, i) => (
         <div
           key={i}
-          className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+          className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]"
         >
           <Skeleton className="h-[168px] w-full rounded-none bg-muted/80" />
-          <div className="grid grid-cols-2 divide-x divide-slate-200 bg-white py-2">
+          <div className="grid grid-cols-2 divide-x divide-slate-200 bg-white py-2 dark:divide-[#383F58] dark:bg-[#1A2036]">
             <Skeleton className="mx-2 h-3 justify-self-center bg-muted/90" />
             <Skeleton className="mx-2 h-3 justify-self-center bg-muted/90" />
           </div>
@@ -164,9 +164,9 @@ function ScheduleSingleSkeleton() {
       aria-busy="true"
       aria-label="Loading schedule"
     >
-      <div className="flex w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]">
         <Skeleton className="h-[168px] w-full rounded-none bg-muted/80" />
-        <div className="grid grid-cols-2 divide-x divide-slate-200 bg-white py-2">
+        <div className="grid grid-cols-2 divide-x divide-slate-200 bg-white py-2 dark:divide-[#383F58] dark:bg-[#1A2036]">
           <Skeleton className="mx-2 h-3 justify-self-center bg-muted/90" />
           <Skeleton className="mx-2 h-3 justify-self-center bg-muted/90" />
         </div>
@@ -184,7 +184,7 @@ function ScheduleStudentBrowseSkeleton() {
       aria-busy="true"
       aria-label="Loading schedules"
     >
-      <div className="flex w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex w-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-[#383F58] dark:bg-[#1A2036]">
         <Skeleton
           className="w-full rounded-none bg-muted/80"
           style={{ height: STUDENT_BROWSE_PDF_HEIGHT }}
@@ -266,6 +266,13 @@ export default function ScheduleListShell({
           parsed = null
         }
 
+        if (!response.ok && (response.status === 403 || response.status === 404)) {
+          if (active) {
+            setSchedules([])
+          }
+          return
+        }
+
         if (!response.ok) {
           throw new Error(rawText || "Failed to fetch schedules")
         }
@@ -280,10 +287,18 @@ export default function ScheduleListShell({
             ? data!.results!
             : []
 
-        const remoteSchedules = rawList.map((item) => ({
-          ...item,
-          pdf: normalizePdfUrl(item.pdf),
-        }))
+        const remoteSchedules = rawList
+          .filter((item) => {
+            const a = String(item.audience ?? "").toLowerCase()
+            if (backendAudience === "teacher") {
+              return a === "teacher" || a === "professor"
+            }
+            return a === backendAudience
+          })
+          .map((item) => ({
+            ...item,
+            pdf: normalizePdfUrl(item.pdf),
+          }))
         if (active) {
           setSchedules(remoteSchedules)
         }
@@ -491,11 +506,11 @@ export default function ScheduleListShell({
       {isStudentBrowse ? (
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl">
+            <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl dark:text-[#EEF4F7]">
               {title}
             </h1>
             {subtitle ? (
-              <p className="mt-1.5 text-sm font-medium text-[#51689A] sm:text-base">
+              <p className="mt-1.5 text-sm font-medium text-[#51689A] sm:text-base dark:text-[#9BA8C4]">
                 {subtitle}
               </p>
             ) : null}
@@ -519,7 +534,7 @@ export default function ScheduleListShell({
           </Button>
         </header>
       ) : hideTopNavigation ? (
-        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl dark:text-[#EEF4F7]">
           {title}
         </h1>
       ) : (
@@ -552,13 +567,13 @@ export default function ScheduleListShell({
 
       <div className="flex w-full min-w-0 max-w-none flex-1 flex-col gap-6 bg-transparent">
         {!isStudentBrowse ? (
-          <div className="flex w-full flex-col gap-4 rounded-xl border border-blue-primary/50 bg-[#F6F9FB] p-3 shadow-md lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex w-full flex-col gap-4 rounded-xl border border-blue-primary/50 bg-[#F6F9FB] p-3 shadow-md lg:flex-row lg:items-center lg:justify-between dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
             <div className="flex min-w-0 shrink-0 items-center gap-3">
-              <div className="flex h-fit w-fit shrink-0 items-center justify-center rounded-sm border border-blue-primary bg-slate-50 ">
-                <Users className="text-[#1B2065]" size={20} aria-hidden />
+              <div className="flex h-fit w-fit shrink-0 items-center justify-center rounded-sm border border-blue-primary bg-slate-50 dark:border-[#383F58] dark:bg-[#242A40] ">
+                <Users className="text-[#1B2065] dark:text-[#EEF4F7]" size={20} aria-hidden />
               </div>
               <div className="min-w-0">
-                <p className="text-base font-bold text-[#1B2065]">
+                <p className="text-base font-bold text-[#1B2065] dark:text-[#EEF4F7]">
                   {isArabic ? "قائمة الجداول" : "Schedule list"}
                 </p>
                 {!hideTopNavigation ? (
@@ -594,7 +609,7 @@ export default function ScheduleListShell({
                   value={gradeFilter === "all" ? undefined : gradeFilter}
                   onValueChange={(v) => setGradeFilter(v as GradeFilter)}
                 >
-                  <SelectTrigger className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-sm font-medium text-[#1B2065] shadow-sm">
+                  <SelectTrigger className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-sm font-medium text-[#1B2065] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]">
                     <SelectValue
                       placeholder={isArabic ? "تصفية" : "Filter"}
                     />

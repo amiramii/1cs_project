@@ -164,11 +164,6 @@ export function getSideBarItems(
       href: "/Students",
     },
     {
-      iconId: "justifications",
-      label: t("Justifications", "مبررات الغياب"),
-      href: "/Justifications",
-    },
-    {
       iconId: "schooling",
       label: t("Schooling", "طاقم التعليم"),
       href: "/Schooling",
@@ -195,6 +190,11 @@ export function getSideBarItems(
       iconId: "students",
       label: t("Students", "الطلاب"),
       href: "/Students",
+    },
+    {
+      iconId: "absences",
+      label: t("Absences", "الغياب"),
+      href: "/Absences",
     },
   ]
 
@@ -240,12 +240,12 @@ export function getSideBarItems(
     },
     {
       iconId: "profabsences",
-      label: t("ProfessorAbsences", "غياب الأساتذة"),
+      label: t("Professor Absences", "غياب الأساتذة"),
       href: "/ProfAuditions/Absences",
-    },   
-   {
+    },
+    {
       iconId: "requests",
-      label: t("SessionRequests", "الطلبات"),
+      label: t("Session Requests", "طلبات الحصص"),
       href: "/ProfAuditions/Requests",
     }
   ]

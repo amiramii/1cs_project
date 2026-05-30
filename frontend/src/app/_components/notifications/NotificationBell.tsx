@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Bell, Loader2 } from "lucide-react"
 
 import { useLanguage } from "@/app/_components/language-provider"
@@ -52,17 +53,36 @@ function NotificationRow({
   isAr: boolean
   onRead: (id: string) => void
 }) {
+  const href =
+    n.link && n.link.startsWith("/") ? n.link : n.link ? `/${n.link}` : null
+
+  const content = (
+    <>
+      <p className="text-sm font-medium leading-tight text-foreground">
+        {n.title}
+      </p>
+      <p className="line-clamp-2 text-xs text-muted-foreground">{n.body}</p>
+      <p className="text-[10px] text-muted-foreground">
+        <ClientRelativeTime iso={n.created_at} isAr={isAr} />
+      </p>
+    </>
+  )
+
   return (
     <div className="border-b border-border px-3 py-2.5 last:border-b-0">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="text-sm font-medium leading-tight text-foreground">
-            {n.title}
-          </p>
-          <p className="line-clamp-2 text-xs text-muted-foreground">{n.body}</p>
-          <p className="text-[10px] text-muted-foreground">
-            <ClientRelativeTime iso={n.created_at} isAr={isAr} />
-          </p>
+          {href ? (
+            <Link
+              href={href}
+              className="block rounded-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => onRead(n.id)}
+            >
+              {content}
+            </Link>
+          ) : (
+            content
+          )}
         </div>
         <Button
           type="button"
@@ -99,17 +119,17 @@ export default function NotificationBell() {
           type="button"
           
           size="icon"
-          className="relative h-10 w-10 shrink-0 rounded-full bg-card hover:bg-accent"
+          className="relative h-10 w-10 shrink-0 rounded-full bg-[#FEF9F9] text-[#1B2065] hover:bg-[#EEF4F7] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:hover:bg-[#2E3650]"
           aria-label={isAr ? "الإشعارات" : "Notifications"}
           aria-busy={loading}
         >
           {loading ? (
             <Loader2
-              className="size-[22px] animate-spin text-muted-foreground"
+              className="size-[22px] animate-spin text-[#5D719D] dark:text-[#9BA8C4]"
               aria-hidden
             />
           ) : (
-            <Bell className="size-[20px] text-muted-foreground" />
+            <Bell className="size-[20px] text-[#5D719D] dark:text-[#9BA8C4]" />
           )}
           {!loading && unreadCount > 0 && (
             <Badge
@@ -123,7 +143,7 @@ export default function NotificationBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align={isAr ? "start" : "end"}
-        className="w-[min(100vw-2rem,22rem)] border-border/50 bg-popover/80 p-0 shadow-xl backdrop-blur-xl backdrop-saturate-150 dark:bg-popover/85"
+        className="w-[min(100vw-2rem,22rem)] border-[#D6DEEF] bg-[#FEF9F9]/95 p-0 shadow-xl backdrop-blur-xl dark:border-[#383F58] dark:bg-[#1A2036]/95"
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <div className="border-b border-border px-3 py-2">

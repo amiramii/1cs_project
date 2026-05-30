@@ -59,6 +59,12 @@ type JwtPayload = {
   groups?: unknown;
   is_superuser?: unknown;
   is_staff?: unknown;
+  full_name?: unknown;
+  name?: unknown;
+  username?: unknown;
+  first_name?: unknown;
+  last_name?: unknown;
+  email?: unknown;
 };
 
 export function getAccessToken() {
@@ -202,6 +208,46 @@ export function getRoleFromAccessToken(token: string): StoredAppRole | null {
   return extractRoleFromPayload(parseJwtPayload(token));
 }
 
+function cleanDisplayName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** Best-effort display name from JWT payload; returns null when unavailable. */
+export function getUserDisplayNameFromAccessToken(token: string): string | null {
+  const payload = parseJwtPayload(token);
+  if (!payload) return null;
+
+  const direct =
+    cleanDisplayName(payload.full_name) ??
+    cleanDisplayName(payload.name) ??
+    cleanDisplayName(payload.username);
+  if (direct) return direct;
+
+  const first = cleanDisplayName(payload.first_name);
+  const last = cleanDisplayName(payload.last_name);
+  if (first && last) return `${first} ${last}`;
+  if (first) return first;
+  if (last) return last;
+
+  const email = cleanDisplayName(payload.email);
+  if (email && email.includes("@")) return email.split("@")[0];
+  return null;
+}
+
+/** Current user display name (JWT first, then stored email local-part). */
+export function getCurrentUserDisplayName(): string | null {
+  const token = getAccessToken();
+  if (token) {
+    const fromToken = getUserDisplayNameFromAccessToken(token);
+    if (fromToken) return fromToken;
+  }
+  const email = getStoredUserEmail();
+  if (email && email.includes("@")) return email.split("@")[0];
+  return null;
+}
+
 export function getCurrentAppRole(fallback: StoredAppRole = "admin"): StoredAppRole {
   const devOverride = getDevRoleOverride();
   if (devOverride) return devOverride;
@@ -224,6 +270,7 @@ export function clearTokens(){
   sessionStorage.removeItem(REFRESH_KEY);
   sessionStorage.removeItem(APP_ROLE_KEY);
   sessionStorage.removeItem(USER_EMAIL_KEY);
+  sessionStorage.removeItem("chekin:dashboard-home-seen");
   if (isDevRolePreviewEnabled()) {
     sessionStorage.removeItem(DEV_APP_ROLE_OVERRIDE_KEY);
     dispatchDevRoleChanged();

@@ -32,6 +32,28 @@ module.exports = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        status: {
+          info: {
+            bg: "hsl(var(--status-info-bg))",
+            fg: "hsl(var(--status-info-fg))",
+            border: "hsl(var(--status-info-border))",
+          },
+          warning: {
+            bg: "hsl(var(--status-warning-bg))",
+            fg: "hsl(var(--status-warning-fg))",
+            border: "hsl(var(--status-warning-border))",
+          },
+          danger: {
+            bg: "hsl(var(--status-danger-bg))",
+            fg: "hsl(var(--status-danger-fg))",
+            border: "hsl(var(--status-danger-border))",
+          },
+          success: {
+            bg: "hsl(var(--status-success-bg))",
+            fg: "hsl(var(--status-success-fg))",
+            border: "hsl(var(--status-success-border))",
+          },
+        },
       },
       fontFamily: {
         inter: ["var(--font-inter)"],

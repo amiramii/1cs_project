@@ -3,20 +3,21 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import ProfessorAbsencesView from "@/app/_components/absences/ProfessorAbsencesView";
 import StudentAbsencesView from "@/app/_components/absences/StudentAbsencesView";
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
 import { getAccessToken } from "@/lib/tokenStorage";
 import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole";
 
 /**
- * `/Absences` — student absence summary (per-module list). Other roles are redirected.
+ * `/Absences` — student module absences or professor absence justifications.
  */
 export default function Page() {
   const router = useRouter();
   const role = useEffectiveAppRole("admin");
 
   useEffect(() => {
-    if (role !== "student") {
+    if (role !== "student" && role !== "prof") {
       router.replace("/Dashboard");
     }
   }, [role, router]);
@@ -27,8 +28,12 @@ export default function Page() {
     if (!token) router.push("/Login");
   }, [router]);
 
-  if (role !== "student") {
+  if (role !== "student" && role !== "prof") {
     return null;
+  }
+
+  if (role === "prof") {
+    return <ProfessorAbsencesView />;
   }
 
   return <StudentAbsencesView />;

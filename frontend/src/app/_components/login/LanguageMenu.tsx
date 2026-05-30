@@ -24,7 +24,8 @@ export default function LanguageMenu({ language, onChange }: LanguageMenuProps) 
       <DropdownMenuTrigger asChild className="rounded-md">
         <Button
           size="sm"
-          className=" justify-between font-light"
+          variant="ghost"
+          className="justify-between bg-transparent font-light text-[#1B2065] shadow-none hover:bg-transparent dark:text-[#EEF4F7] dark:hover:bg-transparent"
         >
           {language === "en" ? "English" : "العربية"}
           {open ? <ChevronUp /> : <ChevronDown />}
@@ -33,7 +34,7 @@ export default function LanguageMenu({ language, onChange }: LanguageMenuProps) 
 
       <DropdownMenuContent
         align="end"
-        className="min-w-[min(100vw-2rem,7rem)] p-0 "
+        className="min-w-[min(100vw-2rem,7rem)] border-[#D6DEEF] bg-[#FEF9F9] p-0 dark:border-[#383F58] dark:bg-[#1A2036]"
       >
         <DropdownMenuItem onClick={() => onChange("en")}>English</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onChange("ar")}>العربية</DropdownMenuItem>

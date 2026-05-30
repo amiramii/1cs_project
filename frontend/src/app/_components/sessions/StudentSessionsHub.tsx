@@ -24,17 +24,17 @@ export default function StudentSessionsHub() {
   return (
     <div className="w-full max-w-3xl space-y-8">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] md:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] md:text-3xl dark:text-[#EEF4F7]">
           {isAr ? "حصصك" : "Your Sessions"}
         </h1>
-        <p className="text-[15px] text-[#51689A]">
+        <p className="text-[15px] text-[#51689A] dark:text-[#9BA8C4]">
           {isAr
             ? "تابع جدولك وحصصك المنشورة."
             : "Create sessions and manage attendance."}
         </p>
       </header>
 
-      <Alert className="border-[#1B2065]/25 bg-[#1B2065]/10">
+      <Alert className="border-[#1B2065]/25 bg-[#1B2065]/10 dark:border-[#74A7BD]/25 dark:bg-[#152A38]">
         <Info aria-hidden />
         <div className="min-w-0 flex-1 space-y-1">
           <AlertTitle>{isAr ? "حصصي" : "My sessions"}</AlertTitle>
@@ -46,14 +46,14 @@ export default function StudentSessionsHub() {
         </div>
       </Alert>
 
-      <div className="flex flex-col gap-4 rounded-2xl border-2 border-[#51689A]/50 bg-[#FEF9F9] p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border-2 border-[#51689A]/50 bg-[#FEF9F9] p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-[#383F58] dark:bg-[#1A2036]">
         <div className="min-w-0 space-y-1">
-          <p className="font-bold text-[#1B2065]">
+          <p className="font-bold text-[#1B2065] dark:text-[#EEF4F7]">
             {isAr
               ? "لديك حصة مجدولة اليوم (مثال)"
               : "You have a session scheduled today (sample)"}
           </p>
-          <p className="text-sm text-[#51689A]">
+          <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
             Algebra - G2 — Jan 13, 2023 — 10:30 AM
           </p>
         </div>
@@ -72,25 +72,25 @@ export default function StudentSessionsHub() {
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-lg font-bold text-[#1B2065]">
+        <h2 className="text-lg font-bold text-[#1B2065] dark:text-[#EEF4F7]">
           {isAr ? "سجل الحصص" : "Session History"}
         </h2>
-        <p className="text-sm text-[#51689A]">
+        <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
           {isAr ? "اطّلع على كل حصصك المحفوظة." : "Check all your saved sessions."}
         </p>
       </section>
 
-      <div className="rounded-2xl border border-[#51689A]/25 bg-[#F6F7FE] p-10 text-center shadow-inner">
+      <div className="rounded-2xl border border-[#51689A]/25 bg-[#F6F7FE] p-10 text-center shadow-inner dark:border-[#383F58] dark:bg-[#1A2036]">
         <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-[#74A7BD]/20">
           <CirclePlay
             className="size-10 text-[#74A7BD]"
             strokeWidth={1.25}
           />
         </div>
-        <h2 className="text-lg font-semibold text-[#51689A]">
+        <h2 className="text-lg font-semibold text-[#51689A] dark:text-[#EEF4F7]">
           {isAr ? "لا يوجد سجل حصص" : "No Session History"}
         </h2>
-        <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-[#51689A]">
+        <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-[#51689A] dark:text-[#9BA8C4]">
           {isAr
             ? "ستظهر حصصك المحفوظة هنا عند ربطها بالخادم."
             : "Start a new session to start tracking attendance. Save the session in order to check your session history."}
@@ -100,7 +100,7 @@ export default function StudentSessionsHub() {
       <Button
         type="button"
         variant="outline"
-        className="h-14 w-full rounded-xl border-2 border-[#1B2065] bg-[#FEF9F9] text-base font-medium text-[#1B2065] hover:bg-[#74A7BD]/10"
+        className="h-14 w-full rounded-xl border-2 border-[#1B2065] bg-[#FEF9F9] text-base font-medium text-[#1B2065] hover:bg-[#74A7BD]/10 dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:hover:bg-[#383F58]"
         asChild
       >
         <Link href="/Scheduals">

@@ -10,12 +10,12 @@ import Sidebar from "../../../components/ui/siderbar";
 import { useRouter } from "next/navigation";
 import { CircleUserRound } from "lucide-react";
 import {ModeToggle} from "../../_components/ModeToggle";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SidebarMenuIcon } from "../../../components/ui/sidebarMenuIcon";
 import { useLanguage } from "../../_components/language-provider";
 import LanguageMenu from "../../_components/login/LanguageMenu";
-import { clearTokens } from "../../../lib/tokenStorage";
+import { clearTokens, getCurrentUserDisplayName } from "../../../lib/tokenStorage";
 import { useEffectiveAppRole } from "../../../lib/useEffectiveAppRole";
 import DevRoleSwitcher from "../../_components/DevRoleSwitcher";
 import {
@@ -51,9 +51,32 @@ export default function DashboardLayout({
   const isRtl = dir === "rtl";
   const role = useEffectiveAppRole(DEFAULT_APP_ROLE) as AppSidebarRole;
   const isSchooling = role === "schooling";
+  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
 
   const navItems = getSideBarItems(language, role);
   const sidebarTx = getSidebarChromeTexts(language);
+
+  const DASHBOARD_HOME_SEEN_KEY = "chekin:dashboard-home-seen";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const path = (pathname ?? "/").split("?")[0]?.replace(/\/$/, "") || "/";
+    if (path === "/Dashboard") {
+      sessionStorage.setItem(DASHBOARD_HOME_SEEN_KEY, "1");
+      return;
+    }
+    const onSidebarRoute = navItems.some(
+      (item) => path === item.href || path.startsWith(`${item.href}/`)
+    );
+    if (!onSidebarRoute) return;
+    if (!sessionStorage.getItem(DASHBOARD_HOME_SEEN_KEY)) {
+      router.replace("/Dashboard");
+    }
+  }, [pathname, router, navItems]);
+
+  useEffect(() => {
+    setUserDisplayName(getCurrentUserDisplayName());
+  }, []);
   const profileGroup =
     role === "admin"
       ? language === "ar"
@@ -70,7 +93,8 @@ export default function DashboardLayout({
         : language === "ar"
           ? "الطالب"
           : "Student";
-  const profileName = language === "ar" ? "مستخدم تشيكن" : "Chekin User";
+  const profileName =
+    userDisplayName ?? (language === "ar" ? "مستخدم تشيكن" : "Chekin User");
 
   const handleLogout = () => {
     clearTokens();
@@ -93,13 +117,21 @@ export default function DashboardLayout({
     <NotificationProvider>
     <div className="relative min-h-screen text-foreground font-montserrat">
       <div
-        className="pointer-events-none fixed inset-0 -z-10"
+        className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
         aria-hidden
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-[#74A7BD]/10 via-[#FEF9F9] to-[#FEF9F9]" />
-        <div className="absolute -end-16 top-0 h-44 w-44 rounded-full bg-fuchsia-200/35 blur-3xl" />
-        <div className="absolute -end-20 top-8 h-48 w-48 rounded-full bg-[#74A7BD]/12 blur-3xl" />
-        <div className="absolute end-8 bottom-0 h-32 w-32 rounded-full bg-sky-200/25 blur-2xl" />
+        {/* Light background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#74A7BD]/10 via-[#FEF9F9] to-[#FEF9F9] dark:hidden" />
+        <div className="absolute -end-16 top-0 h-44 w-44 rounded-full bg-fuchsia-200/35 blur-3xl dark:hidden" />
+        <div className="absolute -end-20 top-8 h-48 w-48 rounded-full bg-[#74A7BD]/12 blur-3xl dark:hidden" />
+        <div className="absolute end-8 bottom-0 h-32 w-32 rounded-full bg-sky-200/25 blur-2xl dark:hidden" />
+
+        {/* Dark background — #141726 main tone */}
+        <div className="absolute inset-0 hidden bg-[#141726] dark:block" />
+        <div className="absolute inset-0 hidden bg-gradient-to-br from-[#141726] via-[#19203A] to-[#111322] dark:block" />
+        <div className="absolute inset-0 hidden bg-gradient-to-tl from-[#29587f]/38 via-transparent to-transparent dark:block" />
+        <div className="absolute -end-24 top-0 hidden h-64 w-64 rounded-full bg-[#29587f]/30 blur-3xl dark:block md:-end-32 md:h-80 md:w-80" />
+        <div className="absolute start-0 bottom-0 hidden h-48 w-48 rounded-full bg-[#383F58]/10 blur-3xl dark:block md:bottom-[-2rem] md:h-64 md:w-64" />
       </div>
         <Sidebar
           expanded={expanded}
@@ -107,10 +139,10 @@ export default function DashboardLayout({
           role={role}
         />
       <div className={`${shellClass} min-w-0`}>
-      <header className="sticky top-0 z-30 flex min-h-16 w-full items-center justify-between gap-3 border-b border-[#74A7BD]/20 bg-[#FEF9F9]/80 px-4 shadow-md backdrop-blur-sm sm:px-6">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-[#74A7BD]/8 to-transparent" />
-          <div className="flex min-w-0 items-center gap-2 text-foreground">
-            <SidebarMenuIcon id={activeItem.iconId} size={18} className="shrink-0" />
+      <header className="sticky top-0 z-30 flex min-h-16 w-full items-center justify-between gap-3 border-b border-[#74A7BD]/20 bg-[#FEF9F9]/80 px-4 shadow-md backdrop-blur-sm sm:px-6 dark:border-[#51689A]/30 dark:bg-[#141726]/95 dark:text-[#EEF4F7] dark:shadow-black/25">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-[#74A7BD]/8 to-transparent dark:via-[#29587f]/30" />
+          <div className="flex min-w-0 items-center gap-2 text-[#1B2065] dark:text-[#EEF4F7]">
+            <SidebarMenuIcon id={activeItem.iconId} size={18} className="shrink-0 text-[#1B2065] dark:text-[#EEF4F7]" />
             <span className="truncate text-sm font-semibold sm:text-base">{activeItem.label}</span>
           </div>
         <div className="flex shrink-0 items-center gap-3 sm:gap-4 ">
@@ -122,19 +154,19 @@ export default function DashboardLayout({
                 <Button
                   type="button"
                   size="icon"
-                  className="ms-1 h-12 w-12 shrink-0 rounded-full bg-card p-2 hover:bg-accent"
+                  className="ms-1 h-12 w-12 shrink-0 rounded-full bg-[#FEF9F9] p-2 text-[#1B2065] hover:bg-[#EEF4F7] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:hover:bg-[#2E3650]"
                   aria-label={language === "ar" ? "الحساب" : "Account menu"}
                 >
-                  <CircleUserRound className="size-7 text-foreground" strokeWidth={1} />
+                  <CircleUserRound className="size-7" strokeWidth={1} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align={isRtl ? "start" : "end"}
-                className="min-w-[min(100vw-2rem,9rem)] p-0 "
+                className="min-w-[min(100vw-2rem,9rem)] border-[#D6DEEF] bg-[#FEF9F9] p-0 dark:border-[#383F58] dark:bg-[#1A2036]"
               >
                 <DropdownMenuLabel className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">{profileName}</p>
-                  <p className="text-xs font-normal text-muted-foreground">{profileGroup}</p>
+                  <p className="text-sm font-semibold text-[#1B2065] dark:text-[#EEF4F7]">{profileName}</p>
+                  <p className="text-xs font-normal text-[#5D719D] dark:text-[#9BA8C4]">{profileGroup}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} variant="destructive">

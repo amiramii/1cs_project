@@ -33,7 +33,11 @@ export function isRouteAllowedForRole(pathname: string, role: AppSidebarRole): b
       p === "/Justifications/Schooling-Justifications" ||
       p.startsWith("/Justifications/Schooling-Justifications/") ||
       p === "/Justifications/Justification-details" ||
-      p.startsWith("/Justifications/Justification-details/")
+      p.startsWith("/Justifications/Justification-details/") ||
+      p === "/ProfAuditions/Absences" ||
+      p.startsWith("/ProfAuditions/Absences/") ||
+      p === "/ProfAuditions/Requests" ||
+      p.startsWith("/ProfAuditions/Requests/")
     )
   }
 
@@ -56,7 +60,9 @@ export function isRouteAllowedForRole(pathname: string, role: AppSidebarRole): b
       p === "/Scheduals" ||
       p.startsWith("/Scheduals/") ||
       p === "/Sessions" ||
-      p.startsWith("/Sessions/")
+      p.startsWith("/Sessions/") ||
+      p === "/Absences" ||
+      p.startsWith("/Absences/")
     )
   }
 
