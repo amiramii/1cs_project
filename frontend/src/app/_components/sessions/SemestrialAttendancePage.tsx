@@ -32,6 +32,10 @@ import {
 import { cn } from "@/lib/utils";
 import { getApiBaseUrl } from "@/lib/apiBase";
 import { checkinPath } from "@/lib/checkinApi";
+import {
+  loadStudentExclusions,
+  type StudentExclusionRow,
+} from "@/lib/checkinClient";
 import { loadDrfListAll } from "@/lib/drfPaginatedList";
 import { getAccessToken } from "@/lib/tokenStorage";
 
@@ -181,6 +185,7 @@ export default function SemestrialAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [exclusionFilter, setExclusionFilter] = useState<"all" | "excluded" | "notExcluded">("all");
   const [showAll, setShowAll] = useState(false);
   const [studentModal, setStudentModal] = useState<HistoryMatrixRow | null>(
     null
@@ -192,6 +197,7 @@ export default function SemestrialAttendancePage() {
     Awaited<ReturnType<typeof loadProfessorSessionData>> | null
   >(null);
   const [rosterRows, setRosterRows] = useState<HistoryMatrixRow[]>([]);
+  const [serverExclusions, setServerExclusions] = useState<StudentExclusionRow[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -283,6 +289,25 @@ export default function SemestrialAttendancePage() {
     };
   }, [openAssignment?.group, isAr]);
 
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const rows = await loadStudentExclusions(
+          typeof openAssignment?.module === "number"
+            ? { module: openAssignment.module }
+            : undefined
+        );
+        if (alive) setServerExclusions(rows);
+      } catch {
+        if (alive) setServerExclusions([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [openAssignment?.module]);
+
   const dist = useMemo(() => {
     if (!matrix || matrix.courseSessions.length === 0) {
       return { present: 0, absent: 0, justified: 0 };
@@ -327,16 +352,30 @@ export default function SemestrialAttendancePage() {
     return rosterRows;
   }, [matrix?.rows, rosterRows]);
 
+  const excludedEmails = useMemo(
+    () =>
+      new Set(
+        serverExclusions
+          .map((row) => row.student_email?.trim().toLowerCase())
+          .filter((email): email is string => Boolean(email))
+      ),
+    [serverExclusions]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return displayRows;
-    return displayRows.filter(
-      (r) =>
+    return displayRows.filter((r) => {
+      const isExcluded = excludedEmails.has(r.email.trim().toLowerCase());
+      if (exclusionFilter === "excluded" && !isExcluded) return false;
+      if (exclusionFilter === "notExcluded" && isExcluded) return false;
+      if (!q) return true;
+      return (
         r.name.toLowerCase().includes(q) ||
         r.email.toLowerCase().includes(q) ||
         userIdFromEmail(r.email).toLowerCase().includes(q)
-    );
-  }, [displayRows, search]);
+      );
+    });
+  }, [displayRows, search, exclusionFilter, excludedEmails]);
 
   const visible = useMemo(
     () => (showAll ? filtered : filtered.slice(0, SHEET_PAGE)),
@@ -556,6 +595,20 @@ export default function SemestrialAttendancePage() {
                 className="h-8 rounded border-[#51689A]/30 bg-[#FEF9F9] ps-9 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7]"
               />
             </div>
+            <select
+              value={exclusionFilter}
+              onChange={(e) =>
+                setExclusionFilter(e.target.value as typeof exclusionFilter)
+              }
+              className="h-8 rounded border border-[#51689A]/30 bg-[#FEF9F9] px-2 text-xs text-[#1B2065] dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7]"
+              aria-label={isAr ? "تصفية الاستبعاد" : "Filter exclusion"}
+            >
+              <option value="all">{isAr ? "الكل" : "All"}</option>
+              <option value="excluded">{isAr ? "مستبعد" : "Excluded"}</option>
+              <option value="notExcluded">
+                {isAr ? "غير مستبعد" : "Not excluded"}
+              </option>
+            </select>
           </div>
           <div className="overflow-x-auto">
             <table
@@ -580,6 +633,9 @@ export default function SemestrialAttendancePage() {
                   ))}
                   <th className="min-w-[4rem] bg-[#51689A] px-1 py-2 text-center text-xs font-bold dark:bg-[#242A40]">
                     {isAr ? "غياب" : "Absence count"}
+                  </th>
+                  <th className="min-w-[6rem] bg-[#51689A] px-1 py-2 text-center text-xs font-bold dark:bg-[#242A40]">
+                    {isAr ? "الاستبعاد" : "Exclusion"}
                   </th>
                   <th className="min-w-[3rem] bg-[#51689A] px-1 py-2 text-center text-xs font-bold dark:bg-[#242A40]">
                     ›
@@ -621,6 +677,17 @@ export default function SemestrialAttendancePage() {
                     ))}
                     <td className="border-s border-[#D8DDF5] bg-[#FDECEC]/20 dark:border-[#383F58] dark:bg-[#3A1A22]/30 px-1 text-center text-sm font-semibold text-[#C71122]">
                       {r.absent}
+                    </td>
+                    <td className="px-1 text-center">
+                      {excludedEmails.has(r.email.trim().toLowerCase()) ? (
+                        <span className="inline-flex rounded-full border border-[#DF2D3E]/45 bg-[#FFD1D5] px-2 py-1 text-[10px] font-semibold text-[#DF2D3E] dark:border-[#E85462] dark:bg-[#3A1A22] dark:text-[#F0707A]">
+                          {isAr ? "مستبعد" : "Excluded"}
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-[#74A7BD] bg-[#EEFAFF] px-2 py-1 text-[10px] font-semibold text-[#74A7BD] dark:border-[#74A7BD] dark:bg-[#152A38]">
+                          {isAr ? "غير مستبعد" : "Not excluded"}
+                        </span>
+                      )}
                     </td>
                     <td className="px-1 text-center">
                       <Button

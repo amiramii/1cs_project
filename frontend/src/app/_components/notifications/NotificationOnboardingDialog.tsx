@@ -39,7 +39,7 @@ export default function NotificationOnboardingDialog() {
       localStorage.setItem(STORAGE_KEY, "1")
       return
     }
-    setOpen(true)
+    queueMicrotask(() => setOpen(true))
   }, [])
 
   const finish = () => {

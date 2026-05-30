@@ -46,6 +46,8 @@ const SEMANTIC_CHART_COLORS: Record<string, string> = {
   present: "hsl(var(--chart-3))",
   absent: "hsl(var(--chart-4))",
   justified: "hsl(var(--chart-2))",
+  excluded: "hsl(var(--chart-4))",
+  notExcluded: "hsl(var(--chart-3))",
   pending: "hsl(var(--chart-3))",
   accepted: "hsl(var(--chart-2))",
   refused: "hsl(var(--chart-4))",
@@ -265,12 +267,11 @@ function OverviewBarChart({
 
 function TrendAreaChart({
   data,
-  isAr,
   isRtl,
   seriesLabel,
 }: {
   data: DashboardTrendPoint[];
-  isAr: boolean;
+  isAr?: boolean;
   isRtl: boolean;
   seriesLabel: string;
 }) {
@@ -545,18 +546,14 @@ export function ProfessorDashboardCharts({
       </ChartCard>
       <ChartCard
         className="lg:col-span-2"
-        title={isAr ? "حضور اليوم" : "Today’s attendance"}
+        title={isAr ? "الاستبعاد" : "Exclusion status"}
         description={
           isAr
-            ? "سجلات الحضور والغياب والتبرير لحصص اليوم."
-            : "Present, absent, and justified marks for today’s sessions."
+            ? "نسبة الطلاب المستبعدين وغير المستبعدين في مجموعاتك."
+            : "Excluded and not-excluded students in your groups."
         }
       >
-        <OverviewBarChart
-          data={charts?.attendanceToday ?? []}
-          isAr={isAr}
-          isRtl={isRtl}
-        />
+        <StatusPieChart data={charts?.exclusionStatus ?? []} isAr={isAr} />
       </ChartCard>
     </section>
   );

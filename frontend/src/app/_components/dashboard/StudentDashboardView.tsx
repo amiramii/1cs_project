@@ -40,7 +40,9 @@ export default function StudentDashboardView() {
 
   useEffect(() => {
     let alive = true;
-    setChartsLoading(true);
+    queueMicrotask(() => {
+      if (alive) setChartsLoading(true);
+    });
     void fetchStudentDashboardCharts(isAr).then((m) => {
       if (alive) {
         setCharts(m);
@@ -48,7 +50,8 @@ export default function StudentDashboardView() {
         notifyStudentAbsenceRisk(
           m.absencesByModule.map((row) => ({
             name: row.label,
-            count: row.value,
+            unjustified: row.value,
+            justified: 0,
           })),
           isAr
         );

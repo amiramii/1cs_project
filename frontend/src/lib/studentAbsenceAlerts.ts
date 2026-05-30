@@ -40,8 +40,8 @@ export function notifyStudentAbsenceRisk(
   const unjustifiedLimit = getModuleExclusionUnjustifiedLimit();
 
   for (const { name, unjustified, justified } of modules) {
-    const module = name.trim();
-    if (!module) continue;
+    const moduleName = name.trim();
+    if (!moduleName) continue;
 
     const excluded = isStudentExcludedFromAttendanceCounts(
       { justified, unjustified },
@@ -62,7 +62,7 @@ export function notifyStudentAbsenceRisk(
     if (!almost && !excluded) continue;
 
     const kind = excluded ? "excluded" : "almost";
-    const storageKey = alertStorageKey(module, kind);
+    const storageKey = alertStorageKey(moduleName, kind);
     if (alreadyNotified(storageKey)) continue;
     markNotified(storageKey);
 
@@ -77,18 +77,18 @@ export function notifyStudentAbsenceRisk(
     const body = excluded
       ? isAr
         ? mode === "general"
-          ? `بلغت الحد العام (${limit}) في «${module}». تواصل مع الشؤون التعليمية إن لزم.`
-          : `بلغت حد الاستبعاد في «${module}» (مبرر: ${justified}/${justifiedLimit}، غير مبرر: ${unjustified}/${unjustifiedLimit}).`
+          ? `بلغت الحد العام (${limit}) في «${moduleName}». تواصل مع الشؤون التعليمية إن لزم.`
+          : `بلغت حد الاستبعاد في «${moduleName}» (مبرر: ${justified}/${justifiedLimit}، غير مبرر: ${unjustified}/${unjustifiedLimit}).`
         : mode === "general"
-          ? `You reached the general limit (${limit}) in “${module}”. Contact the schooling office if needed.`
-          : `You reached an exclusion limit in “${module}” (justified: ${justified}/${justifiedLimit}, unjustified: ${unjustified}/${unjustifiedLimit}).`
+          ? `You reached the general limit (${limit}) in “${moduleName}”. Contact the schooling office if needed.`
+          : `You reached an exclusion limit in “${moduleName}” (justified: ${justified}/${justifiedLimit}, unjustified: ${unjustified}/${unjustifiedLimit}).`
       : isAr
         ? mode === "general"
-          ? `غياب واحد إضافي في «${module}» يعني الاستبعاد من المادة (الحد العام: ${limit}).`
-          : `أنت قريب من حد الاستبعاد في «${module}» (مبرر: ${justified}/${justifiedLimit}، غير مبرر: ${unjustified}/${unjustifiedLimit}).`
+          ? `غياب واحد إضافي في «${moduleName}» يعني الاستبعاد من المادة (الحد العام: ${limit}).`
+          : `أنت قريب من حد الاستبعاد في «${moduleName}» (مبرر: ${justified}/${justifiedLimit}، غير مبرر: ${unjustified}/${unjustifiedLimit}).`
         : mode === "general"
-          ? `One more absence in “${module}” may exclude you from that module (general limit: ${limit}).`
-          : `You are close to an exclusion limit in “${module}” (justified: ${justified}/${justifiedLimit}, unjustified: ${unjustified}/${unjustifiedLimit}).`;
+          ? `One more absence in “${moduleName}” may exclude you from that module (general limit: ${limit}).`
+          : `You are close to an exclusion limit in “${moduleName}” (justified: ${justified}/${justifiedLimit}, unjustified: ${unjustified}/${unjustifiedLimit}).`;
 
     pushRoleNotification({
       audience: ["student"],

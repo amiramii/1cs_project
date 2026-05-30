@@ -7,12 +7,18 @@ interface CirclesBgProps {
   seed?: number
 }
 
-function CirclesBg({ seed }: CirclesBgProps) {
-  const floatDelay = useMemo(() => (Math.random() * 5) + (seed || 0), [seed])
-  const floatDuration = useMemo(() => 12 + Math.random() * 5, [])
+/** Deterministic 0–1 from seed (stable across renders; no Math.random). */
+function seededUnit(seed: number, channel: number): number {
+  const x = Math.sin(seed * 12.9898 + channel * 78.233) * 43758.5453
+  return x - Math.floor(x)
+}
 
-  const pulseDelay = useMemo(() => (Math.random() * 5) + (seed || 0), [seed])
-  const pulseRepeatDelay = useMemo(() => Math.random() * 6, [])
+function CirclesBg({ seed }: CirclesBgProps) {
+  const s = seed ?? 1
+  const floatDelay = useMemo(() => seededUnit(s, 1) * 5 + s, [s])
+  const floatDuration = useMemo(() => 12 + seededUnit(s, 2) * 5, [s])
+  const pulseDelay = useMemo(() => seededUnit(s, 3) * 5 + s, [s])
+  const pulseRepeatDelay = useMemo(() => seededUnit(s, 4) * 6, [s])
 
   return (
     <motion.div

@@ -23,6 +23,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer"
+import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -38,6 +47,7 @@ import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
 import { deleteTeacherById } from "@/lib/checkinClient"
 import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
+import { uploadSingleCsvRow } from "@/lib/singleCsvUpload"
 
 type Semester = "S1" | "S2"
 
@@ -140,6 +150,17 @@ export default function DataTable() {
   const [currentPage, setCurrentPage] = useState(1)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [drawerMode, setDrawerMode] = useState<"add" | "edit" | null>(null)
+  const [savingDrawer, setSavingDrawer] = useState(false)
+  const [teacherForm, setTeacherForm] = useState({
+    full_name: "",
+    email: "",
+    module: "",
+    groups: "",
+    semester: "S1",
+    section: "",
+    year: "",
+  })
 
   const mapTeacherToRow = useCallback(
     (
@@ -332,6 +353,80 @@ export default function DataTable() {
       : yearFilter
 
   const colCount = 6
+  const selectedTeacher = useMemo(() => {
+    const firstId = [...selectedIds][0]
+    return data.find((row) => row.id === firstId) ?? null
+  }, [data, selectedIds])
+
+  const openAddDrawer = () => {
+    setTeacherForm({
+      full_name: "",
+      email: "",
+      module: "",
+      groups: "",
+      semester: "S1",
+      section: "",
+      year: "",
+    })
+    setDrawerMode("add")
+  }
+
+  const openEditDrawer = () => {
+    if (!selectedTeacher) {
+      setLoadError(isArabic ? "اختر أستاذًا واحدًا للتعديل." : "Select one professor to edit.")
+      return
+    }
+    setTeacherForm({
+      full_name: selectedTeacher.name,
+      email: selectedTeacher.email,
+      module: "",
+      groups: "",
+      semester: "S1",
+      section: "",
+      year: "",
+    })
+    setDrawerMode("edit")
+  }
+
+  const submitTeacherDrawer = async () => {
+    if (drawerMode !== "add") {
+      setLoadError(
+        isArabic
+          ? "تعديل الأستاذ يحتاج مسار تحديث مناسب في الخادم."
+          : "Professor edit needs a proper backend update endpoint for nested user and assignment fields."
+      )
+      return
+    }
+    setSavingDrawer(true)
+    setLoadError(null)
+    try {
+      const res = await uploadSingleCsvRow(
+        "teacher",
+        ["full_name", "email", "module", "groups", "semester", "section", "year"],
+        {
+        full_name: teacherForm.full_name,
+        email: teacherForm.email,
+        module: teacherForm.module,
+        groups: teacherForm.groups,
+        semester: teacherForm.semester,
+        section: teacherForm.section,
+        year: teacherForm.year,
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setDrawerMode(null)
+      await loadProfessors()
+    } catch (error) {
+      setLoadError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : isArabic
+            ? "تعذر حفظ الأستاذ."
+            : "Could not save professor."
+      )
+    } finally {
+      setSavingDrawer(false)
+    }
+  }
 
   return (
     <section className="mx-auto w-full max-w-full min-w-0 space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm dark:border-[#383F58] dark:bg-[#13182A]/40">
@@ -418,8 +513,8 @@ export default function DataTable() {
                 variant="outline"
                 size="icon"
                 className={`${controlBtnClass} py-[1px] px-[6px] bg-[#FEF9F9] h-fit w-fit`}
-                disabled
-                title={isArabic ? "تعديل (قريباً)" : "Edit (coming soon)"}
+                onClick={openEditDrawer}
+                title={isArabic ? "تعديل" : "Edit"}
                 aria-label={isArabic ? "تعديل" : "Edit"}
               >
                 <Pencil size={18} strokeWidth={1.5} className="text-[#1B2065F2] dark:text-[#EEF4F7]" />
@@ -429,8 +524,8 @@ export default function DataTable() {
                 variant="outline"
                 size="icon"
                 className={`${controlBtnClass} py-[1px] px-[6px] bg-[#FEF9F9] h-fit w-fit`}
-                disabled
-                title={isArabic ? "إضافة (قريباً)" : "Add (coming soon)"}
+                onClick={openAddDrawer}
+                title={isArabic ? "إضافة" : "Add"}
                 aria-label={isArabic ? "إضافة مستخدم" : "Add user"}
               >
                 <UserPlus size={18} strokeWidth={1.5} className="text-[#1B2065F2] dark:text-[#EEF4F7]" />
@@ -674,6 +769,78 @@ export default function DataTable() {
           </PaginationContent>
         </Pagination>
       </div>
+      <Drawer
+        open={drawerMode !== null}
+        onOpenChange={(open) => !open && setDrawerMode(null)}
+        direction={isArabic ? "left" : "right"}
+      >
+        <DrawerContent dir={isArabic ? "rtl" : "ltr"}>
+          <DrawerHeader>
+            <DrawerTitle>
+              {drawerMode === "add"
+                ? isArabic
+                  ? "إضافة أستاذ"
+                  : "Add professor"
+                : isArabic
+                  ? "تعديل الأستاذ"
+                  : "Edit professor"}
+            </DrawerTitle>
+            <DrawerDescription>
+              {drawerMode === "add"
+                ? isArabic
+                  ? "إنشاء أستاذ وتعيين تدريسي."
+                  : "Create a professor and teaching assignment."
+                : isArabic
+                  ? "التعديل الكامل يحتاج دعمًا إضافيًا من الخادم."
+                  : "Full edit needs additional backend support."}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="grid gap-3">
+            {[
+              ["full_name", "full_name", "Dr Ahmed"],
+              ["email", "email", "ahmed@gmail.com"],
+              ["module", "module", "Network 1"],
+              ["groups", "groups", "G1;G2;G3"],
+              ["semester", "semester", "S1"],
+              ["section", "section", "A"],
+              ["year", "year", "1"],
+            ].map(([key, label, placeholder]) => (
+              <label key={key} className="grid gap-1 text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7]">
+                {label}
+                <Input
+                  value={teacherForm[key as keyof typeof teacherForm]}
+                  disabled={drawerMode === "edit"}
+                  placeholder={placeholder}
+                  onChange={(e) =>
+                    setTeacherForm((prev) => ({ ...prev, [key]: e.target.value }))
+                  }
+                  className="bg-white dark:bg-[#242A40]"
+                />
+              </label>
+            ))}
+          </div>
+          <DrawerFooter>
+            <Button
+              onClick={submitTeacherDrawer}
+              disabled={savingDrawer}
+              className="bg-[#51689A] text-white hover:bg-[#40547F]"
+            >
+              {savingDrawer
+                ? isArabic
+                  ? "جارٍ الحفظ..."
+                  : "Saving..."
+                : isArabic
+                  ? "حفظ"
+                  : "Save"}
+            </Button>
+            <DrawerClose asChild>
+              <Button type="button" variant="outline">
+                {isArabic ? "إلغاء" : "Cancel"}
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </section>
   )
 }

@@ -254,10 +254,10 @@ export default function ProfessorSessionsView() {
   const [professors, setProfessors] = useState<ProfessorOption[]>([]);
   const [requestedProfessorId, setRequestedProfessorId] = useState("");
   const [sessionStart, setSessionStart] = useState<Dayjs>(() =>
-    dayjs(`${todayLocalIso()}T08:00:00`)
+    dayjs(`${todayLocalIso()}T08:00:00`).add(1, "day")
   );
   const [sessionEnd, setSessionEnd] = useState<Dayjs>(() =>
-    dayjs(`${todayLocalIso()}T08:00:00`).add(2, "hour")
+    dayjs(`${todayLocalIso()}T08:00:00`).add(1, "day").add(2, "hour")
   );
   const [creating, setCreating] = useState(false);
   /** Re-read browser closed-session ids after Save (backend has no completed flag). */
@@ -556,6 +556,14 @@ export default function ProfessorSessionsView() {
 
   const createSession = async () => {
     if (newAssignmentId === "") return;
+    if (!sessionStart.isAfter(dayjs(), "day")) {
+      toast.error(
+        isAr
+          ? "لا يمكن إنشاء حصة بتاريخ اليوم أو تاريخ سابق."
+          : "You can only schedule sessions for a future date."
+      );
+      return;
+    }
 
     setCreating(true);
     try {
@@ -1338,8 +1346,7 @@ export default function ProfessorSessionsView() {
         onOpenChange={(open) => {
           setShowScheduleForm(open);
           if (open) {
-            const d = todayLocalIso();
-            const s = dayjs(`${d}T08:00:00`);
+            const s = dayjs(`${todayLocalIso()}T08:00:00`).add(1, "day");
             setSessionStart(s);
             setSessionEnd(s.add(2, "hour"));
             setClassRoom("");

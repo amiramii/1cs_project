@@ -32,6 +32,11 @@ const notoArabic = Noto_Sans_Arabic({
 export const metadata: Metadata = {
   title: "Chekin",
   description: "Absence management system",
+  icons: {
+    icon: "/logoChopped.svg",
+    shortcut: "/logoChopped.svg",
+    apple: "/logoChopped.svg",
+  },
 }
 
 export default function RootLayout({

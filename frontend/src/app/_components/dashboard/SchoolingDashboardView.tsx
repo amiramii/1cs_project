@@ -45,7 +45,9 @@ export default function SchoolingDashboardView() {
 
   useEffect(() => {
     let alive = true;
-    setChartsLoading(true);
+    queueMicrotask(() => {
+      if (alive) setChartsLoading(true);
+    });
     void fetchSchoolingDashboardCharts(isAr).then((m) => {
       if (alive) {
         setCharts(m);

@@ -44,7 +44,7 @@ export default function DevRoleSwitcher() {
   const activePointerIdRef = useRef<number | null>(null)
 
   useEffect(() => {
-    setPos(computeViewportPosition())
+    queueMicrotask(() => setPos(computeViewportPosition()))
   }, [])
 
   useEffect(() => {

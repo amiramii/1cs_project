@@ -44,7 +44,9 @@ export default function ProfessorDashboardView() {
 
   useEffect(() => {
     let alive = true;
-    setChartsLoading(true);
+    queueMicrotask(() => {
+      if (alive) setChartsLoading(true);
+    });
     void fetchProfessorDashboardCharts(isAr).then((m) => {
       if (alive) {
         setCharts(m);

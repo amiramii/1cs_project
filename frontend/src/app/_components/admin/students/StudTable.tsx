@@ -23,6 +23,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer"
+import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -36,8 +45,14 @@ import { getAccessToken } from "@/lib/tokenStorage"
 import { getApiBaseUrl } from "@/lib/apiBase"
 import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
-import { deleteUserById, loadAllAcademicSections } from "@/lib/checkinClient"
+import {
+  deleteUserById,
+  loadAllAcademicSections,
+  loadStudentExclusions,
+  type StudentExclusionRow,
+} from "@/lib/checkinClient"
 import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
+import { uploadSingleCsvRow } from "@/lib/singleCsvUpload"
 
 type JustifiedSemester = {
   id: string
@@ -55,6 +70,7 @@ type StudentRow = {
   section: string
   group: string
   justifiedSemesters: JustifiedSemester[]
+  excluded: boolean
 }
 
 type ApiStudentRow = {
@@ -83,18 +99,35 @@ export default function StudTable() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [yearFilter, setYearFilter] = useState<string>("all")
+  const [exclusionFilter, setExclusionFilter] = useState<"all" | "excluded" | "notExcluded">("all")
   const [openFilter, setOpenFilter] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [drawerMode, setDrawerMode] = useState<"add" | "edit" | null>(null)
+  const [savingDrawer, setSavingDrawer] = useState(false)
+  const [studentForm, setStudentForm] = useState({
+    n_inscript: "",
+    full_name: "",
+    email: "",
+    year: "",
+    section: "",
+    group: "",
+  })
 
   const mapStudents = useCallback(
     (
       raw: ApiStudentRow[],
       yMap: Map<number, string>,
       secMap: Map<number, string>,
-      gMap: Map<number, string>
+      gMap: Map<number, string>,
+      exclusions: StudentExclusionRow[]
     ): StudentRow[] => {
+      const excludedEmails = new Set(
+        exclusions
+          .map((row) => row.student_email?.trim().toLowerCase())
+          .filter((email): email is string => Boolean(email))
+      )
       return raw.map((s) => ({
         id: String(s.user_id),
         name: s.full_name,
@@ -103,6 +136,7 @@ export default function StudTable() {
         section: secMap.get(s.section) ?? "—",
         group: gMap.get(s.group) ?? "—",
         justifiedSemesters: [],
+        excluded: excludedEmails.has(s.email.trim().toLowerCase()),
       }))
     },
     []
@@ -117,7 +151,7 @@ export default function StudTable() {
     }
     const base = getApiBaseUrl()
     try {
-      const [rawStudents, years, sections, groups] = await Promise.all([
+      const [rawStudents, years, sections, groups, exclusions] = await Promise.all([
         loadDrfListAll<ApiStudentRow>(base, `${checkinPath.students}/`, headers, {}),
         loadDrfListAll<{ id: number; name: string }>(
           base,
@@ -132,11 +166,12 @@ export default function StudTable() {
           headers,
           {}
         ),
+        loadStudentExclusions().catch(() => [] as StudentExclusionRow[]),
       ])
       const yMap = new Map(years.map((y) => [y.id, y.name]))
       const secMap = new Map(sections.map((x) => [x.id, x.name]))
       const gMap = new Map(groups.map((g) => [g.id, g.name]))
-      setData(mapStudents(rawStudents, yMap, secMap, gMap))
+      setData(mapStudents(rawStudents, yMap, secMap, gMap, exclusions))
     } catch {
       setLoadError(
         isArabic
@@ -175,9 +210,11 @@ export default function StudTable() {
 
       if (!matchesSearch) return false
       if (yearFilter !== "all" && row.year !== yearFilter) return false
+      if (exclusionFilter === "excluded" && !row.excluded) return false
+      if (exclusionFilter === "notExcluded" && row.excluded) return false
       return true
     })
-  }, [data, yearFilter, search])
+  }, [data, yearFilter, exclusionFilter, search])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
   const currentPageSafe = Math.min(currentPage, totalPages)
@@ -267,7 +304,79 @@ export default function StudTable() {
   const filterLabelText =
     yearFilter === "all" ? (isArabic ? "الكل" : "All years") : yearFilter
 
-  const colCount = 7
+  const colCount = 8
+  const selectedStudent = useMemo(() => {
+    const firstId = [...selectedIds][0]
+    return data.find((row) => row.id === firstId) ?? null
+  }, [data, selectedIds])
+
+  const openAddDrawer = () => {
+    setStudentForm({
+      n_inscript: "",
+      full_name: "",
+      email: "",
+      year: "",
+      section: "",
+      group: "",
+    })
+    setDrawerMode("add")
+  }
+
+  const openEditDrawer = () => {
+    if (!selectedStudent) {
+      setLoadError(isArabic ? "اختر طالبًا واحدًا للتعديل." : "Select one student to edit.")
+      return
+    }
+    setStudentForm({
+      n_inscript: selectedStudent.id,
+      full_name: selectedStudent.name,
+      email: selectedStudent.email,
+      year: "",
+      section: "",
+      group: "",
+    })
+    setDrawerMode("edit")
+  }
+
+  const submitStudentDrawer = async () => {
+    setSavingDrawer(true)
+    setLoadError(null)
+    try {
+      if (drawerMode !== "add") {
+        setLoadError(
+          isArabic
+            ? "تعديل الطالب الكامل يحتاج مسار تحديث مناسب في الخادم."
+            : "Student edit needs a proper backend update endpoint for profile and user fields."
+        )
+        return
+      }
+      const res = await uploadSingleCsvRow(
+        "student",
+        ["full_name", "email", "n_inscript", "year", "section", "group"],
+        {
+        full_name: studentForm.full_name,
+        email: studentForm.email,
+        n_inscript: studentForm.n_inscript,
+        year: studentForm.year,
+        section: studentForm.section,
+        group: studentForm.group,
+      })
+      if (!res.ok) throw new Error(await res.text())
+      setDrawerMode(null)
+      setSelectedIds(new Set())
+      await loadStudents()
+    } catch (error) {
+      setLoadError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : isArabic
+            ? "تعذر حفظ الطالب."
+            : "Could not save student."
+      )
+    } finally {
+      setSavingDrawer(false)
+    }
+  }
 
   return (
     <section className="mx-auto w-full min-w-0 max-w-full space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm dark:border-[#383F58] dark:bg-[#13182A]/40">
@@ -343,6 +452,33 @@ export default function StudTable() {
                     {yearFilter === y && <Check className="ms-auto size-4" />}
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuItem
+                  onClick={() => {
+                    setExclusionFilter("all")
+                    setCurrentPage(1)
+                  }}
+                >
+                  <span>{isArabic ? "كل حالات الاستبعاد" : "All exclusion states"}</span>
+                  {exclusionFilter === "all" && <Check className="ms-auto size-4" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setExclusionFilter("excluded")
+                    setCurrentPage(1)
+                  }}
+                >
+                  <span>{isArabic ? "مستبعد" : "Excluded"}</span>
+                  {exclusionFilter === "excluded" && <Check className="ms-auto size-4" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setExclusionFilter("notExcluded")
+                    setCurrentPage(1)
+                  }}
+                >
+                  <span>{isArabic ? "غير مستبعد" : "Not excluded"}</span>
+                  {exclusionFilter === "notExcluded" && <Check className="ms-auto size-4" />}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -352,8 +488,8 @@ export default function StudTable() {
                 variant="outline"
                 size="icon"
                 className={`${controlBtnClass} h-fit w-fit bg-[#FEF9F9] px-[6px] py-px`}
-                disabled
-                title={isArabic ? "تعديل (قريباً)" : "Edit (coming soon)"}
+                onClick={openEditDrawer}
+                title={isArabic ? "تعديل" : "Edit"}
                 aria-label={isArabic ? "تعديل" : "Edit"}
               >
                 <Pencil size={18} strokeWidth={1.5} className="text-[#1B2065F2] dark:text-[#EEF4F7]" />
@@ -363,8 +499,8 @@ export default function StudTable() {
                 variant="outline"
                 size="icon"
                 className={`${controlBtnClass} h-fit w-fit bg-[#FEF9F9] px-[6px] py-px`}
-                disabled
-                title={isArabic ? "إضافة (قريباً)" : "Add (coming soon)"}
+                onClick={openAddDrawer}
+                title={isArabic ? "إضافة" : "Add"}
                 aria-label={isArabic ? "إضافة طالب" : "Add student"}
               >
                 <UserPlus size={18} strokeWidth={1.5} className="text-[#1B2065F2] dark:text-[#EEF4F7]" />
@@ -420,6 +556,9 @@ export default function StudTable() {
                 </th>
                 <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-start text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
                   {isArabic ? "المجموعة" : "Group"}
+                </th>
+                <th className="min-w-0 border-b border-[#D6DEEF] dark:border-[#383F58] px-1 py-2.5 text-center text-[11px] font-bold uppercase tracking-wide sm:px-2 sm:text-sm">
+                  {isArabic ? "الاستبعاد" : "Exclusion"}
                 </th>
               </tr>
             </thead>
@@ -493,6 +632,17 @@ export default function StudTable() {
                       </td>
                       <td className="min-w-0 align-middle sm:px-1 sm:py-2.5">
                         <span className="font-medium text-[#6CB4B4] dark:text-[#6CB4B4]">{row.group}</span>
+                      </td>
+                      <td className="min-w-0 align-middle text-center sm:px-1 sm:py-2.5">
+                        {row.excluded ? (
+                          <span className="inline-flex min-w-[6.4rem] justify-center rounded-full border border-[#DF2D3EF2] bg-[#FFD1D5F2] px-2 py-1 text-[11px] font-semibold text-[#DF2D3EF2] dark:border-[#E85462] dark:bg-[#3A1A22] dark:text-[#F0707A]">
+                            {isArabic ? "مستبعد" : "Excluded"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex min-w-[6.4rem] justify-center rounded-full border border-[#74A7BD] bg-[#EEFAFF] px-2 py-1 text-[11px] font-semibold text-[#74A7BD] dark:border-[#74A7BD] dark:bg-[#152A38] dark:text-[#74A7BD]">
+                            {isArabic ? "غير مستبعد" : "Not excluded"}
+                          </span>
+                        )}
                       </td>
                     </tr>
                     {isOpen && (
@@ -599,6 +749,77 @@ export default function StudTable() {
           </PaginationContent>
         </Pagination>
       </div>
+      <Drawer
+        open={drawerMode !== null}
+        onOpenChange={(open) => !open && setDrawerMode(null)}
+        direction={isArabic ? "left" : "right"}
+      >
+        <DrawerContent dir={isArabic ? "rtl" : "ltr"}>
+          <DrawerHeader>
+            <DrawerTitle>
+              {drawerMode === "add"
+                ? isArabic
+                  ? "إضافة طالب"
+                  : "Add student"
+                : isArabic
+                  ? "تعديل الطالب"
+                  : "Edit student"}
+            </DrawerTitle>
+            <DrawerDescription>
+              {drawerMode === "add"
+                ? isArabic
+                  ? "إنشاء حساب طالب يدويًا."
+                  : "Create a student account manually."
+                : isArabic
+                  ? "تعديل بيانات الحساب المتاحة من الواجهة."
+                  : "Edit account fields supported by the current backend."}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="grid gap-3">
+            {[
+              ["full_name", "full_name", "Khaldi Houda"],
+              ["email", "email", "ho.khaldi@esi-sba.dz"],
+              ["n_inscript", "n_inscript", "834657871331"],
+              ["year", "year", "1"],
+              ["section", "section", "A"],
+              ["group", "group", "G1"],
+            ].map(([key, label, placeholder]) => (
+              <label key={key} className="grid gap-1 text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7]">
+                {label}
+                <Input
+                  value={studentForm[key as keyof typeof studentForm]}
+                  disabled={drawerMode === "edit"}
+                  placeholder={placeholder}
+                  onChange={(e) =>
+                    setStudentForm((prev) => ({ ...prev, [key]: e.target.value }))
+                  }
+                  className="bg-white dark:bg-[#242A40]"
+                />
+              </label>
+            ))}
+          </div>
+          <DrawerFooter>
+            <Button
+              onClick={submitStudentDrawer}
+              disabled={savingDrawer}
+              className="bg-[#51689A] text-white hover:bg-[#40547F]"
+            >
+              {savingDrawer
+                ? isArabic
+                  ? "جارٍ الحفظ..."
+                  : "Saving..."
+                : isArabic
+                  ? "حفظ"
+                  : "Save"}
+            </Button>
+            <DrawerClose asChild>
+              <Button type="button" variant="outline">
+                {isArabic ? "إلغاء" : "Cancel"}
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </section>
   )
 }

@@ -35,7 +35,7 @@ function formatRelative(iso: string, isAr: boolean): string {
 function ClientRelativeTime({ iso, isAr }: { iso: string; isAr: boolean }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
-    setMounted(true)
+    queueMicrotask(() => setMounted(true))
   }, [])
   return (
     <span className="tabular-nums">

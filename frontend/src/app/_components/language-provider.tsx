@@ -32,12 +32,10 @@ export function useLanguage() {
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>("en")
+  const [language, setLanguage] = useState<Language>(() =>
+    typeof window !== "undefined" ? getStoredLanguage() : "en"
+  )
   const skipNextPersist = useRef(true)
-
-  useEffect(() => {
-    setLanguage(getStoredLanguage())
-  }, [])
 
   useEffect(() => {
     if (skipNextPersist.current) {

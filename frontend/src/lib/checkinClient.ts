@@ -185,6 +185,30 @@ export async function putSchooling(
   })
 }
 
+export type StudentExclusionRow = {
+  id: number
+  student?: number
+  student_name?: string
+  student_email?: string
+  module?: number
+  module_name?: string
+  exclusion_type?: "global" | "unjustified" | "justified" | string
+  created_at?: string
+}
+
+export function loadStudentExclusions(params?: { module?: string | number }) {
+  const query =
+    params?.module != null
+      ? `?module=${encodeURIComponent(String(params.module))}`
+      : ""
+  return loadDrfListAll<StudentExclusionRow>(
+    getApiBaseUrl(),
+    `${checkinPath.exclusions.collection}/${query}`,
+    listAuthHeaders(),
+    {}
+  )
+}
+
 export async function deleteSchoolingById(id: string | number): Promise<Response> {
   return api(checkinPath.schooler(id), { method: "DELETE" })
 }
@@ -246,8 +270,10 @@ export function loadAllAcademicSections() {
   )
 }
 
-export function loadAllAcademicYears() {
-  return loadDrfListAll(
+export function loadAllAcademicYears(): Promise<
+  Array<{ id: number; name: string }>
+> {
+  return loadDrfListAll<{ id: number; name: string }>(
     getApiBaseUrl(),
     `${checkinPath.academic.years}/`,
     listAuthHeaders(),
@@ -722,11 +748,26 @@ export function loadAllDocuments() {
   )
 }
 
-/** DRF list with `?audience=` (same as `ScheduleListShell` / student dashboard). */
+export type FetchDocumentsQuery = {
+  audience?: "student" | "teacher" | "professor"
+  /** DRF `SearchFilter` on document title. */
+  search?: string
+}
+
+/** DRF list with `?audience=` and optional `?search=` (schedule lists). */
 export async function fetchDocumentsByAudience(
-  audience: string
+  audienceOrQuery: string | FetchDocumentsQuery
 ): Promise<Response> {
-  const href = `${checkinUrl(checkinPath.documents.collection)}?audience=${encodeURIComponent(audience)}`
+  const query: FetchDocumentsQuery =
+    typeof audienceOrQuery === "string"
+      ? { audience: audienceOrQuery as FetchDocumentsQuery["audience"] }
+      : audienceOrQuery
+  const audience =
+    query.audience === "professor" ? "teacher" : query.audience
+  const u = new URL(checkinUrl(checkinPath.documents.collection))
+  if (audience) u.searchParams.set("audience", audience)
+  if (query.search?.trim()) u.searchParams.set("search", query.search.trim())
+  const href = u.toString()
   const fallbackHref = checkinUrl(checkinPath.documents.collection)
   let res = await fetch(href, { headers: listAuthHeaders() })
 

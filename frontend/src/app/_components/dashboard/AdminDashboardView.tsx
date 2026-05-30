@@ -91,7 +91,9 @@ export default function AdminDashboardView() {
 
     let alive = true;
 
-    setChartsLoading(true);
+    queueMicrotask(() => {
+      if (alive) setChartsLoading(true);
+    });
 
     void fetchAdminDashboardCharts(isAr).then((m) => {
 

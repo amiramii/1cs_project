@@ -96,9 +96,11 @@ export default function ScheduleSessionForm({
   const dateStr = sessionStart.isValid() ? sessionStart.format("YYYY-MM-DD") : "";
   const startTimeStr = sessionStart.isValid() ? sessionStart.format("HH:mm") : "08:00";
   const endTimeStr = sessionEnd.isValid() ? sessionEnd.format("HH:mm") : "10:00";
+  const minDate = dayjs().add(1, "day").format("YYYY-MM-DD");
 
   const applyDate = (yMd: string) => {
     if (!yMd) return;
+    if (dayjs(yMd).isBefore(dayjs(minDate), "day")) return;
     const t = sessionStart.isValid() ? sessionStart : dayjs();
     const nextStart = dayjs(`${yMd}T${t.format("HH:mm:ss")}`);
     if (!nextStart.isValid()) return;
@@ -169,7 +171,7 @@ export default function ScheduleSessionForm({
             sideOffset={4}
             align="start"
           >
-            <SelectItem value={UNSET} className="text-[#51689A] dark:text-[#9BA8C4] focus:text-[#1B2065F2] dark:text-[#9BA8C4] dark:focus:text-[#EEF4F7]">
+            <SelectItem value={UNSET} className="text-[#51689A] dark:text-[#9BA8C4] focus:text-[#1B2065F2] dark:focus:text-[#EEF4F7]">
               {isAr ? "اختر…" : "Select…"}
             </SelectItem>
             {assignments.map((a) => (
@@ -239,6 +241,7 @@ export default function ScheduleSessionForm({
                     </span>
                     <input
                       type="date"
+                      min={minDate}
                       className={cn(
                         textInputClass,
                         "h-9 [color-scheme:light] dark:[color-scheme:dark]"

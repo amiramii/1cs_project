@@ -99,6 +99,9 @@ const extractGrade = (title: string): Exclude<GradeFilter, "all"> | null => {
   return null
 }
 
+const isPdfScheduleFile = (urlOrName: string) =>
+  /\.pdf(\?|#|$)/i.test(urlOrName)
+
 /** Visible cards per “page” (3×2 on large screens). */
 const SCHEDULE_PAGE_SIZE = 6
 
@@ -256,7 +259,10 @@ export default function ScheduleListShell({
       try {
         setLoading(true)
         setError(null)
-        const response = await fetchDocumentsByAudience(backendAudience)
+        const response = await fetchDocumentsByAudience({
+          audience: backendAudience,
+          search: search.trim() || undefined,
+        })
 
         const rawText = await response.text()
         let parsed: unknown = null
@@ -290,6 +296,7 @@ export default function ScheduleListShell({
         const remoteSchedules = rawList
           .filter((item) => {
             const a = String(item.audience ?? "").toLowerCase()
+            if (!isPdfScheduleFile(item.pdf || item.title)) return false
             if (backendAudience === "teacher") {
               return a === "teacher" || a === "professor"
             }
@@ -325,7 +332,7 @@ export default function ScheduleListShell({
     return () => {
       active = false
     }
-  }, [apiBase, backendAudience, isArabic, normalizePdfUrl])
+  }, [apiBase, backendAudience, isArabic, normalizePdfUrl, search])
 
   const deleteSchedule = useCallback(
     async (item: ScheduleItem) => {

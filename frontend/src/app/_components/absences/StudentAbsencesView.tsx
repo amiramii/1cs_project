@@ -29,7 +29,9 @@ import {
 import {
   fetchStudentAbsencesByDate,
   fetchStudentAbsencesByModule,
+  loadStudentExclusions,
   loadStudentJustificationsList,
+  type StudentExclusionRow,
 } from "@/lib/checkinClient";
 import {
   getAbsenceSeverityColor,
@@ -138,9 +140,9 @@ function justifiedAbsencesByModuleFromJustifications(
   for (const j of list) {
     const atts = j.attendances ?? [];
     for (const a of atts) {
-      const module = normalizeModule(a.module).toLowerCase();
-      if (!module || a.status !== "justified") continue;
-      out.set(module, (out.get(module) ?? 0) + 1);
+      const moduleName = normalizeModule(a.module).toLowerCase();
+      if (!moduleName || a.status !== "justified") continue;
+      out.set(moduleName, (out.get(moduleName) ?? 0) + 1);
     }
   }
   return out;
@@ -197,6 +199,7 @@ export default function StudentAbsencesView() {
 
   const [moduleRows, setModuleRows] = useState<AbsenceRow[]>([]);
   const [dayCards, setDayCards] = useState<AbsenceDayCard[]>([]);
+  const [serverExclusions, setServerExclusions] = useState<StudentExclusionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadNonce, setLoadNonce] = useState(0);
   const [exclusionLimit, setExclusionLimit] = useState(
@@ -230,9 +233,10 @@ export default function StudentAbsencesView() {
     (async () => {
       setLoading(true);
       try {
-        const [modRes, dateRes] = await Promise.all([
+        const [modRes, dateRes, exclusionRows] = await Promise.all([
           fetchStudentAbsencesByModule(),
           fetchStudentAbsencesByDate(),
+          loadStudentExclusions().catch(() => [] as StudentExclusionRow[]),
         ]);
         let justifications = [] as RawJustification[];
 
@@ -262,33 +266,40 @@ export default function StudentAbsencesView() {
 
         const justifiedByModule =
           justifiedAbsencesByModuleFromJustifications(justifications);
+        const excludedModuleNames = new Set(
+          exclusionRows
+            .map((row) => normalizeModule(row.module_name).toLowerCase())
+            .filter(Boolean)
+        );
         const nextRows: AbsenceRow[] = modList.map(
           (entry: unknown, idx: number) => {
             const row = entry as ByModuleApiEntry;
-            const module =
+            const moduleName =
               normalizeModule(row.session__assignment__module__name) || "—";
             const absenceCount =
               typeof row.absence_count === "number"
                 ? row.absence_count
                 : Number(row.absence_count) || 0;
             const justifiedCount =
-              justifiedByModule.get(module.trim().toLowerCase()) ?? 0;
-            const excluded = isStudentExcludedFromAttendanceCounts(
-              { justified: justifiedCount, unjustified: absenceCount },
-              {
-                mode: exclusionMode,
-                generalLimit: exclusionLimit,
-                justifiedLimit,
-                unjustifiedLimit,
-              }
-            );
+              justifiedByModule.get(moduleName.trim().toLowerCase()) ?? 0;
+            const excluded =
+              excludedModuleNames.has(moduleName.trim().toLowerCase()) ||
+              isStudentExcludedFromAttendanceCounts(
+                { justified: justifiedCount, unjustified: absenceCount },
+                {
+                  mode: exclusionMode,
+                  generalLimit: exclusionLimit,
+                  justifiedLimit,
+                  unjustifiedLimit,
+                }
+              );
             const justificationCount = justificationRequestsTouchingModule(
               justifications,
-              module
+              moduleName
             );
             return {
-              id: `m-${module}-${idx}`,
-              module,
+              id: `m-${moduleName}-${idx}`,
+              module: moduleName,
               absenceCount,
               justifiedCount,
               justificationCount,
@@ -309,6 +320,7 @@ export default function StudentAbsencesView() {
         if (!cancelled) {
           setModuleRows(nextRows);
           setDayCards(cards);
+          setServerExclusions(exclusionRows);
           notifyStudentAbsenceRisk(
             nextRows.map((r) => ({
               name: r.module,
@@ -329,6 +341,7 @@ export default function StudentAbsencesView() {
         if (!cancelled) {
           setModuleRows([]);
           setDayCards([]);
+          setServerExclusions([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -431,6 +444,24 @@ export default function StudentAbsencesView() {
 
       {loading ? (
         <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">{isAr ? "جاري التحميل…" : "Loading…"}</p>
+      ) : null}
+
+      {!loading && serverExclusions.length > 0 ? (
+        <section className="rounded-2xl border border-[#DF2D3E]/25 bg-[#FFF1F3] p-4 shadow-sm dark:border-[#E85462]/35 dark:bg-[#3A1A22]/40">
+          <h2 className="text-base font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
+            {isAr ? "المواد التي أنت مستبعد منها" : "Modules you are excluded from"}
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {serverExclusions.map((row) => (
+              <span
+                key={row.id}
+                className="inline-flex rounded-full border border-[#DF2D3E]/45 bg-white px-3 py-1 text-xs font-semibold text-[#DF2D3E] dark:border-[#E85462] dark:bg-[#1A2036] dark:text-[#F0707A]"
+              >
+                {row.module_name || `#${row.module ?? row.id}`}
+              </span>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section

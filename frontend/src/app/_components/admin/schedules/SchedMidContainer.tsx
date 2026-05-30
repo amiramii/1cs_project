@@ -12,10 +12,21 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getAccessToken } from "@/lib/tokenStorage";
-import { postDocument } from "@/lib/checkinClient";
+import { loadAllAcademicYears, postDocument } from "@/lib/checkinClient";
+import { checkinPath } from "@/lib/checkinApi";
+import { getApiBaseUrl } from "@/lib/apiBase";
+import { loadDrfListAll } from "@/lib/drfPaginatedList";
+import {
+  resolveAcademicYearPk,
+  resolveTeacherPk,
+  type AcademicYearRow,
+  type TeacherRow,
+} from "@/lib/scheduleDocumentHelpers";
 import { useLanguage } from "@/app/_components/language-provider";
 import StudScheduleList from "@/app/_components/admin/schedules/StudScheduleList";
 import ScheduleYearCombobox from "@/app/_components/admin/schedules/ScheduleYearCombobox";
+
+type UploadMode = "pdf" | "excel";
 
 function parseJsonSafe(text: string): unknown {
   const t = text.trim();
@@ -96,6 +107,7 @@ export default function SchedulsMiddleContainer({
   onStagedPdfChange,
 }: SchedMidProps) {
   const [activeTab, setActiveTab] = useState<"professor" | "student">("professor");
+  const [uploadMode, setUploadMode] = useState<UploadMode>("pdf");
   const [year, setYear] = useState("default");
   const [title, setTitle] = useState("");
   const [professorName, setProfessorName] = useState("");
@@ -109,6 +121,9 @@ export default function SchedulsMiddleContainer({
   };
   const StudentSchedulesPath = () => {
     router.push("/Scheduals/Student-Schedules");
+  };
+  const ExcelSchedulesPath = () => {
+    router.push("/Scheduals/Excel-Schedules");
   };
   const { language } = useLanguage();
   const isArabic = language === "ar";
@@ -145,6 +160,27 @@ export default function SchedulsMiddleContainer({
 
   const handleUpload = async () => {
     if (!effectivePdf || !title.trim()) return;
+    const needsYear =
+      uploadMode === "excel" ||
+      (uploadMode === "pdf" && activeTab === "student");
+    if (needsYear && (year === "default" || year === "All")) {
+      const message = isArabic ? "اختر السنة أولاً." : "Select a year first.";
+      setUploadError(message);
+      toast.error(message);
+      return;
+    }
+    if (
+      uploadMode === "pdf" &&
+      activeTab === "professor" &&
+      !professorName.trim()
+    ) {
+      const message = isArabic
+        ? "أدخل اسم الأستاذ كما في قاعدة البيانات."
+        : "Enter the professor name as stored in the database.";
+      setUploadError(message);
+      toast.error(message);
+      return;
+    }
 
     setIsUploading(true);
     setUploadError(null);
@@ -159,16 +195,56 @@ export default function SchedulsMiddleContainer({
         return;
       }
 
-      const audienceValue = activeTab === "professor" ? "teacher" : "student";
+      const apiBase = getApiBaseUrl();
+      const headers = { Authorization: `Bearer ${token}` };
+      const [academicYears, teachers] = await Promise.all([
+        loadAllAcademicYears().catch(() => [] as AcademicYearRow[]),
+        uploadMode === "pdf" && activeTab === "professor"
+          ? loadDrfListAll<TeacherRow>(
+              apiBase,
+              `${checkinPath.teachers}/`,
+              headers,
+              {}
+            ).catch(() => [] as TeacherRow[])
+          : Promise.resolve([] as TeacherRow[]),
+      ]);
+
+      const audienceValue =
+        uploadMode === "excel"
+          ? "student"
+          : activeTab === "professor"
+            ? "teacher"
+            : "student";
+
       const formData = new FormData();
-      formData.append("title", title);
+      formData.append("title", title.trim());
       formData.append("pdf", effectivePdf);
       formData.append("audience", audienceValue);
-      if (activeTab === "student" && year !== "default") {
-        formData.append("year", year);
+
+      if (needsYear) {
+        const yearPk = resolveAcademicYearPk(year, academicYears);
+        if (yearPk == null) {
+          const message = isArabic
+            ? "السنة غير معروفة في قاعدة البيانات. أنشئها من الإعداد الأكاديمي أو اختر سنة موجودة."
+            : "Year not found in the database. Create it under academic settings or pick an existing year.";
+          setUploadError(message);
+          toast.error(message);
+          return;
+        }
+        formData.append("year", String(yearPk));
       }
-      if (activeTab === "professor" && professorName.trim()) {
-        formData.append("professorName", professorName.trim());
+
+      if (uploadMode === "pdf" && activeTab === "professor") {
+        const teacherPk = resolveTeacherPk(professorName, teachers);
+        if (teacherPk == null) {
+          const message = isArabic
+            ? "لم يُعثر على أستاذ بهذا الاسم. استخدم الاسم الكامل كما في قائمة الأساتذة."
+            : "No professor matched that name. Use the full name from the professors list.";
+          setUploadError(message);
+          toast.error(message);
+          return;
+        }
+        formData.append("teacher", String(teacherPk));
       }
 
       const res = await postDocument(formData);
@@ -214,6 +290,9 @@ export default function SchedulsMiddleContainer({
   }
 
   const showAudienceToggle = variant === "admin";
+  const uploadNeedsYear =
+    uploadMode === "excel" ||
+    (uploadMode === "pdf" && activeTab === "student");
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-full md:w-11/12 lg:w-9/12 xl:w-8/12 space-y-6">
@@ -223,13 +302,48 @@ export default function SchedulsMiddleContainer({
             {isArabic ? "إضافة جدول" : "Add schedule"}
           </h1>
 
-          <p className="text-center text-xs text-muted-foreground sm:text-sm">
-            {isArabic
-              ? "يمكنك إفلات ملف PDF في أي مكان في الصفحة لتحديده، ثم اضغط «رفع الجدول» لحفظه في قاعدة البيانات."
-              : "Drop a PDF anywhere on this page to select it, then click “Upload Schedule” to save it to the database."}
-          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: "pdf" as const, label: isArabic ? "ملف PDF" : "PDF file" },
+              { value: "excel" as const, label: isArabic ? "ملف Excel" : "Excel file" },
+            ].map((mode) => (
+              <Button
+                key={mode.value}
+                type="button"
+                variant={uploadMode === mode.value ? "default" : "outline"}
+                className={
+                  uploadMode === mode.value
+                    ? "bg-[#51689A] text-white hover:bg-[#40547F]"
+                    : "border-[#51689A]/35 text-[#1B2065] dark:text-[#EEF4F7]"
+                }
+                onClick={() => {
+                  setUploadMode(mode.value);
+                  setDroppedFile(null);
+                  onStagedPdfChange?.(null);
+                  setUploadError(null);
+                  setSuccessMsg(false);
+                }}
+              >
+                {mode.label}
+              </Button>
+            ))}
+          </div>
 
-          {showAudienceToggle && (
+          {uploadMode === "pdf" ? (
+            <p className="text-center text-xs text-muted-foreground sm:text-sm">
+              {isArabic
+                ? "يمكنك إفلات ملف PDF في أي مكان في الصفحة لتحديده، ثم اضغط «رفع الجدول» لحفظه في قاعدة البيانات."
+                : "Drop a PDF anywhere on this page to select it, then click “Upload Schedule” to save it to the database."}
+            </p>
+          ) : (
+            <p className="text-center text-xs text-muted-foreground sm:text-sm">
+              {isArabic
+                ? "اختر السنة والعنوان ثم ارفع ملف Excel."
+                : "Select a year and title, then upload an Excel file."}
+            </p>
+          )}
+
+          {showAudienceToggle && uploadMode === "pdf" && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
                 {
@@ -265,17 +379,19 @@ export default function SchedulsMiddleContainer({
             <ScheduleYearCombobox
               value={year}
               onChange={setYear}
-              disabled={activeTab === "professor"}
+              disabled={uploadMode === "pdf" && activeTab === "professor"}
               isArabic={isArabic}
             />
-            <Input
-              type="text"
-              placeholder={isArabic ? "اسم الأستاذ..." : "Professor Name..."}
-              value={professorName}
-              onChange={(event) => setProfessorName(event.target.value)}
-              className="h-11 rounded-md border-border bg-background disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={activeTab === "student"}
-            />
+            {uploadMode === "pdf" ? (
+              <Input
+                type="text"
+                placeholder={isArabic ? "اسم الأستاذ..." : "Professor Name..."}
+                value={professorName}
+                onChange={(event) => setProfessorName(event.target.value)}
+                className="h-11 rounded-md border-border bg-background disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={activeTab === "student"}
+              />
+            ) : null}
           </div>
 
           <Input
@@ -289,10 +405,13 @@ export default function SchedulsMiddleContainer({
           <MyDropzone
             onDrop={handleDrop}
             accept={{
-              "application/pdf": [".pdf"],
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-              "application/vnd.ms-excel": [".xls"],
-              "text/csv": [".csv"],
+              ...(uploadMode === "pdf"
+                ? { "application/pdf": [".pdf"] }
+                : {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+                    "application/vnd.ms-excel": [".xls"],
+                    "text/csv": [".csv"],
+                  }),
             }}
             className="group mx-auto flex min-h-36 w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-border bg-background px-4 transition-colors hover:border-primary hover:bg-accent/30"
           >
@@ -302,8 +421,12 @@ export default function SchedulsMiddleContainer({
                 {effectivePdf
                   ? effectivePdf.name
                   : isArabic
-                    ? "قم بإفلات ملف PDF أو Excel أو اختره"
-                    : "Drop or choose a PDF or Excel file"}
+                    ? uploadMode === "pdf"
+                      ? "قم بإفلات ملف PDF أو اختره"
+                      : "قم بإفلات ملف Excel أو اختره"
+                    : uploadMode === "pdf"
+                      ? "Drop or choose a PDF file"
+                      : "Drop or choose an Excel file"}
               </p>
             </div>
           </MyDropzone>
@@ -312,7 +435,15 @@ export default function SchedulsMiddleContainer({
             <Button
               type="button"
               onClick={handleUpload}
-              disabled={isUploading || !effectivePdf || !title.trim()}
+              disabled={
+                isUploading ||
+                !effectivePdf ||
+                !title.trim() ||
+                (uploadNeedsYear && (year === "default" || year === "All")) ||
+                (uploadMode === "pdf" &&
+                  activeTab === "professor" &&
+                  !professorName.trim())
+              }
               className="inline-flex h-10 w-full sm:w-3/5 lg:w-1/2 items-center justify-center gap-2 rounded-md bg-[#51689A] px-4 text-sm font-semibold text-[#FEF9F9] transition-colors hover:bg-[#51689A]/90 disabled:cursor-not-allowed disabled:opacity-55"
             >
               <Download size={18} className="shrink-0" aria-hidden />
@@ -339,7 +470,7 @@ export default function SchedulsMiddleContainer({
       </div>
 
       {variant === "admin" && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <Button
             type="button"
             onClick={ProfessorSchedulesPath}
@@ -355,6 +486,14 @@ export default function SchedulsMiddleContainer({
           >
             <CalendarCheck className="text-[#FEF9F9]" size={22} />
             {isArabic ? "جداول الطلاب" : "Students Schedule"}
+          </Button>
+          <Button
+            type="button"
+            onClick={ExcelSchedulesPath}
+            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#1B2065] py-4 text-center text-[#FEF9F9] hover:bg-[#1B2065]/90"
+          >
+            <CalendarCheck className="text-[#FEF9F9]" size={22} />
+            {isArabic ? "ملفات Excel" : "Excel Files"}
           </Button>
         </div>
       )}

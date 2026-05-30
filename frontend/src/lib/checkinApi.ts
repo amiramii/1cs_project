@@ -103,6 +103,12 @@ export const checkinPath = {
     openSession: (id: string | number) =>
       `api/extra-sessions/${id}/open_session` as const,
   },
+  exclusions: {
+    collection: "api/exclusions",
+    detail: (id: string | number) => `api/exclusions/${id}` as const,
+    config: "api/exclusions/config",
+    recalculate: "api/exclusions/recalculate",
+  },
   /** `teacher_absence` app — router at `/api/teacher-absence/` */
   teacherAbsence: {
     collection: "api/teacher-absence",

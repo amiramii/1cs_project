@@ -75,7 +75,7 @@ export default function DashboardLayout({
   }, [pathname, router, navItems]);
 
   useEffect(() => {
-    setUserDisplayName(getCurrentUserDisplayName());
+    queueMicrotask(() => setUserDisplayName(getCurrentUserDisplayName()));
   }, []);
   const profileGroup =
     role === "admin"

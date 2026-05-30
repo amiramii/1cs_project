@@ -61,8 +61,10 @@ export default function LoginForm() {
     const prev = prevPathRef.current
     prevPathRef.current = pathname
     if (pathname === "/Login" && prev !== undefined && prev !== "/Login") {
-      setTouched({ email: false, password: false })
-      setApiError("")
+      queueMicrotask(() => {
+        setTouched({ email: false, password: false })
+        setApiError("")
+      })
     }
   }, [pathname])
 
@@ -153,7 +155,7 @@ export default function LoginForm() {
           id="login-form"
           className="w-full flex flex-col gap-3"
           noValidate
-          onSubmit={validatorHandleSubmit((_values: any, _valid: boolean) => {
+          onSubmit={validatorHandleSubmit((_values: unknown, _valid: boolean) => {
             const emailErr = getEmailError()
             const passErr = getPasswordError()
             if (emailErr || passErr) {
@@ -162,8 +164,11 @@ export default function LoginForm() {
             }
             onSubmit({ email: data.email, password: data.password })
           })}
-          onReset={handleReset((v: any) => {
-            setData({ ...v })
+          onReset={handleReset((v) => {
+            setData({
+              email: typeof v.email === "string" ? v.email : "",
+              password: typeof v.password === "string" ? v.password : "",
+            })
             setApiError("")
           })}
         >

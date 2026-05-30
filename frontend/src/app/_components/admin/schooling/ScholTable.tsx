@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Check, Funnel, Search, Trash2 } from "lucide-react"
+import { Check, Funnel, Pencil, Search, Trash2, UserPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer"
 import {
   Pagination,
   PaginationContent,
@@ -25,8 +34,9 @@ import { getAccessToken } from "@/lib/tokenStorage"
 import { getApiBaseUrl } from "@/lib/apiBase"
 import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
-import { deleteSchoolingById } from "@/lib/checkinClient"
+import { deleteSchoolingById, patchSchooling } from "@/lib/checkinClient"
 import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
+import { uploadSingleCsvRow } from "@/lib/singleCsvUpload"
 
 type StaffRow = {
   id: string
@@ -58,6 +68,13 @@ export default function DataTable() {
   const [openFilter, setOpenFilter] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [drawerMode, setDrawerMode] = useState<"add" | "edit" | null>(null)
+  const [savingDrawer, setSavingDrawer] = useState(false)
+  const [staffForm, setStaffForm] = useState({
+    full_name: "",
+    email: "",
+    department: "CP",
+  })
 
   const loadStaff = useCallback(async () => {
     setLoading(true)
@@ -209,6 +226,62 @@ export default function DataTable() {
   }
 
   const colCount = 5
+  const selectedStaff = useMemo(() => {
+    const firstId = [...selectedIds][0]
+    return data.find((row) => row.id === firstId) ?? null
+  }, [data, selectedIds])
+
+  const openAddDrawer = () => {
+    setStaffForm({ full_name: "", email: "", department: "CP" })
+    setDrawerMode("add")
+  }
+
+  const openEditDrawer = () => {
+    if (!selectedStaff) {
+      setLoadError(isArabic ? "اختر موظفًا واحدًا للتعديل." : "Select one staff member to edit.")
+      return
+    }
+    setStaffForm({
+      full_name: selectedStaff.name,
+      email: selectedStaff.email,
+      department: selectedStaff.department === "CS" ? "CS" : "CP",
+    })
+    setDrawerMode("edit")
+  }
+
+  const submitStaffDrawer = async () => {
+    setSavingDrawer(true)
+    setLoadError(null)
+    try {
+      const res =
+        drawerMode === "add"
+          ? await uploadSingleCsvRow(
+              "schooling",
+              ["full_name", "email", "department"],
+              {
+              full_name: staffForm.full_name,
+              email: staffForm.email,
+              department: staffForm.department,
+            })
+          : await patchSchooling(selectedStaff?.id ?? "", {
+              department: staffForm.department,
+            })
+      if (!res.ok) throw new Error(await res.text())
+      setDrawerMode(null)
+      setSelectedIds(new Set())
+      await loadStaff()
+    } catch (error) {
+      setLoadError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : isArabic
+            ? "تعذر حفظ الموظف."
+            : "Could not save staff member."
+      )
+    } finally {
+      setSavingDrawer(false)
+    }
+  }
 
   return (
     <section className="mx-auto w-full max-w-full min-w-0 space-y-3 overflow-x-hidden rounded-xl border border-[#51689A]/30 bg-[#F6F7FE]/40 p-4 shadow-sm dark:border-[#383F58] dark:bg-[#13182A]/40">
@@ -281,6 +354,28 @@ export default function DataTable() {
           </DropdownMenu>
 
           <div className="flex flex-wrap items-center gap-1.5 ">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className={`${controlBtnClass} h-fit w-fit bg-[#FEF9F9] px-[6px] py-px`}
+              onClick={openEditDrawer}
+              title={isArabic ? "تعديل" : "Edit"}
+              aria-label={isArabic ? "تعديل" : "Edit"}
+            >
+              <Pencil size={18} strokeWidth={1.5} className="text-[#1B2065F2] dark:text-[#EEF4F7]" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className={`${controlBtnClass} h-fit w-fit bg-[#FEF9F9] px-[6px] py-px`}
+              onClick={openAddDrawer}
+              title={isArabic ? "إضافة" : "Add"}
+              aria-label={isArabic ? "إضافة موظف" : "Add staff"}
+            >
+              <UserPlus size={18} strokeWidth={1.5} className="text-[#1B2065F2] dark:text-[#EEF4F7]" />
+            </Button>
             {hasSelection && (
               <Button
                 type="button"
@@ -433,6 +528,86 @@ export default function DataTable() {
           </PaginationContent>
         </Pagination>
       </div>
+      <Drawer
+        open={drawerMode !== null}
+        onOpenChange={(open) => !open && setDrawerMode(null)}
+        direction={isArabic ? "left" : "right"}
+      >
+        <DrawerContent dir={isArabic ? "rtl" : "ltr"}>
+          <DrawerHeader>
+            <DrawerTitle>
+              {drawerMode === "add"
+                ? isArabic
+                  ? "إضافة موظف"
+                  : "Add staff member"
+                : isArabic
+                  ? "تعديل الموظف"
+                  : "Edit staff member"}
+            </DrawerTitle>
+            <DrawerDescription>
+              {drawerMode === "add"
+                ? isArabic
+                  ? "إنشاء حساب طاقم التعليم يدويًا."
+                  : "Create a schooling staff account manually."
+                : isArabic
+                  ? "تعديل القسم المتاح من الواجهة الحالية."
+                  : "Edit the department supported by the current backend."}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="grid gap-3">
+            {[
+              ["full_name", "full_name", "John Doe"],
+              ["email", "email", "john.doe@example.com"],
+            ].map(([key, label, placeholder]) => (
+              <label key={key} className="grid gap-1 text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7]">
+                {label}
+                <Input
+                  value={staffForm[key as keyof typeof staffForm]}
+                  disabled={drawerMode === "edit"}
+                  placeholder={placeholder}
+                  onChange={(e) =>
+                    setStaffForm((prev) => ({ ...prev, [key]: e.target.value }))
+                  }
+                  className="bg-white dark:bg-[#242A40]"
+                />
+              </label>
+            ))}
+            <label className="grid gap-1 text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7]">
+              {isArabic ? "القسم" : "Department"}
+              <select
+                value={staffForm.department}
+                onChange={(e) =>
+                  setStaffForm((prev) => ({ ...prev, department: e.target.value }))
+                }
+                className="h-10 rounded-md border border-[#51689A]/35 bg-white px-3 text-sm text-[#1B2065] dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]"
+              >
+                <option value="CP">CP</option>
+                <option value="CS">CS</option>
+              </select>
+            </label>
+          </div>
+          <DrawerFooter>
+            <Button
+              onClick={submitStaffDrawer}
+              disabled={savingDrawer}
+              className="bg-[#51689A] text-white hover:bg-[#40547F]"
+            >
+              {savingDrawer
+                ? isArabic
+                  ? "جارٍ الحفظ..."
+                  : "Saving..."
+                : isArabic
+                  ? "حفظ"
+                  : "Save"}
+            </Button>
+            <DrawerClose asChild>
+              <Button type="button" variant="outline">
+                {isArabic ? "إلغاء" : "Cancel"}
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </section>
   )
 }

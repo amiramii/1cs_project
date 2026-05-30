@@ -47,6 +47,8 @@ export type SessionApi = {
 
 export type AssignmentApi = {
   id: number;
+  /** Teaching-assignment module FK — used for exclusions API. */
+  module?: number;
   /** Teaching-assignment group FK — used for roster / dashboard counts. */
   group?: number;
   group_name?: string;
@@ -131,6 +133,7 @@ function buildResolvedAssignments(
     const moduleName = mn?.trim() || `Module #${ra.module}`;
     out.push({
       id: ra.id,
+      module: typeof ra.module === "number" ? ra.module : undefined,
       group: typeof ra.group === "number" ? ra.group : undefined,
       group_name: groupName,
       module_name: moduleName,

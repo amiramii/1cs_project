@@ -20,11 +20,11 @@ export default function StudScheduleList() {
         isStudentRole ? "اطّلع على أهم جداولك الدراسية" : undefined
       }
       backHref="/Scheduals/Professor-Schedules"
-      nextHref="/Scheduals"
+      nextHref="/Scheduals/Excel-Schedules"
       backLabelEn="Professors"
       backLabelAr="الأساتذة"
-      nextLabelEn="Back to Upload"
-      nextLabelAr="العودة للتحميل"
+      nextLabelEn="Excel"
+      nextLabelAr="ملفات Excel"
       audience="student"
       allowDelete={allowDelete}
       hideTopNavigation={isStudentRole}

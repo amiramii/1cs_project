@@ -1,6 +1,7 @@
 import {
   fetchStudentAbsencesByDate,
   fetchStudentAbsencesByModule,
+  loadStudentExclusions,
   loadStudentJustificationsList,
 } from "@/lib/checkinClient";
 import { fetchAdminTotalsStats } from "@/lib/adminTotalsMetrics";
@@ -9,7 +10,6 @@ import { checkinPath } from "@/lib/checkinApi";
 import { loadDrfListAll, unwrapList } from "@/lib/drfPaginatedList";
 import {
   loadProfessorSessionData,
-  type AttendanceStatus,
 } from "@/lib/professorSessionData";
 import { getAbsenceSeverity, type AbsenceSeverity } from "@/lib/moduleExclusionPolicy";
 import { getAccessToken } from "@/lib/tokenStorage";
@@ -42,7 +42,7 @@ export type SchoolingDashboardCharts = {
 export type ProfessorDashboardCharts = {
   overview: DashboardChartPoint[];
   sessionsTrend: DashboardTrendPoint[];
-  attendanceToday: DashboardChartPoint[];
+  exclusionStatus: DashboardChartPoint[];
 };
 
 export type StudentDashboardCharts = {
@@ -542,26 +542,43 @@ export async function fetchSchoolingDashboardCharts(
 export async function fetchProfessorDashboardCharts(
   isAr: boolean
 ): Promise<ProfessorDashboardCharts> {
-  const today = todayLocalIso();
   const empty: ProfessorDashboardCharts = {
     overview: [],
     sessionsTrend: buildLast7DayTrend(new Map(), isAr),
-    attendanceToday: [],
+    exclusionStatus: [],
   };
 
   try {
-    const [metrics, bundle] = await Promise.all([
+    const [metrics, bundle, students, exclusions] = await Promise.all([
       fetchProfessorDashboardMetrics(isAr),
       loadProfessorSessionData(isAr),
+      loadDrfListAll<StudentListRow>(
+        getApiBaseUrl(),
+        `${checkinPath.students}/`,
+        listHeaders(),
+        {}
+      ).catch(() => [] as StudentListRow[]),
+      loadStudentExclusions().catch(() => []),
     ]);
-
-    const todaySessions = bundle.sessions.filter((s) => s.date === today);
-    const attendanceRows: { status?: AttendanceStatus }[] = [];
-    for (const session of todaySessions) {
-      if (Array.isArray(session.attendances)) {
-        attendanceRows.push(...session.attendances);
+    const professorGroups = new Set(
+      bundle.assignments
+        .map((a) => a.group)
+        .filter((g): g is number => typeof g === "number")
+    );
+    const rosterEmails = new Set<string>();
+    for (const student of students) {
+      if (typeof student.group !== "number" || !professorGroups.has(student.group)) {
+        continue;
       }
+      if (student.email?.trim()) rosterEmails.add(student.email.trim().toLowerCase());
     }
+    const excludedEmails = new Set(
+      exclusions
+        .map((row) => row.student_email?.trim().toLowerCase())
+        .filter((email): email is string => Boolean(email && rosterEmails.has(email)))
+    );
+    const excluded = excludedEmails.size;
+    const notExcluded = Math.max(0, rosterEmails.size - excluded);
 
     return {
       overview: [
@@ -590,12 +607,18 @@ export async function fetchProfessorDashboardCharts(
         countSessionsByDate(bundle.sessions),
         isAr
       ),
-      attendanceToday: statusToChartPoints(
-        countAttendanceByStatus(attendanceRows),
-        ATTENDANCE_STATUS_LABELS,
-        isAr,
-        ["present", "absent", "justified"]
-      ),
+      exclusionStatus: [
+        {
+          key: "excluded",
+          label: isAr ? "مستبعد" : "Excluded",
+          value: excluded,
+        },
+        {
+          key: "notExcluded",
+          label: isAr ? "غير مستبعد" : "Not excluded",
+          value: notExcluded,
+        },
+      ],
     };
   } catch {
     return empty;
