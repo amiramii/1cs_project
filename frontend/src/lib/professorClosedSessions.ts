@@ -35,3 +35,14 @@ export function markProfessorSessionClosedLocally(sessionId: number): void {
     /* quota / private mode */
   }
 }
+
+export function unmarkProfessorSessionClosedLocally(sessionId: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    const next = readClosedProfessorSessionIds();
+    if (!next.delete(sessionId)) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
+  } catch {
+    /* quota / private mode */
+  }
+}

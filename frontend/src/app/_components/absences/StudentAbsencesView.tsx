@@ -34,6 +34,7 @@ import {
   type StudentExclusionRow,
 } from "@/lib/checkinClient";
 import {
+  fetchAndApplyAbsenceConfigFromApi,
   getAbsenceSeverityColor,
   getModuleExclusionCountMode,
   getModuleExclusionAbsenceLimit,
@@ -233,6 +234,7 @@ export default function StudentAbsencesView() {
     (async () => {
       setLoading(true);
       try {
+        await fetchAndApplyAbsenceConfigFromApi();
         const [modRes, dateRes, exclusionRows] = await Promise.all([
           fetchStudentAbsencesByModule(),
           fetchStudentAbsencesByDate(),

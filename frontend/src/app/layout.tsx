@@ -51,7 +51,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${inter.variable} ${montserrat.variable} ${notoArabic.variable}`}
     >
-      <body className="min-h-screen antialiased bg-background overflow-x-hidden">
+      <body className="min-h-screen w-full max-w-[100%] antialiased bg-background">
         <Providers>
           {children}
         </Providers>

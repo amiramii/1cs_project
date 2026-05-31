@@ -196,17 +196,63 @@ export type StudentExclusionRow = {
   created_at?: string
 }
 
+/** `GET /api/exclusions/` — optional `?module=` (DjangoFilterBackend). */
 export function loadStudentExclusions(params?: { module?: string | number }) {
-  const query =
+  const path =
     params?.module != null
-      ? `?module=${encodeURIComponent(String(params.module))}`
-      : ""
+      ? `${checkinPath.exclusions.collection}/?module=${encodeURIComponent(String(params.module))}`
+      : `${checkinPath.exclusions.collection}/`
   return loadDrfListAll<StudentExclusionRow>(
     getApiBaseUrl(),
-    `${checkinPath.exclusions.collection}/${query}`,
+    path,
     listAuthHeaders(),
     {}
   )
+}
+
+export type AbsenceConfigDto = {
+  mode: "global" | "separate"
+  global_limit: number | null
+  unjustified_limit: number | null
+  justified_limit: number | null
+}
+
+export type PutAbsenceConfigResponse = AbsenceConfigDto & {
+  recalculated?: boolean
+  new_exclusions?: number
+}
+
+/** `GET /api/exclusions/config/` */
+export async function fetchAbsenceConfig(): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.exclusions.config), {
+    headers: listAuthHeaders(),
+  })
+}
+
+/** `PUT /api/exclusions/config/` — admin only; triggers recalculate on server. */
+export async function putAbsenceConfig(
+  body: AbsenceConfigDto
+): Promise<Response> {
+  return api(checkinPath.exclusions.config, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  })
+}
+
+/** `POST /api/exclusions/recalculate/` — admin only. */
+export async function postRecalculateExclusions(): Promise<Response> {
+  return api(checkinPath.exclusions.recalculate, {
+    method: "POST",
+  })
+}
+
+/** `GET /api/exclusions/{id}/` */
+export async function fetchStudentExclusionById(
+  id: string | number
+): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.exclusions.detail(id)), {
+    headers: listAuthHeaders(),
+  })
 }
 
 export async function deleteSchoolingById(id: string | number): Promise<Response> {
@@ -795,7 +841,7 @@ export async function fetchDocumentsByAudience(
   return res
 }
 
-/** Timetable JSON from uploaded PDFs (`ProfessorTodayView`). */
+/** Timetable JSON from uploaded Excel (`ProfessorTodayView`). */
 export async function fetchProfessorScheduleToday(
   professor: string,
   query?: { day?: string }
@@ -805,7 +851,74 @@ export async function fetchProfessorScheduleToday(
   if (query?.day != null && query.day !== "") {
     u.searchParams.set("day", query.day)
   }
-  return fetch(u.toString(), { headers: listAuthHeaders() })
+  let res = await fetch(u.toString(), { headers: listAuthHeaders() })
+  if (
+    (res.status === 401 || res.status === 403) &&
+    typeof window !== "undefined" &&
+    (await attemptTokenRefresh())
+  ) {
+    res = await fetch(u.toString(), { headers: listAuthHeaders() })
+  }
+  return res
+}
+
+export type ExcelScheduleSemester = "S1" | "S2"
+
+export type ExcelScheduleRow = {
+  id: number
+  title: string
+  year: number | { id: number; name: string } | null
+  semester: ExcelScheduleSemester
+  file: string
+  uploaded_at: string
+}
+
+/** GET all rows from `ExcelScheduleView`. */
+export async function fetchExcelSchedules(): Promise<Response> {
+  const href = checkinUrl(checkinPath.documents.excelSchedules)
+  let res = await fetch(href, { headers: listAuthHeaders() })
+  if (
+    (res.status === 401 || res.status === 403) &&
+    typeof window !== "undefined" &&
+    (await attemptTokenRefresh())
+  ) {
+    res = await fetch(href, { headers: listAuthHeaders() })
+  }
+  return res
+}
+
+/** POST multipart — `file`, `title`, `year` (pk), `semester` (`S1` | `S2`). */
+export async function postExcelSchedule(formData: FormData): Promise<Response> {
+  const href = checkinUrl(checkinPath.documents.excelSchedules)
+  let res = await fetch(href, {
+    method: "POST",
+    headers: listAuthHeaders(),
+    body: formData,
+  })
+  if (
+    (res.status === 401 || res.status === 403) &&
+    typeof window !== "undefined" &&
+    (await attemptTokenRefresh())
+  ) {
+    res = await fetch(href, {
+      method: "POST",
+      headers: listAuthHeaders(),
+      body: formData,
+    })
+  }
+  return res
+}
+
+export async function loadAllExcelSchedules(): Promise<ExcelScheduleRow[]> {
+  const res = await fetchExcelSchedules()
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(text || `Failed to load Excel schedules (HTTP ${res.status})`)
+  }
+  if (!text.trim()) return []
+  const parsed = JSON.parse(text) as unknown
+  if (Array.isArray(parsed)) return parsed as ExcelScheduleRow[]
+  return unwrapList<ExcelScheduleRow>(parsed)
 }
 
 export async function getDocumentById(

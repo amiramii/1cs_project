@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import PdfPreview from "./PdfPreview"
+import StudentExcelTimetablePanel from "./StudentExcelTimetablePanel"
 
 type ScheduleListShellProps = {
   titleEn: string
@@ -573,6 +574,14 @@ export default function ScheduleListShell({
       )}
 
       <div className="flex w-full min-w-0 max-w-none flex-1 flex-col gap-6 bg-transparent">
+        {audience === "student" ? (
+          <StudentExcelTimetablePanel
+            isArabic={isArabic}
+            gradeFilter={gradeFilter}
+            studentBrowse={isStudentBrowse}
+          />
+        ) : null}
+
         {!isStudentBrowse ? (
           <div className="flex w-full flex-col gap-4 rounded-xl border border-blue-primary/50 bg-[#F6F9FB] p-3 shadow-md lg:flex-row lg:items-center lg:justify-between dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
             <div className="flex min-w-0 shrink-0 items-center gap-3">

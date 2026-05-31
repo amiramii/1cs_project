@@ -87,7 +87,8 @@ function SessionHistorySemesterSection({
     const PARTICIPATION_CAP_PER_MARK = 10;
     return assignments.map((a) => {
       const list = sessions.filter(
-        (s) => s.assignment === a.id && isIsoDateInRange(s.date, from, to)
+        (s) =>
+          s.assignment === a.id && isIsoDateInRange(s.date, from, to)
       );
       const sessionIds = new Set(list.map((s) => s.id));
       const rel = teacherAttendanceRows.filter(

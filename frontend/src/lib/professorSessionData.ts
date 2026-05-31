@@ -333,6 +333,32 @@ function authHeaders(token: string | null): HeadersInit {
   return token?.trim() ? { Authorization: `Bearer ${token.trim()}` } : {};
 }
 
+/** List endpoint often omits nested attendances; detail GET has full roster + marks. */
+async function hydrateSessionsWithDetails(
+  sessions: SessionApi[],
+  headers: HeadersInit,
+  cacheBust: boolean
+): Promise<SessionApi[]> {
+  const fetchInit: RequestInit = {
+    headers,
+    ...(cacheBust ? { cache: "no-store" as RequestCache } : {}),
+  };
+  return Promise.all(
+    sessions.map(async (session) => {
+      try {
+        const res = await fetch(
+          buildApiAbsoluteUrl(checkinPath.attendance.session(session.id)),
+          fetchInit
+        );
+        if (!res.ok) return session;
+        return (await res.json()) as SessionApi;
+      } catch {
+        return session;
+      }
+    })
+  );
+}
+
 export type ProfessorSessionBundle = {
   sessions: SessionApi[];
   teacherAttendanceRows: AttendanceRow[];
@@ -347,7 +373,8 @@ export type ProfessorSessionBundle = {
  * semestrial sheet page, etc.).
  */
 export async function loadProfessorSessionData(
-  isAr: boolean
+  isAr: boolean,
+  options?: { cacheBust?: boolean }
 ): Promise<ProfessorSessionBundle> {
   const apiBase = getApiBaseUrl();
   await deferOneFrame();
@@ -355,6 +382,9 @@ export async function loadProfessorSessionData(
   let headers = authHeaders(token);
   const sessionsParams = new URLSearchParams();
   sessionsParams.set("page_size", String(API_LIST_PAGE_SIZE));
+  if (options?.cacheBust) {
+    sessionsParams.set("_", String(Date.now()));
+  }
   const sessionsUrl = buildApiAbsoluteUrl(
     checkinPath.attendance.sessions,
     sessionsParams
@@ -443,6 +473,9 @@ export async function loadProfessorSessionData(
           (async () => {
             const attParams = new URLSearchParams();
             attParams.set("page_size", String(API_LIST_PAGE_SIZE));
+            if (options?.cacheBust) {
+              attParams.set("_", String(Date.now()));
+            }
             const first = await fetch(
               buildApiAbsoluteUrl(checkinPath.attendance.attendance, attParams),
               { headers }
@@ -546,16 +579,31 @@ export async function loadProfessorSessionData(
         if (resolved.length === 0) {
           resolved = deriveAssignmentsFromSessions(sessionsList);
         }
+        const assignmentIds = new Set(resolved.map((a) => a.id));
+        const sessionsForSheet = sessionsList.filter((s) =>
+          assignmentIds.has(s.assignment)
+        );
+        const sessionsHydrated = await hydrateSessionsWithDetails(
+          sessionsForSheet,
+          headers,
+          Boolean(options?.cacheBust)
+        );
+        const sessionsById = new Map(
+          sessionsHydrated.map((s) => [s.id, s] as const)
+        );
+        const sessionsMerged = sessionsList.map(
+          (s) => sessionsById.get(s.id) ?? s
+        );
         const withSession = mergeAttendanceWithSessionInfo(
           attMerged,
-          attendanceRowsWithSessionFromSessions(sessionsList)
+          attendanceRowsWithSessionFromSessions(sessionsMerged)
         );
         const studentLookup = buildStudentNameEmailLookup(studentListRows);
         const teacherAttendanceRows = await hydrateAttendanceRowsStudentInfo(
           applyStudentLookup(withSession, studentLookup)
         );
         return {
-          sessions: sessionsList,
+          sessions: sessionsMerged,
           teacherAttendanceRows,
           assignments: resolved,
           assignmentsCatalogFallback: typeof teacherId !== "number",

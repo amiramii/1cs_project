@@ -1,6 +1,19 @@
-/** Fired when the module exclusion absence limit changes (e.g. legacy localStorage). */
+import type {
+  AbsenceConfigDto,
+  PutAbsenceConfigResponse,
+} from "@/lib/checkinClient";
+import {
+  fetchAbsenceConfig,
+  postRecalculateExclusions,
+  putAbsenceConfig,
+} from "@/lib/checkinClient";
+
+/** Fired when the module exclusion absence limit changes (API or localStorage). */
 export const MODULE_EXCLUSION_POLICY_CHANGED_EVENT =
   "chekin-module-exclusion-policy-changed";
+
+/** Fired after background exclusion recalculation completes (lists can refresh). */
+export const EXCLUSIONS_RECALCULATED_EVENT = "chekin-exclusions-recalculated";
 
 const STORAGE_KEY = "chekin:module-exclusion-absence-limit";
 const COUNT_MODE_STORAGE_KEY = "chekin:module-exclusion-count-mode";
@@ -197,4 +210,126 @@ export function getAbsenceSeverityColor(
   limit = getModuleExclusionAbsenceLimit()
 ): string {
   return ABSENCE_SEVERITY_COLORS[getAbsenceSeverity(absenceCount, limit)];
+}
+
+/** Maps UI policy state to `AbsenceConfigSerializer` payload. */
+export function buildAbsenceConfigPayload(): AbsenceConfigDto {
+  const mode = getModuleExclusionCountMode();
+  if (mode === "split") {
+    return {
+      mode: "separate",
+      global_limit: null,
+      unjustified_limit: getModuleExclusionUnjustifiedLimit(),
+      justified_limit: getModuleExclusionJustifiedLimit(),
+    };
+  }
+  return {
+    mode: "global",
+    global_limit: getModuleExclusionAbsenceLimit(),
+    unjustified_limit: null,
+    justified_limit: null,
+  };
+}
+
+/** Applies server config to local getters (localStorage + change event). */
+export function applyAbsenceConfigFromApi(config: AbsenceConfigDto): void {
+  if (config.mode === "separate") {
+    setModuleExclusionCountMode("split");
+    if (config.justified_limit != null) {
+      setModuleExclusionJustifiedLimit(config.justified_limit);
+    }
+    if (config.unjustified_limit != null) {
+      setModuleExclusionUnjustifiedLimit(config.unjustified_limit);
+    }
+  } else {
+    setModuleExclusionCountMode("general");
+    if (config.global_limit != null) {
+      setModuleExclusionAbsenceLimit(config.global_limit);
+    }
+  }
+}
+
+/** `GET /api/exclusions/config/` — sync limits used across dashboards and absence views. */
+export async function fetchAndApplyAbsenceConfigFromApi(): Promise<boolean> {
+  try {
+    const res = await fetchAbsenceConfig();
+    if (!res.ok) return false;
+    const data = (await res.json()) as AbsenceConfigDto;
+    applyAbsenceConfigFromApi(data);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** `PUT /api/exclusions/config/` — persists policy and returns recalculation summary. */
+export async function saveAbsenceConfigToApi(
+  body: AbsenceConfigDto = buildAbsenceConfigPayload()
+): Promise<PutAbsenceConfigResponse | null> {
+  try {
+    const res = await putAbsenceConfig(body);
+    if (!res.ok) return null;
+    const data = (await res.json()) as PutAbsenceConfigResponse;
+    applyAbsenceConfigFromApi(data);
+    notifyExclusionsRecalculated();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** `POST /api/exclusions/recalculate/` — admin rebuilds exclusion rows from attendance. */
+export async function recalculateExclusionsOnApi(): Promise<{
+  ok: boolean;
+  detail?: string;
+  count?: number;
+}> {
+  try {
+    const res = await postRecalculateExclusions();
+    const text = await res.text();
+    let parsed: { detail?: string; new_exclusions?: number } | null = null;
+    try {
+      parsed = text ? (JSON.parse(text) as { detail?: string }) : null;
+    } catch {
+      parsed = null;
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        detail:
+          parsed?.detail ??
+          text.trim() ??
+          `Recalculate failed (${res.status})`,
+      };
+    }
+    const detail = parsed?.detail;
+    const match = detail?.match(/(\d+)\s+new exclusion/i);
+    const count =
+      typeof (parsed as { new_exclusions?: number } | null)?.new_exclusions ===
+      "number"
+        ? (parsed as { new_exclusions: number }).new_exclusions
+        : match
+          ? Number.parseInt(match[1]!, 10)
+          : undefined;
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(EXCLUSIONS_RECALCULATED_EVENT));
+    }
+    return { ok: true, detail, count };
+  } catch {
+    return { ok: false, detail: "Network error" };
+  }
+}
+
+/** Runs recalculation in the background (no admin action). Best-effort, non-blocking. */
+export function runAutomaticExclusionsRecalculate(): void {
+  if (typeof window === "undefined") return;
+  void recalculateExclusionsOnApi().then((result) => {
+    if (result.ok) return;
+    console.warn("Automatic exclusion recalculate:", result.detail);
+  });
+}
+
+export function notifyExclusionsRecalculated(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(EXCLUSIONS_RECALCULATED_EVENT));
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/app/_components/language-provider";
+import type { AbsenceConfigDto } from "@/lib/checkinClient";
 import {
+  buildAbsenceConfigPayload,
+  fetchAndApplyAbsenceConfigFromApi,
   getModuleExclusionCountMode,
   getModuleExclusionAbsenceLimit,
   getModuleExclusionJustifiedLimit,
@@ -20,6 +23,7 @@ import {
   ModuleExclusionCountMode,
   MODULE_EXCLUSION_POLICY_CHANGED_EVENT,
   moduleExclusionPolicyBounds,
+  saveAbsenceConfigToApi,
   setModuleExclusionCountMode,
   setModuleExclusionAbsenceLimit,
   setModuleExclusionJustifiedLimit,
@@ -49,6 +53,15 @@ export default function ModuleExclusionPolicyCard({
     String(unjustifiedLimit)
   );
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const syncFromPolicy = useCallback(() => {
+    setLimit(getModuleExclusionAbsenceLimit());
+    setCountMode(getModuleExclusionCountMode());
+    setJustifiedLimit(getModuleExclusionJustifiedLimit());
+    setUnjustifiedLimit(getModuleExclusionUnjustifiedLimit());
+  }, []);
 
   const countingModeLabel =
     countMode === "general"
@@ -72,59 +85,93 @@ export default function ModuleExclusionPolicyCard({
   }, [unjustifiedLimit]);
 
   useEffect(() => {
-    const sync = () => {
-      setLimit(getModuleExclusionAbsenceLimit());
-      setCountMode(getModuleExclusionCountMode());
-      setJustifiedLimit(getModuleExclusionJustifiedLimit());
-      setUnjustifiedLimit(getModuleExclusionUnjustifiedLimit());
-    };
-    window.addEventListener(MODULE_EXCLUSION_POLICY_CHANGED_EVENT, sync);
-    window.addEventListener("storage", sync);
+    let alive = true;
+    (async () => {
+      setConfigLoading(true);
+      await fetchAndApplyAbsenceConfigFromApi();
+      if (alive) {
+        syncFromPolicy();
+        setConfigLoading(false);
+      }
+    })();
     return () => {
-      window.removeEventListener(MODULE_EXCLUSION_POLICY_CHANGED_EVENT, sync);
-      window.removeEventListener("storage", sync);
+      alive = false;
     };
-  }, []);
+  }, [syncFromPolicy]);
 
-  const saveLimit = () => {
-    const raw = Number.parseInt(draft, 10);
-    const next = setModuleExclusionAbsenceLimit(raw);
-    setLimit(next);
-    toast.success(
-      isAr
-        ? `تم تحديث حد الاستبعاد إلى ${next} غيابات.`
-        : `Exclusion limit updated to ${next} absences.`
-    );
+  useEffect(() => {
+    const onPolicyChange = () => syncFromPolicy();
+    window.addEventListener(MODULE_EXCLUSION_POLICY_CHANGED_EVENT, onPolicyChange);
+    window.addEventListener("storage", onPolicyChange);
+    return () => {
+      window.removeEventListener(
+        MODULE_EXCLUSION_POLICY_CHANGED_EVENT,
+        onPolicyChange
+      );
+      window.removeEventListener("storage", onPolicyChange);
+    };
+  }, [syncFromPolicy]);
+
+  const persistConfig = async (body: AbsenceConfigDto) => {
+    setSaving(true);
+    try {
+      const result = await saveAbsenceConfigToApi(body);
+      if (!result) {
+        toast.error(
+          isAr
+            ? "تعذر حفظ السياسة على الخادم."
+            : "Could not save policy to the server."
+        );
+        return false;
+      }
+      syncFromPolicy();
+      if (typeof result.new_exclusions === "number") {
+        toast.success(
+          isAr
+            ? `تم الحفظ. ${result.new_exclusions} استبعاد(ات) محدّثة.`
+            : `Saved. ${result.new_exclusions} exclusion(s) updated.`
+        );
+      } else {
+        toast.success(isAr ? "تم حفظ السياسة." : "Policy saved.");
+      }
+      return true;
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const saveCountMode = (value: string) => {
+  const saveLimit = async () => {
+    const raw = Number.parseInt(draft, 10);
+    setModuleExclusionAbsenceLimit(raw);
+    const body: AbsenceConfigDto = {
+      mode: "global",
+      global_limit: getModuleExclusionAbsenceLimit(),
+      unjustified_limit: null,
+      justified_limit: null,
+    };
+    await persistConfig(body);
+  };
+
+  const saveCountMode = async (value: string) => {
     const next = setModuleExclusionCountMode(
       value === "split" ? "split" : "general"
     );
     setCountMode(next);
-    toast.success(
-      isAr
-        ? next === "general"
-          ? "تم تحديث السياسة إلى الوضع العام."
-          : "تم تحديث السياسة إلى تفصيل المبرر وغير المبرر."
-        : next === "general"
-          ? "Policy updated to general mode."
-          : "Policy updated to justified/unjustified split mode."
-    );
+    await persistConfig(buildAbsenceConfigPayload());
   };
 
-  const saveSplitLimits = () => {
+  const saveSplitLimits = async () => {
     const justifiedRaw = Number.parseInt(justifiedDraft, 10);
     const unjustifiedRaw = Number.parseInt(unjustifiedDraft, 10);
-    const nextJustified = setModuleExclusionJustifiedLimit(justifiedRaw);
-    const nextUnjustified = setModuleExclusionUnjustifiedLimit(unjustifiedRaw);
-    setJustifiedLimit(nextJustified);
-    setUnjustifiedLimit(nextUnjustified);
-    toast.success(
-      isAr
-        ? `تم تحديث الحدود: المبرر ${nextJustified} وغير المبرر ${nextUnjustified}.`
-        : `Limits updated: justified ${nextJustified}, unjustified ${nextUnjustified}.`
-    );
+    setModuleExclusionJustifiedLimit(justifiedRaw);
+    setModuleExclusionUnjustifiedLimit(unjustifiedRaw);
+    const body: AbsenceConfigDto = {
+      mode: "separate",
+      global_limit: null,
+      unjustified_limit: getModuleExclusionUnjustifiedLimit(),
+      justified_limit: getModuleExclusionJustifiedLimit(),
+    };
+    await persistConfig(body);
   };
 
   return (
@@ -137,9 +184,13 @@ export default function ModuleExclusionPolicyCard({
               : "Absence exclusion policy"}
           </p>
           <p className="text-xs text-[#51689A] dark:text-[#9BA8C4]">
-            {isAr
-              ? "النظام يعلّم الطالب كمستبعد تلقائيًا عندما يتجاوز هذا الحد في أي مادة."
-              : "The system automatically marks a student as excluded from a module once this limit is reached."}
+            {configLoading
+              ? isAr
+                ? "جارٍ التحميل من الخادم…"
+                : "Loading from server…"
+              : isAr
+                ? "يُحدَّث الاستبعاد تلقائيًا عند الحفظ، عند استيراد الطلاب، وعند تسجيل الغيابات."
+                : "Exclusions update automatically when you save, import students, or record attendance."}
           </p>
         </div>
         <ShieldAlert className="size-5 shrink-0 text-[#74A7BD]" />
@@ -150,7 +201,7 @@ export default function ModuleExclusionPolicyCard({
           {isAr ? "طريقة الاحتساب" : "Counting mode"}
         </span>
         <DropdownMenu open={modeMenuOpen} onOpenChange={setModeMenuOpen}>
-          <DropdownMenuTrigger asChild disabled={!canEdit}>
+          <DropdownMenuTrigger asChild disabled={!canEdit || configLoading}>
             <Button
               type="button"
               variant="outline"
@@ -167,7 +218,7 @@ export default function ModuleExclusionPolicyCard({
           >
             <DropdownMenuItem
               onClick={() => {
-                saveCountMode("general");
+                void saveCountMode("general");
                 setModeMenuOpen(false);
               }}
             >
@@ -177,7 +228,7 @@ export default function ModuleExclusionPolicyCard({
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
-                saveCountMode("split");
+                void saveCountMode("split");
                 setModeMenuOpen(false);
               }}
             >
@@ -200,7 +251,7 @@ export default function ModuleExclusionPolicyCard({
               max={moduleExclusionPolicyBounds.max}
               value={canEdit ? draft : String(limit)}
               onChange={(event) => setDraft(event.target.value)}
-              disabled={!canEdit}
+              disabled={!canEdit || configLoading}
               className="h-9 w-24 rounded-lg border-[#51689A]/25 bg-white text-center font-semibold text-[#1B2065] dark:border-[#383F58] dark:bg-[#141726] dark:text-[#EEF4F7]"
               aria-label={isAr ? "الحد العام للاستبعاد" : "General exclusion limit"}
             />
@@ -213,10 +264,11 @@ export default function ModuleExclusionPolicyCard({
             <Button
               type="button"
               size="sm"
-              onClick={saveLimit}
+              disabled={saving || configLoading}
+              onClick={() => void saveLimit()}
               className="h-9 rounded-lg bg-[#51689A] px-4 text-white hover:bg-[#51689A]/90"
             >
-              {isAr ? "حفظ" : "Save"}
+              {saving ? (isAr ? "جارٍ الحفظ…" : "Saving…") : isAr ? "حفظ" : "Save"}
             </Button>
           ) : null}
         </div>
@@ -233,7 +285,7 @@ export default function ModuleExclusionPolicyCard({
                 max={moduleExclusionPolicyBounds.max}
                 value={canEdit ? justifiedDraft : String(justifiedLimit)}
                 onChange={(event) => setJustifiedDraft(event.target.value)}
-                disabled={!canEdit}
+                disabled={!canEdit || configLoading}
                 className="h-9 w-24 rounded-lg border-[#51689A]/25 bg-white text-center font-semibold text-[#1B2065] dark:border-[#383F58] dark:bg-[#141726] dark:text-[#EEF4F7]"
                 aria-label={isAr ? "حد الغياب المبرر" : "Justified absence limit"}
               />
@@ -248,7 +300,7 @@ export default function ModuleExclusionPolicyCard({
                 max={moduleExclusionPolicyBounds.max}
                 value={canEdit ? unjustifiedDraft : String(unjustifiedLimit)}
                 onChange={(event) => setUnjustifiedDraft(event.target.value)}
-                disabled={!canEdit}
+                disabled={!canEdit || configLoading}
                 className="h-9 w-24 rounded-lg border-[#51689A]/25 bg-white text-center font-semibold text-[#1B2065] dark:border-[#383F58] dark:bg-[#141726] dark:text-[#EEF4F7]"
                 aria-label={isAr ? "حد الغياب غير المبرر" : "Unjustified absence limit"}
               />
@@ -258,14 +310,22 @@ export default function ModuleExclusionPolicyCard({
             <Button
               type="button"
               size="sm"
-              onClick={saveSplitLimits}
+              disabled={saving || configLoading}
+              onClick={() => void saveSplitLimits()}
               className="h-9 w-fit rounded-lg bg-[#51689A] px-4 text-white hover:bg-[#51689A]/90"
             >
-              {isAr ? "حفظ الحدود" : "Save limits"}
+              {saving
+                ? isAr
+                  ? "جارٍ الحفظ…"
+                  : "Saving…"
+                : isAr
+                  ? "حفظ الحدود"
+                  : "Save limits"}
             </Button>
           ) : null}
         </div>
       )}
+
     </section>
   );
 }

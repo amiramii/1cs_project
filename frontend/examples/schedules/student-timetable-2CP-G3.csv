@@ -1,0 +1,8 @@
+Day,Time_Slot,Module,Professor,Group,Room,Session_Type
+Dimanche,08h-09h30,Database,Dr Sara,G3,SALLE 08,Cours
+Dimanche,11h-12h30,Database,Dr Sara,G3,SALLE 08,TD
+Lundi,09h30-11h,Operating Systems,Dr Sara,G3,SALLE TP2,Cours
+Lundi,14h-15h30,Database,Dr Sara,G3,SALLE 08,TP
+Mardi,08h-09h30,Database,Dr Sara,G3,SALLE 08,TD
+Mercredi,09h30-11h,Operating Systems,Dr Sara,G3,SALLE TP2,TD
+Jeudi,14h-15h30,Database,Dr Sara,G3,SALLE 08,TP

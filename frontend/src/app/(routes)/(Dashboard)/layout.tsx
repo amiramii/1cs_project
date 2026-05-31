@@ -38,6 +38,7 @@ import NotificationOnboardingDialog from "../../_components/notifications/Notifi
 import { NotificationProvider } from "../../_components/notifications/NotificationProvider";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
+import { fetchAndApplyAbsenceConfigFromApi } from "@/lib/moduleExclusionPolicy";
 
 export default function DashboardLayout({
   children,
@@ -77,6 +78,10 @@ export default function DashboardLayout({
   useEffect(() => {
     queueMicrotask(() => setUserDisplayName(getCurrentUserDisplayName()));
   }, []);
+
+  useEffect(() => {
+    void fetchAndApplyAbsenceConfigFromApi();
+  }, []);
   const profileGroup =
     role === "admin"
       ? language === "ar"
@@ -109,13 +114,20 @@ export default function DashboardLayout({
     ) ??
     navItems[0];
 
-  const shellClass = `flex min-h-screen flex-1 flex-col pb-24 md:pb-0 transition-all duration-200 ${
-    expanded ? (isRtl ? "md:mr-64" : "md:ml-64") : isRtl ? "md:mr-24" : "md:ml-24"
+  /** Sidebar is fixed: use padding (not margin) so w-full does not overflow the viewport. */
+  const shellClass = `box-border flex min-h-screen w-full min-w-0 max-w-full flex-col pb-24 transition-[padding] duration-200 md:pb-0 ${
+    expanded
+      ? isRtl
+        ? "md:pe-64"
+        : "md:ps-64"
+      : isRtl
+        ? "md:pe-24"
+        : "md:ps-24"
   }`;
 
   return (
     <NotificationProvider>
-    <div className="relative min-h-screen text-foreground font-montserrat">
+    <div className="relative min-h-screen w-full max-w-[100vw] text-foreground font-montserrat">
       <div
         className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
         aria-hidden
@@ -138,8 +150,8 @@ export default function DashboardLayout({
           setExpanded={setExpanded}
           role={role}
         />
-      <div className={`${shellClass} min-w-0`}>
-      <header className="sticky top-0 z-30 flex min-h-16 w-full items-center justify-between gap-3 border-b border-[#74A7BD]/20 bg-[#FEF9F9]/80 px-4 shadow-md backdrop-blur-sm sm:px-6 dark:border-[#51689A]/30 dark:bg-[#141726]/95 dark:text-[#EEF4F7] dark:shadow-black/25">
+      <div className={shellClass}>
+      <header className="z-50 box-border flex h-16 w-full max-w-full shrink-0 items-center justify-between gap-3 border-b border-[#74A7BD]/20 bg-[#FEF9F9] px-4 shadow-md backdrop-blur-md max-md:fixed max-md:start-0 max-md:end-0 max-md:top-0 sm:px-6 md:sticky md:top-0 dark:border-[#51689A]/30 dark:bg-[#141726] dark:text-[#EEF4F7] dark:shadow-black/25">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-transparent via-[#74A7BD]/8 to-transparent dark:via-[#29587f]/30" />
           <div className="flex min-w-0 items-center gap-2 text-[#1B2065] dark:text-[#EEF4F7]">
             <SidebarMenuIcon id={activeItem.iconId} size={18} className="shrink-0 text-[#1B2065] dark:text-[#EEF4F7]" />
@@ -176,8 +188,10 @@ export default function DashboardLayout({
             </DropdownMenu>
         </div>
       </header>
+      {/* Reserves space under the fixed mobile header so content is not covered */}
+      <div className="h-16 w-full shrink-0 max-md:block md:hidden" aria-hidden />
       <NotificationOnboardingDialog />
-      <main className="mx-auto flex w-full min-w-0 flex-1 flex-col items-stretch bg-transparent px-4 py-4 sm:px-5 lg:px-6">
+      <main className="flex w-full min-w-0 flex-1 flex-col items-stretch bg-transparent px-4 pb-6 pt-3 sm:px-6 lg:px-8">
         <DashboardRoleGuard>{children}</DashboardRoleGuard>
       </main>
       <DevRoleSwitcher />

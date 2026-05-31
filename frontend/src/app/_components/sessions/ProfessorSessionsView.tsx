@@ -58,11 +58,22 @@ import {
 import { hydrateAttendanceRowsStudentInfo } from "@/lib/attendanceStudentHydrate";
 import { checkinPath } from "@/lib/checkinApi";
 import { loadDrfListAll } from "@/lib/drfPaginatedList";
-import {
-  markProfessorSessionClosedLocally,
-  readClosedProfessorSessionIds,
-} from "@/lib/professorClosedSessions";
+import { dispatchProfSessionSaved } from "@/lib/professorSessionEvents";
+import { sessionHasRecordedAttendance } from "@/lib/sessionHistoryEligibility";
+import { SessionTypeBadge } from "@/lib/SessionTypeBadge";
 import { getAccessToken, getStoredUserEmail } from "@/lib/tokenStorage";
+import {
+  loadProfessorTimetableToday,
+  resolveProfessorTimetableName,
+  type ProfessorTimetableSession,
+  type ProfessorTimetableToday,
+} from "@/lib/professorScheduleToday";
+import {
+  findTodaySessionForTimetableSlot,
+  parseFrenchTimeSlot,
+  resolveAssignmentForTimetableSlot,
+  timetableSlotKey,
+} from "@/lib/professorTimetableActions";
 
 type RowDraft = {
   status: AttendanceStatus;
@@ -260,8 +271,15 @@ export default function ProfessorSessionsView() {
     dayjs(`${todayLocalIso()}T08:00:00`).add(1, "day").add(2, "hour")
   );
   const [creating, setCreating] = useState(false);
-  /** Re-read browser closed-session ids after Save (backend has no completed flag). */
-  const [closedSessionsBump, setClosedSessionsBump] = useState(0);
+  const [todayTimetable, setTodayTimetable] =
+    useState<ProfessorTimetableToday | null>(null);
+  const [timetableLoading, setTimetableLoading] = useState(true);
+  const [timetableError, setTimetableError] = useState<string | null>(null);
+  const [startingSlotKey, setStartingSlotKey] = useState<string | null>(null);
+  /** In-memory only (not localStorage): sessions just saved this visit. */
+  const [savedSessionIds, setSavedSessionIds] = useState<Set<number>>(
+    () => new Set()
+  );
 
   const getRowDraft = useCallback(
     (row: AttendanceRow): RowDraft =>
@@ -272,7 +290,7 @@ export default function ProfessorSessionsView() {
   const refreshData = useCallback(async () => {
     const ar = isArRef.current;
     try {
-      const bundle = await loadProfessorSessionData(ar);
+      const bundle = await loadProfessorSessionData(ar, { cacheBust: true });
       setSessions(bundle.sessions);
       setTeacherAttendanceRows(bundle.teacherAttendanceRows);
       setAssignments(bundle.assignments);
@@ -347,12 +365,39 @@ export default function ProfessorSessionsView() {
     };
   }, []);
 
-  const todayStr = todayLocalIso();
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setTimetableLoading(true);
+      setTimetableError(null);
+      try {
+        const professorName = await resolveProfessorTimetableName();
+        if (!professorName) {
+          if (alive) setTodayTimetable(null);
+          return;
+        }
+        const data = await loadProfessorTimetableToday(professorName);
+        if (alive) setTodayTimetable(data);
+      } catch (e) {
+        if (!alive) return;
+        setTodayTimetable(null);
+        setTimetableError(
+          e instanceof Error
+            ? e.message
+            : isArRef.current
+              ? "تعذر تحميل جدول اليوم."
+              : "Could not load today's timetable."
+        );
+      } finally {
+        if (alive) setTimetableLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  const locallyClosedSessionIds = useMemo(() => {
-    void closedSessionsBump;
-    return readClosedProfessorSessionIds();
-  }, [closedSessionsBump]);
+  const todayStr = todayLocalIso();
 
   const sessionsWithCatalogLabels = useMemo(
     () =>
@@ -360,16 +405,15 @@ export default function ProfessorSessionsView() {
     [sessions, assignments]
   );
 
-  const todaySessions = useMemo(() => {
-    return sessionsWithCatalogLabels
-      .filter(
-        (s) =>
-          s.date === todayStr && !locallyClosedSessionIds.has(s.id)
-      )
-      .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)));
-  }, [sessionsWithCatalogLabels, todayStr, locallyClosedSessionIds]);
-
-  const highlightSession = todaySessions[0] ?? null;
+  const allTodaySessions = useMemo(
+    () =>
+      sessionsWithCatalogLabels
+        .filter((s) => s.date === todayStr)
+        .sort((a, b) =>
+          String(a.start_time).localeCompare(String(b.start_time))
+        ),
+    [sessionsWithCatalogLabels, todayStr]
+  );
 
   const startWorking = async (
     s: SessionApi,
@@ -407,6 +451,91 @@ export default function ProfessorSessionsView() {
       });
     }
   };
+
+  const startTimetableSlot = useCallback(
+    async (slot: ProfessorTimetableSession) => {
+      const key = timetableSlotKey(slot);
+      const times = parseFrenchTimeSlot(slot.time_slot);
+      if (!times) {
+        toast.error(
+          isAr
+            ? "تعذر قراءة وقت الحصة من الجدول."
+            : "Could not read the time slot from the timetable."
+        );
+        return;
+      }
+
+      const assignment = resolveAssignmentForTimetableSlot(slot, assignments);
+      if (!assignment) {
+        toast.error(
+          isAr
+            ? `لا يوجد تعيين تدريسي لمادة «${slot.subject}» والمجموعة «${slot.group}».`
+            : `No teaching assignment for «${slot.subject}» / «${slot.group}».`
+        );
+        return;
+      }
+
+      setStartingSlotKey(key);
+      try {
+        let session = findTodaySessionForTimetableSlot(
+          assignment.id,
+          times,
+          todayStr,
+          allTodaySessions
+        );
+
+        if (!session) {
+          const res = await createAttendanceSession({
+            assignment: assignment.id,
+            date: todayStr,
+            start_time: times.start,
+            end_time: times.end,
+            room: slot.room.trim() || "—",
+            extra_fields: ["participation_points", "professor_note"],
+          });
+          const text = await res.text();
+          if (!res.ok) {
+            throw new Error(text || "create failed");
+          }
+          await refreshData();
+          try {
+            session = text ? (JSON.parse(text) as SessionApi) : null;
+          } catch {
+            session = null;
+          }
+          if (!session) {
+            session = findTodaySessionForTimetableSlot(
+              assignment.id,
+              times,
+              todayStr,
+              sessionsWithCatalogLabels.filter((s) => s.date === todayStr)
+            );
+          }
+        }
+
+        if (!session?.id) {
+          throw new Error("session missing after create");
+        }
+
+        await startWorking(session);
+      } catch (e) {
+        console.error(e);
+        toast.error(
+          isAr ? "تعذر بدء الحصة." : "Could not start this session."
+        );
+      } finally {
+        setStartingSlotKey(null);
+      }
+    },
+    [
+      allTodaySessions,
+      assignments,
+      isAr,
+      refreshData,
+      sessionsWithCatalogLabels,
+      todayStr,
+    ]
+  );
 
   const stats = useMemo(() => {
     const rows = workingSession?.attendances ?? [];
@@ -491,9 +620,10 @@ export default function ProfessorSessionsView() {
         });
         if (!res.ok) throw new Error(await res.text());
       }
+      const savedSessionId = workingSession.id;
       await refreshData();
-      markProfessorSessionClosedLocally(workingSession.id);
-      setClosedSessionsBump((n) => n + 1);
+      setSavedSessionIds((prev) => new Set(prev).add(savedSessionId));
+      dispatchProfSessionSaved(savedSessionId, workingSession.assignment);
       setSaveMsg(
         isAr
           ? "تم حفظ الورقة وإنهاء الحصة."
@@ -502,8 +632,8 @@ export default function ProfessorSessionsView() {
       void notifyUser({
         title: isAr ? "انتهت الحصة" : "Session complete",
         body: isAr
-          ? "سُجّل الحضور والنقاط والملاحظات في السجل."
-          : "Attendance, points, and notes were stored in history.",
+          ? "سُجّل الحضور والغياب — راجع تبويب الطلاب للتحديث."
+          : "Attendance saved — check the Students tab for updated presence.",
         tag: `session-close-${workingSession.id}`,
       });
       setWorkingSession(null);
@@ -1209,36 +1339,115 @@ export default function ProfessorSessionsView() {
       ) : null}
 
       <section className="rounded-md border border-[#51689A]/35 bg-[#FEF9F9] px-4 py-6 shadow-sm dark:border-[#383F58] dark:bg-[#1A2036] sm:mx-3 sm:px-7">
-        {highlightSession ? (
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 space-y-3">
-              <p className="font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
-                {isAr
-                  ? "لديك حصة مجدولة اليوم"
-                  : "You have a session scheduled today"}
-              </p>
-              <p className="ps-8 text-xs text-[#51689A] dark:text-[#9BA8C4]">
-                {formatSessionSubtitle(
-                  highlightSession,
-                  locale,
-                  isAr ? "التاريخ" : "Date"
-                )}
-              </p>
-            </div>
-            <Button
-              type="button"
-              className="h-9 shrink-0 rounded-md bg-[#51689A] px-8 text-sm font-medium text-white shadow-md hover:bg-[#51689A]/90"
-              onClick={() => void startWorking(highlightSession)}
-            >
-              <CirclePlay className="me-3 size-4" strokeWidth={2} />
-              {isAr ? "بدء الحصة" : "Start Session"}
-            </Button>
-          </div>
+        <p className="mb-3 text-sm font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
+          {isAr ? "حصص اليوم" : "Today's classes"}
+        </p>
+        <p className="mb-4 text-xs text-[#51689A] dark:text-[#9BA8C4]">
+          {isAr
+            ? "من جدول Excel — اضغط «بدء الحصة» لفتح سجل الحضور (تُنشأ الحصة تلقائياً إن لم تكن موجودة)."
+            : "From your Excel timetable — tap Start Session to open the attendance sheet (creates the session if needed)."}
+        </p>
+        {timetableLoading ? (
+          <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
+            {isAr ? "جارٍ التحميل…" : "Loading…"}
+          </p>
+        ) : timetableError ? (
+          <p className="text-sm text-destructive">{timetableError}</p>
+        ) : todayTimetable?.is_weekend ? (
+          <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
+            {todayTimetable.message ??
+              (isAr
+                ? "لا حصص اليوم (عطلة نهاية الأسبوع)."
+                : "No classes today (weekend).")}
+          </p>
+        ) : todayTimetable?.sessions?.length ? (
+          <ul className="space-y-3">
+            {todayTimetable.sessions.map((slot, index) => {
+              const key = timetableSlotKey(slot);
+              const times = parseFrenchTimeSlot(slot.time_slot);
+              const assignment = resolveAssignmentForTimetableSlot(
+                slot,
+                assignments
+              );
+              const existing =
+                assignment && times
+                  ? findTodaySessionForTimetableSlot(
+                      assignment.id,
+                      times,
+                      todayStr,
+                      allTodaySessions
+                    )
+                  : null;
+              const isClosed =
+                existing != null &&
+                (savedSessionIds.has(existing.id) ||
+                  sessionHasRecordedAttendance(
+                    existing.id,
+                    teacherAttendanceRows
+                  ));
+              const busy = startingSlotKey === key;
+              const canStart = assignment != null && times != null;
+
+              return (
+                <li
+                  key={`${key}-${index}`}
+                  className="flex flex-col gap-3 rounded-md border border-[#51689A]/20 bg-white/80 px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-[#383F58] dark:bg-[#242A40]/60"
+                >
+                  <div className="min-w-0 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-[#1B2065] dark:text-[#EEF4F7]">
+                        {slot.time_slot} · {slot.subject}
+                      </p>
+                      <SessionTypeBadge type={slot.session_type} isAr={isAr} />
+                      {isClosed ? (
+                        <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
+                          {isAr ? "منتهية" : "Completed"}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-[#51689A] dark:text-[#9BA8C4]">
+                      {slot.group} · {slot.room}
+                    </p>
+                    {!canStart ? (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                        {isAr
+                          ? "لا يوجد تعيين تدريسي مطابق لهذه المادة/المجموعة."
+                          : "No matching teaching assignment for this module/group."}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={!canStart || busy || isClosed}
+                    className="h-9 shrink-0 rounded-md bg-[#51689A] px-6 text-sm font-medium text-white shadow-md hover:bg-[#51689A]/90 disabled:opacity-50"
+                    onClick={() => void startTimetableSlot(slot)}
+                  >
+                    <CirclePlay className="me-2 size-4" strokeWidth={2} />
+                    {isClosed
+                      ? isAr
+                        ? "منتهية"
+                        : "Completed"
+                      : busy
+                        ? isAr
+                          ? "جارٍ…"
+                          : "Starting…"
+                        : existing
+                          ? isAr
+                            ? "متابعة الحصة"
+                            : "Continue"
+                          : isAr
+                            ? "بدء الحصة"
+                            : "Start Session"}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
           <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
             {isAr
-              ? "لا توجد حصة مجدولة اليوم."
-              : "No session scheduled today."}
+              ? "لا حصص في الجدول لهذا اليوم."
+              : "No classes on your timetable for today."}
           </p>
         )}
       </section>

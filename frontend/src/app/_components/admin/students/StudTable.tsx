@@ -2,26 +2,27 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import {
-  Check,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   Funnel,
   Pencil,
-  Search,
   Trash2,
   Users,
   UserPlus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import SearchBar from "@/app/_components/admin/SearchBar"
 import { Input } from "@/components/ui/input"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Drawer,
   DrawerClose,
@@ -51,8 +52,13 @@ import {
   loadStudentExclusions,
   type StudentExclusionRow,
 } from "@/lib/checkinClient"
-import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
+import {
+  notifyAdminCsvUploadSuccess,
+  subscribeAdminCsvUploadSuccess,
+} from "@/lib/adminCsvUploadRefresh"
 import { uploadSingleCsvRow } from "@/lib/singleCsvUpload"
+import { EXCLUSIONS_RECALCULATED_EVENT } from "@/lib/moduleExclusionPolicy"
+import { PROF_SESSION_SAVED_EVENT } from "@/lib/professorSessionEvents"
 
 type JustifiedSemester = {
   id: string
@@ -100,7 +106,6 @@ export default function StudTable() {
   const [search, setSearch] = useState("")
   const [yearFilter, setYearFilter] = useState<string>("all")
   const [exclusionFilter, setExclusionFilter] = useState<"all" | "excluded" | "notExcluded">("all")
-  const [openFilter, setOpenFilter] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -192,6 +197,17 @@ export default function StudTable() {
     return subscribeAdminCsvUploadSuccess("student", () => {
       void loadStudents()
     })
+  }, [loadStudents])
+
+  useEffect(() => {
+    const refresh = () => void loadStudents()
+    const refreshFromSession = () => void loadStudents()
+    window.addEventListener(EXCLUSIONS_RECALCULATED_EVENT, refresh)
+    window.addEventListener(PROF_SESSION_SAVED_EVENT, refreshFromSession)
+    return () => {
+      window.removeEventListener(EXCLUSIONS_RECALCULATED_EVENT, refresh)
+      window.removeEventListener(PROF_SESSION_SAVED_EVENT, refresh)
+    }
   }, [loadStudents])
 
   const yearOptions = useMemo(() => collectYears(data), [data])
@@ -301,9 +317,6 @@ export default function StudTable() {
     await loadStudents()
   }
 
-  const filterLabelText =
-    yearFilter === "all" ? (isArabic ? "الكل" : "All years") : yearFilter
-
   const colCount = 8
   const selectedStudent = useMemo(() => {
     const firstId = [...selectedIds][0]
@@ -364,6 +377,7 @@ export default function StudTable() {
       if (!res.ok) throw new Error(await res.text())
       setDrawerMode(null)
       setSelectedIds(new Set())
+      notifyAdminCsvUploadSuccess("student")
       await loadStudents()
     } catch (error) {
       setLoadError(
@@ -396,91 +410,99 @@ export default function StudTable() {
         </div>
 
         <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:flex-1 sm:justify-end">
-          <div className="relative w-full min-w-0 sm:w-[253px] sm:max-w-[253px] sm:flex-initial">
-            <Input
+          <div className="w-full min-w-0 sm:w-48 sm:max-w-none md:w-52">
+            <SearchBar
               value={search}
-              onChange={(event) => {
-                setSearch(event.target.value)
+              onChange={(v) => {
+                setSearch(v)
                 setCurrentPage(1)
               }}
-              placeholder={isArabic ? "ابحث..." : "Search..."}
-              className="h-[43px] rounded-lg border border-[#51689A]/35 bg-[#FEF9F9] pe-9 ps-3 text-sm text-[#1B2065F2] shadow-sm focus-visible:ring-[#51689A]/40 sm:h-9 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7] dark:placeholder:text-[#9BA8C4]"
-            />
-            <Search
-              className="pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-[#1B2065F2]/70 dark:text-[#9BA8C4]"
-              strokeWidth={2}
+              placeholder={isArabic ? "بحث..." : "Search..."}
+              inputClassName="h-10 rounded-xl border border-slate-200/80 bg-[#FEF9F9] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]"
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            <DropdownMenu open={openFilter} onOpenChange={setOpenFilter}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={`${controlBtnClass} inline-flex h-[43px] min-w-0 items-center justify-center gap-1.5 bg-[#FEF9F9] px-3 sm:h-9`}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full min-w-[7.5rem] sm:w-32 md:w-36">
+              <Funnel
+                className="pointer-events-none absolute start-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground"
+                size={16}
+                aria-hidden
+              />
+              <Select
+                value={yearFilter}
+                onValueChange={(v) => {
+                  setYearFilter(v)
+                  setCurrentPage(1)
+                }}
+              >
+                <SelectTrigger className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-sm font-medium text-[#1B2065] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]">
+                  <SelectValue placeholder={isArabic ? "تصفية" : "Filter"} />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  side="bottom"
+                  align="start"
+                  sideOffset={6}
+                  className="min-w-[var(--radix-select-trigger-width)] border border-slate-200/40 bg-popover/75 shadow-lg backdrop-blur-xl dark:border-border/50 dark:bg-popover/70"
                 >
-                  <Funnel size={16} className="shrink-0" strokeWidth={1.75} />
-                  <span className="font-medium">
-                    {isArabic ? "تصفية" : "Filter"}
-                  </span>
-                  <span className="max-w-[5rem] truncate text-xs text-[#1B2065F2]/80 dark:text-[#9BA8C4] sm:max-w-none sm:inline">
-                    ({filterLabelText})
-                  </span>
-                  {openFilter ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[10rem] p-0">
-                <DropdownMenuItem
-                  onClick={() => {
-                    setYearFilter("all")
-                    setCurrentPage(1)
-                  }}
+                  <SelectGroup>
+                    <SelectLabel className="px-2 font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
+                      {isArabic ? "السنة" : "Year"}
+                    </SelectLabel>
+                    <SelectItem value="all">
+                      {isArabic ? "كل السنوات" : "All years"}
+                    </SelectItem>
+                    {yearOptions.map((y) => (
+                      <SelectItem key={y} value={y}>
+                        {y}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="relative w-full min-w-[7.5rem] sm:w-32 md:w-40">
+              <Funnel
+                className="pointer-events-none absolute start-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground"
+                size={16}
+                aria-hidden
+              />
+              <Select
+                value={exclusionFilter}
+                onValueChange={(v) => {
+                  setExclusionFilter(v as "all" | "excluded" | "notExcluded")
+                  setCurrentPage(1)
+                }}
+              >
+                <SelectTrigger className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-sm font-medium text-[#1B2065] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]">
+                  <SelectValue placeholder={isArabic ? "تصفية" : "Filter"} />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  side="bottom"
+                  align="start"
+                  sideOffset={6}
+                  className="min-w-[var(--radix-select-trigger-width)] border border-slate-200/40 bg-popover/75 shadow-lg backdrop-blur-xl dark:border-border/50 dark:bg-popover/70"
                 >
-                  <span>{isArabic ? "كل السنوات" : "All years"}</span>
-                  {yearFilter === "all" && <Check className="ms-auto size-4" />}
-                </DropdownMenuItem>
-                {yearOptions.map((y) => (
-                  <DropdownMenuItem
-                    key={y}
-                    onClick={() => {
-                      setYearFilter(y)
-                      setCurrentPage(1)
-                    }}
-                  >
-                    <span>{y}</span>
-                    {yearFilter === y && <Check className="ms-auto size-4" />}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuItem
-                  onClick={() => {
-                    setExclusionFilter("all")
-                    setCurrentPage(1)
-                  }}
-                >
-                  <span>{isArabic ? "كل حالات الاستبعاد" : "All exclusion states"}</span>
-                  {exclusionFilter === "all" && <Check className="ms-auto size-4" />}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    setExclusionFilter("excluded")
-                    setCurrentPage(1)
-                  }}
-                >
-                  <span>{isArabic ? "مستبعد" : "Excluded"}</span>
-                  {exclusionFilter === "excluded" && <Check className="ms-auto size-4" />}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    setExclusionFilter("notExcluded")
-                    setCurrentPage(1)
-                  }}
-                >
-                  <span>{isArabic ? "غير مستبعد" : "Not excluded"}</span>
-                  {exclusionFilter === "notExcluded" && <Check className="ms-auto size-4" />}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <SelectGroup>
+                    <SelectLabel className="px-2 font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
+                      {isArabic ? "الاستبعاد" : "Exclusion"}
+                    </SelectLabel>
+                    <SelectItem value="all">
+                      {isArabic ? "الكل" : "All"}
+                    </SelectItem>
+                    <SelectItem value="excluded">
+                      {isArabic ? "مستبعد" : "Excluded"}
+                    </SelectItem>
+                    <SelectItem value="notExcluded">
+                      {isArabic ? "غير مستبعد" : "Not excluded"}
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="flex items-center gap-1 border-[#51689A]/30 dark:border-[#383F58] sm:gap-1.5 sm:border-s sm:ps-2">
               <Button

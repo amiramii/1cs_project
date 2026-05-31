@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowUpFromLine,
   FileText,
+  Funnel,
   Search,
   Users,
   X,
@@ -14,6 +15,15 @@ import {
 import { useLanguage } from "@/app/_components/language-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +47,13 @@ import {
   type StudentExclusionRow,
 } from "@/lib/checkinClient";
 import { loadDrfListAll } from "@/lib/drfPaginatedList";
+import { EXCLUSIONS_RECALCULATED_EVENT } from "@/lib/moduleExclusionPolicy";
+import { PROF_SESSION_SAVED_EVENT } from "@/lib/professorSessionEvents";
 import { getAccessToken } from "@/lib/tokenStorage";
+import { loadWeeklyTimetableSlots } from "@/lib/excelTimetableClient";
+import type { TimetableSlotRow } from "@/lib/excelTimetableClient";
+import { filterSessionsBySlotType } from "@/lib/sessionTypeTimetable";
+import { SessionTypeBadge } from "@/lib/SessionTypeBadge";
 
 const STATUS_HEX = {
   present: "#74A7BD",
@@ -115,15 +131,35 @@ function formatSessionPillLabel(
   return `${month} ${englishOrdinalDay(d.date())} ${y} - ${time}`;
 }
 
+function attendanceRowForStudentSession(
+  studentId: number,
+  sessionId: number,
+  rows: AttendanceRow[]
+): AttendanceRow | undefined {
+  return rows.find(
+    (x) => x.student === studentId && x.session === sessionId
+  );
+}
+
 function findProfessorNote(
   studentId: number,
   sessionId: number,
   rows: AttendanceRow[]
 ): string {
-  const row = rows.find(
-    (x) => x.student === studentId && x.session === sessionId
-  );
+  const row = attendanceRowForStudentSession(studentId, sessionId, rows);
   return String(row?.extra_values?.professor_note ?? "").trim();
+}
+
+function findParticipationPoints(
+  studentId: number,
+  sessionId: number,
+  rows: AttendanceRow[]
+): number | null {
+  const row = attendanceRowForStudentSession(studentId, sessionId, rows);
+  if (!row?.extra_values) return null;
+  const pts = Number(row.extra_values.participation_points);
+  if (!Number.isFinite(pts)) return null;
+  return Math.trunc(pts);
 }
 
 function sessionNoteText(
@@ -180,6 +216,7 @@ export default function SemestrialAttendancePage() {
     return currentAcademicStartYear();
   }, [sp]);
   const sem = (sp.get("sem") === "S2" ? "S2" : "S1") as "S1" | "S2";
+  const sessionTypeFilter = sp.get("stype")?.trim() ?? "";
   const backPath = pathname?.startsWith("/Students") ? "/Students" : "/Sessions";
 
   const [loading, setLoading] = useState(true);
@@ -198,12 +235,13 @@ export default function SemestrialAttendancePage() {
   >(null);
   const [rosterRows, setRosterRows] = useState<HistoryMatrixRow[]>([]);
   const [serverExclusions, setServerExclusions] = useState<StudentExclusionRow[]>([]);
+  const [timetableSlots, setTimetableSlots] = useState<TimetableSlotRow[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
-      const b = await loadProfessorSessionData(isAr);
+      const b = await loadProfessorSessionData(isAr, { cacheBust: true });
       setBundle(b);
     } catch (e) {
       setErr(
@@ -222,6 +260,39 @@ export default function SemestrialAttendancePage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const onSaved = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ assignmentId?: number }>).detail;
+      if (
+        detail?.assignmentId != null &&
+        detail.assignmentId !== assignmentId
+      ) {
+        return;
+      }
+      void load();
+    };
+    window.addEventListener(PROF_SESSION_SAVED_EVENT, onSaved);
+    return () => window.removeEventListener(PROF_SESSION_SAVED_EVENT, onSaved);
+  }, [load, assignmentId]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { slots } = await loadWeeklyTimetableSlots({
+          gradeFilter: "all",
+          semester: sem,
+        });
+        if (alive) setTimetableSlots(slots);
+      } catch {
+        if (alive) setTimetableSlots([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [sem]);
+
   const { from, to } = useMemo(() => {
     if (!academicYear || Number.isNaN(academicYear)) {
       return { from: "", to: "" };
@@ -231,15 +302,32 @@ export default function SemestrialAttendancePage() {
 
   const matrix = useMemo(() => {
     if (!bundle || !assignmentId || !from) return null;
+    const assignment =
+      bundle.assignments.find((a) => a.id === assignmentId) ?? null;
+    const sessionsForMatrix = filterSessionsBySlotType(
+      bundle.sessions,
+      assignmentId,
+      assignment,
+      sessionTypeFilter || null,
+      timetableSlots
+    );
     return buildSessionHistoryMatrix(
       assignmentId,
       from,
       to,
-      bundle.sessions,
+      sessionsForMatrix,
       bundle.teacherAttendanceRows,
       isAr
     );
-  }, [bundle, assignmentId, from, to, isAr]);
+  }, [
+    bundle,
+    assignmentId,
+    from,
+    to,
+    isAr,
+    sessionTypeFilter,
+    timetableSlots,
+  ]);
 
   const openAssignment = useMemo((): AssignmentApi | null => {
     if (!bundle) return null;
@@ -308,6 +396,26 @@ export default function SemestrialAttendancePage() {
     };
   }, [openAssignment?.module]);
 
+  useEffect(() => {
+    const reloadExclusions = () => {
+      void (async () => {
+        try {
+          const rows = await loadStudentExclusions(
+            typeof openAssignment?.module === "number"
+              ? { module: openAssignment.module }
+              : undefined
+          );
+          setServerExclusions(rows);
+        } catch {
+          setServerExclusions([]);
+        }
+      })();
+    };
+    window.addEventListener(EXCLUSIONS_RECALCULATED_EVENT, reloadExclusions);
+    return () =>
+      window.removeEventListener(EXCLUSIONS_RECALCULATED_EVENT, reloadExclusions);
+  }, [openAssignment?.module]);
+
   const dist = useMemo(() => {
     if (!matrix || matrix.courseSessions.length === 0) {
       return { present: 0, absent: 0, justified: 0 };
@@ -335,22 +443,43 @@ export default function SemestrialAttendancePage() {
 
   const sessionNotePills = useMemo(() => {
     if (!studentModal || !matrix) return [];
+    const rows = bundle?.teacherAttendanceRows ?? [];
     return matrix.courseSessions.map((session) => ({
       session,
       key: session.id,
       label: formatSessionPillLabel(session, locale, isAr),
-      note: sessionNoteText(
-        studentModal.id,
-        session,
-        bundle?.teacherAttendanceRows
-      ),
+      note: sessionNoteText(studentModal.id, session, rows),
+      points: findParticipationPoints(studentModal.id, session.id, rows),
     }));
   }, [studentModal, matrix, bundle?.teacherAttendanceRows, locale, isAr]);
 
+  const studentParticipationTotal = useMemo(() => {
+    if (!studentModal || !matrix) return null;
+    const rows = bundle?.teacherAttendanceRows ?? [];
+    let sum = 0;
+    let hasAny = false;
+    for (const session of matrix.courseSessions) {
+      const pts = findParticipationPoints(
+        studentModal.id,
+        session.id,
+        rows
+      );
+      if (pts !== null) {
+        sum += pts;
+        hasAny = true;
+      }
+    }
+    return hasAny ? sum : null;
+  }, [studentModal, matrix, bundle?.teacherAttendanceRows]);
+
   const displayRows = useMemo(() => {
-    if (matrix?.rows.length) return matrix.rows;
-    return rosterRows;
-  }, [matrix?.rows, rosterRows]);
+    if (!matrix) return rosterRows;
+    if (matrix.rows.length > 0) return matrix.rows;
+    return rosterRows.map((r) => ({
+      ...r,
+      cells: matrix.courseSessions.map(() => null),
+    }));
+  }, [matrix, rosterRows]);
 
   const excludedEmails = useMemo(
     () =>
@@ -381,6 +510,13 @@ export default function SemestrialAttendancePage() {
     () => (showAll ? filtered : filtered.slice(0, SHEET_PAGE)),
     [filtered, showAll]
   );
+
+  const periodEmpty =
+    !loading &&
+    rosterRows.length === 0 &&
+    (matrix?.courseSessions.length ?? 0) === 0;
+  const filterEmpty =
+    !periodEmpty && displayRows.length > 0 && filtered.length === 0;
 
   const yearLabel = (y: number) => `${y}–${(y + 1).toString().slice(-2)}`;
 
@@ -471,16 +607,19 @@ export default function SemestrialAttendancePage() {
   ].join(" - ");
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 px-0 pb-10 pt-2 font-montserrat sm:px-1">
+    <div className="w-full min-w-0 space-y-5 pb-10 pt-2 font-montserrat">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="space-y-2">
             <h1 className="text-xl font-bold tracking-tight text-[#1B2065] sm:text-2xl dark:text-[#EEF4F7]">
               {isAr ? "ورقة حضور طلابك" : "Your Students Attendance sheet"}
             </h1>
-            <p className="ps-8 text-lg font-bold text-[#74A7BD] dark:text-[#9BA8C4]">
-              {openAssignment.module_name?.trim() || "—"}
-              <span className="ms-8 text-sm font-bold text-[#1B2065] dark:text-[#EEF4F7]">
+            <p className="flex flex-wrap items-center gap-2 text-lg font-bold text-[#74A7BD] dark:text-[#9BA8C4]">
+              <span>{openAssignment.module_name?.trim() || "—"}</span>
+              {sessionTypeFilter ? (
+                <SessionTypeBadge type={sessionTypeFilter} isAr={isAr} />
+              ) : null}
+              <span className="text-sm font-bold text-[#1B2065] dark:text-[#EEF4F7]">
                 {sub}
               </span>
             </p>
@@ -572,8 +711,7 @@ export default function SemestrialAttendancePage() {
         </div>
       </div>
 
-      {(!matrix || matrix.courseSessions.length === 0) &&
-      filtered.length === 0 ? (
+      {periodEmpty ? (
         <p className="text-center text-sm text-muted-foreground">
           {isAr
             ? "لا توجد حصص أو طلاب في هذه الفترة."
@@ -595,20 +733,47 @@ export default function SemestrialAttendancePage() {
                 className="h-8 rounded border-[#51689A]/30 bg-[#FEF9F9] ps-9 dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7]"
               />
             </div>
-            <select
-              value={exclusionFilter}
-              onChange={(e) =>
-                setExclusionFilter(e.target.value as typeof exclusionFilter)
-              }
-              className="h-8 rounded border border-[#51689A]/30 bg-[#FEF9F9] px-2 text-xs text-[#1B2065] dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7]"
-              aria-label={isAr ? "تصفية الاستبعاد" : "Filter exclusion"}
-            >
-              <option value="all">{isAr ? "الكل" : "All"}</option>
-              <option value="excluded">{isAr ? "مستبعد" : "Excluded"}</option>
-              <option value="notExcluded">
-                {isAr ? "غير مستبعد" : "Not excluded"}
-              </option>
-            </select>
+            <div className="relative w-full min-w-[8.5rem] sm:w-36">
+              <Funnel
+                className="pointer-events-none absolute start-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Select
+                value={exclusionFilter}
+                onValueChange={(v) =>
+                  setExclusionFilter(v as typeof exclusionFilter)
+                }
+              >
+                <SelectTrigger
+                  className="h-8 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-xs font-medium text-[#1B2065] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]"
+                  aria-label={isAr ? "تصفية الاستبعاد" : "Filter exclusion"}
+                >
+                  <SelectValue placeholder={isAr ? "تصفية" : "Filter"} />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  side="bottom"
+                  align="start"
+                  sideOffset={6}
+                  className="min-w-[var(--radix-select-trigger-width)] border border-slate-200/40 bg-popover/75 shadow-lg backdrop-blur-xl dark:border-border/50 dark:bg-popover/70"
+                >
+                  <SelectGroup>
+                    <SelectLabel className="px-2 font-semibold text-[#1B2065]">
+                      {isAr ? "الاستبعاد" : "Exclusion"}
+                    </SelectLabel>
+                    <SelectItem value="all">
+                      {isAr ? "الكل" : "All"}
+                    </SelectItem>
+                    <SelectItem value="excluded">
+                      {isAr ? "مستبعد" : "Excluded"}
+                    </SelectItem>
+                    <SelectItem value="notExcluded">
+                      {isAr ? "غير مستبعد" : "Not excluded"}
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table
@@ -643,6 +808,20 @@ export default function SemestrialAttendancePage() {
                 </tr>
               </thead>
               <tbody>
+                {filterEmpty ? (
+                  <tr>
+                    <td
+                      colSpan={
+                        4 + (matrix?.courseSessions.length ?? 0)
+                      }
+                      className="px-4 py-8 text-center text-sm text-muted-foreground"
+                    >
+                      {isAr
+                        ? "لا يوجد طالب يطابق هذا التصفية."
+                        : "No students match this filter."}
+                    </td>
+                  </tr>
+                ) : null}
                 {visible.map((r) => (
                   <tr
                     key={r.id}
@@ -796,6 +975,22 @@ export default function SemestrialAttendancePage() {
 
               <div className="mt-8 space-y-3">
                 <p className="text-start text-base font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
+                  {isAr ? "نقاط المشاركة" : "Participation points"}
+                </p>
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <span className="text-2xl font-bold tabular-nums text-[#74A7BD]">
+                    {studentParticipationTotal ?? "—"}
+                  </span>
+                  <span className="text-sm text-[#7A87A5] dark:text-[#9BA8C4]">
+                    {isAr
+                      ? "المجموع على الحصص المعروضة"
+                      : "Total across sessions on this sheet"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-8 space-y-3">
+                <p className="text-start text-base font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
                   {isAr ? "ملاحظات" : "Notes"}
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -811,13 +1006,26 @@ export default function SemestrialAttendancePage() {
                           )
                         }
                         className={cn(
-                          "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+                          "inline-flex flex-wrap items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
                           active
                             ? "border-[#51689AF2] bg-[#51689AF2] text-white dark:border-[#74A7BD] dark:bg-[#74A7BD] dark:text-[#13182A]"
                             : "border-[#1B2065]/35 bg-white text-[#1B2065] hover:bg-[#F6F7FE] dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:hover:bg-[#383F58]"
                         )}
                       >
-                        {pill.label}
+                        <span>{pill.label}</span>
+                        {pill.points !== null ? (
+                          <span
+                            className={cn(
+                              "rounded-md px-1.5 py-0.5 text-xs font-bold tabular-nums",
+                              active
+                                ? "bg-white/20 text-white"
+                                : "bg-[#74A7BD]/15 text-[#51689A] dark:bg-[#74A7BD]/25 dark:text-[#9BA8C4]"
+                            )}
+                          >
+                            {pill.points}{" "}
+                            {isAr ? "نقطة" : pill.points === 1 ? "pt" : "pts"}
+                          </span>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -830,7 +1038,7 @@ export default function SemestrialAttendancePage() {
                       );
                       if (!pill) return null;
                       return (
-                        <div className="relative mt-4 rounded-2xl border border-[#C5D4E0]/80 bg-[#E8F2F6] p-4 pe-10 text-start dark:border-[#383F58] dark:bg-[#242A40]">
+                        <div className="relative mt-4 space-y-3 rounded-2xl border border-[#C5D4E0]/80 bg-[#E8F2F6] p-4 pe-10 text-start dark:border-[#383F58] dark:bg-[#242A40]">
                           <button
                             type="button"
                             className="absolute end-2 top-2 rounded-full p-1.5 text-[#51689A] hover:bg-white/60 dark:text-[#9BA8C4] dark:hover:bg-[#383F58]"
@@ -839,6 +1047,14 @@ export default function SemestrialAttendancePage() {
                           >
                             <X className="size-4" />
                           </button>
+                          <div className="flex flex-wrap items-baseline gap-2">
+                            <span className="text-sm font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
+                              {isAr ? "نقاط المشاركة" : "Participation points"}
+                            </span>
+                            <span className="text-xl font-bold tabular-nums text-[#74A7BD]">
+                              {pill.points ?? "—"}
+                            </span>
+                          </div>
                           <p
                             className={cn(
                               "text-pretty text-sm sm:text-base",

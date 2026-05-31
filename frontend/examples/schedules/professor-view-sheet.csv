@@ -1,0 +1,12 @@
+Professor,Day,Time_Slot,Session_Type,Subject,Group,Room
+Dr Ahmed,Dimanche,08h-09h30,Cours,Network 1,G1,SALLE 04
+Dr Ahmed,Dimanche,09h30-11h,TD,Network 1,G1,SALLE 04
+Dr Ahmed,Dimanche,08h-09h30,Cours,Network 1,G2,SALLE 05
+Dr Ahmed,Lundi,08h-09h30,Cours,Network 2,G1,AMPHI A
+Dr Ahmed,Lundi,14h-15h30,TP,Network 1,G1,SALLE 04
+Dr Sara,Dimanche,08h-09h30,Cours,Database,G3,SALLE 08
+Dr Sara,Dimanche,08h-09h30,Cours,Database,G4,SALLE 09
+Dr Sara,Lundi,09h30-11h,Cours,Operating Systems,G3,SALLE TP2
+Dr Sara,Mercredi,09h30-11h,TD,Operating Systems,G3,SALLE TP2
+Dr Ali,Lundi,11h-12h30,Cours,Algorithms,G5,AMPHI B
+Dr Ali,Mardi,14h-15h30,TD,Algorithms,G5,SALLE 11

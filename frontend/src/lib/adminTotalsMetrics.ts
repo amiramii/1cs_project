@@ -168,7 +168,9 @@ export function formatPercent(value: number): string {
 }
 
 /** Aggregates admin/schooling KPIs from existing list APIs (no dedicated stats endpoint). */
-export async function fetchAdminTotalsStats(): Promise<AdminTotalsStats | null> {
+export async function fetchAdminTotalsStats(
+  options?: { cacheBust?: boolean }
+): Promise<AdminTotalsStats | null> {
   const headers = listHeaders();
   if (!getAccessToken()?.trim()) return null;
 
@@ -190,7 +192,9 @@ export async function fetchAdminTotalsStats(): Promise<AdminTotalsStats | null> 
         `${checkinPath.academic.teachingAssignments}/`
       ),
       loadList<{ student?: number | string; status?: string }>(
-        `${checkinPath.attendance.attendance}/`
+        options?.cacheBust
+          ? `${checkinPath.attendance.attendance}/?_=${Date.now()}`
+          : `${checkinPath.attendance.attendance}/`
       ),
       loadList<{ id?: number | string }>(
         `${checkinPath.academic.years}/`

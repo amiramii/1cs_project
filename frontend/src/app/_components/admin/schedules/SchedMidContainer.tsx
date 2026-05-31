@@ -12,12 +12,18 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getAccessToken } from "@/lib/tokenStorage";
-import { loadAllAcademicYears, postDocument } from "@/lib/checkinClient";
+import {
+  loadAllAcademicYears,
+  postDocument,
+  postExcelSchedule,
+  type ExcelScheduleSemester,
+} from "@/lib/checkinClient";
 import { checkinPath } from "@/lib/checkinApi";
 import { getApiBaseUrl } from "@/lib/apiBase";
 import { loadDrfListAll } from "@/lib/drfPaginatedList";
 import {
-  resolveAcademicYearPk,
+  academicYearResolveHint,
+  resolveOrEnsureAcademicYearPk,
   resolveTeacherPk,
   type AcademicYearRow,
   type TeacherRow,
@@ -108,6 +114,7 @@ export default function SchedulsMiddleContainer({
 }: SchedMidProps) {
   const [activeTab, setActiveTab] = useState<"professor" | "student">("professor");
   const [uploadMode, setUploadMode] = useState<UploadMode>("pdf");
+  const [excelSemester, setExcelSemester] = useState<ExcelScheduleSemester>("S1");
   const [year, setYear] = useState("default");
   const [title, setTitle] = useState("");
   const [professorName, setProfessorName] = useState("");
@@ -158,8 +165,16 @@ export default function SchedulsMiddleContainer({
     [onStagedPdfChange]
   );
 
+  const excelScheduleTitle =
+    year !== "default" && year !== "All"
+      ? isArabic
+        ? `جدول السنة ${year}`
+        : `${year} academic timetable`
+      : "";
+
   const handleUpload = async () => {
-    if (!effectivePdf || !title.trim()) return;
+    if (!effectivePdf) return;
+    if (uploadMode === "pdf" && !title.trim()) return;
     const needsYear =
       uploadMode === "excel" ||
       (uploadMode === "pdf" && activeTab === "student");
@@ -216,21 +231,65 @@ export default function SchedulsMiddleContainer({
             ? "teacher"
             : "student";
 
-      const formData = new FormData();
-      formData.append("title", title.trim());
-      formData.append("pdf", effectivePdf);
-      formData.append("audience", audienceValue);
+      const documentTitle =
+        uploadMode === "excel" ? excelScheduleTitle : title.trim();
 
+      let yearPk: number | null = null;
       if (needsYear) {
-        const yearPk = resolveAcademicYearPk(year, academicYears);
+        const ensured = await resolveOrEnsureAcademicYearPk(year, academicYears);
+        yearPk = ensured.pk;
         if (yearPk == null) {
-          const message = isArabic
-            ? "السنة غير معروفة في قاعدة البيانات. أنشئها من الإعداد الأكاديمي أو اختر سنة موجودة."
-            : "Year not found in the database. Create it under academic settings or pick an existing year.";
+          const message = academicYearResolveHint(
+            year,
+            ensured.years,
+            isArabic
+          );
           setUploadError(message);
           toast.error(message);
           return;
         }
+      }
+
+      if (uploadMode === "excel" && yearPk != null) {
+        const formData = new FormData();
+        formData.append("title", documentTitle);
+        formData.append("file", effectivePdf);
+        formData.append("year", String(yearPk));
+        formData.append("semester", excelSemester);
+
+        const res = await postExcelSchedule(formData);
+        if (res.ok) {
+          setSuccessMsg(true);
+          setTimeout(() => setSuccessMsg(false), 1000);
+          setYear("default");
+          setDroppedFile(null);
+          onStagedPdfChange?.(null);
+        } else {
+          const bodyText = await res.text();
+          const parsed = parseJsonSafe(bodyText);
+          const message = formatDocumentUploadError(
+            res.status,
+            bodyText,
+            parsed,
+            isArabic
+          );
+          setUploadError(message);
+          toast.error(message);
+          console.error(
+            "Excel upload failed:",
+            res.status,
+            serializeUploadErrorForLog(parsed, bodyText)
+          );
+        }
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("title", documentTitle);
+      formData.append("pdf", effectivePdf);
+      formData.append("audience", audienceValue);
+
+      if (yearPk != null) {
         formData.append("year", String(yearPk));
       }
 
@@ -338,8 +397,8 @@ export default function SchedulsMiddleContainer({
           ) : (
             <p className="text-center text-xs text-muted-foreground sm:text-sm">
               {isArabic
-                ? "اختر السنة والعنوان ثم ارفع ملف Excel."
-                : "Select a year and title, then upload an Excel file."}
+                ? "اختر السنة والفصل ثم ارفع ملف Excel (ورقة Professor_View للجدول اليومي)."
+                : "Select year and semester, then upload the Excel timetable (Professor_View sheet for daily schedules)."}
             </p>
           )}
 
@@ -375,6 +434,31 @@ export default function SchedulsMiddleContainer({
             </div>
           )}
 
+          {uploadMode === "excel" ? (
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  { value: "S1" as const, labelEn: "Semester 1 (S1)", labelAr: "الفصل 1 (S1)" },
+                  { value: "S2" as const, labelEn: "Semester 2 (S2)", labelAr: "الفصل 2 (S2)" },
+                ] as const
+              ).map((sem) => (
+                <Button
+                  key={sem.value}
+                  type="button"
+                  variant={excelSemester === sem.value ? "default" : "outline"}
+                  className={
+                    excelSemester === sem.value
+                      ? "bg-[#51689A] text-white hover:bg-[#40547F]"
+                      : "border-[#51689A]/35 text-[#1B2065] dark:text-[#EEF4F7]"
+                  }
+                  onClick={() => setExcelSemester(sem.value)}
+                >
+                  {isArabic ? sem.labelAr : sem.labelEn}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <ScheduleYearCombobox
               value={year}
@@ -394,13 +478,15 @@ export default function SchedulsMiddleContainer({
             ) : null}
           </div>
 
-          <Input
-            type="text"
-            placeholder={isArabic ? "عنوان الجدول..." : "Schedule Title..."}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="h-11 rounded-md border-border bg-background"
-          />
+          {uploadMode === "pdf" ? (
+            <Input
+              type="text"
+              placeholder={isArabic ? "عنوان الجدول..." : "Schedule Title..."}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="h-11 rounded-md border-border bg-background"
+            />
+          ) : null}
 
           <MyDropzone
             onDrop={handleDrop}
@@ -438,7 +524,7 @@ export default function SchedulsMiddleContainer({
               disabled={
                 isUploading ||
                 !effectivePdf ||
-                !title.trim() ||
+                (uploadMode === "pdf" && !title.trim()) ||
                 (uploadNeedsYear && (year === "default" || year === "All")) ||
                 (uploadMode === "pdf" &&
                   activeTab === "professor" &&

@@ -14,9 +14,13 @@
   }
   html {
     color: hsl(var(--foreground));
-    overflow-x: hidden;
-    /* Prevent tiny horizontal layout jumps when Radix portals toggle scroll locking. */
-    scrollbar-gutter: stable;
+    width: 100%;
+    max-width: 100%;
+  }
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
   }
   select {
   background-image: none !important;

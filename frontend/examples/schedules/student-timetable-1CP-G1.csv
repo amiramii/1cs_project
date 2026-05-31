@@ -1,0 +1,8 @@
+Day,Time_Slot,Module,Professor,Group,Room,Session_Type
+Dimanche,08h-09h30,Network 1,Dr Ahmed,G1,SALLE 04,Cours
+Dimanche,09h30-11h,Network 1,Dr Ahmed,G1,SALLE 04,TD
+Lundi,08h-09h30,Network 2,Dr Ahmed,G1,AMPHI A,Cours
+Lundi,14h-15h30,Network 1,Dr Ahmed,G1,SALLE 04,TP
+Mardi,09h30-11h,Network 1,Dr Ahmed,G1,SALLE 04,TD
+Mercredi,08h-09h30,Network 2,Dr Ahmed,G1,SALLE 12,Cours
+Jeudi,11h-12h30,Network 1,Dr Ahmed,G1,SALLE 04,TD

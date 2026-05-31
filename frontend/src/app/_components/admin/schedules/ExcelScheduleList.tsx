@@ -10,7 +10,6 @@ import {
   Funnel,
   MoveLeft,
   MoveRight,
-  Trash2,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import SearchBar from "../SearchBar"
@@ -27,24 +26,11 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
-  deleteDocument,
-  fetchDocumentsByAudience,
   loadAllAcademicYears,
+  loadAllExcelSchedules,
+  type ExcelScheduleRow,
 } from "@/lib/checkinClient"
 import { getScheduleFileFetchUrl } from "@/lib/scheduleMediaUrl"
-
-type ScheduleDocument = {
-  id: number | string
-  title: string
-  pdf: string
-  audience?: string
-  uploaded_at?: string
-  year?: number | { id: number; name: string } | null
-}
-
-type ApiResponse = {
-  results?: ScheduleDocument[]
-}
 
 type YearFilter = "all" | "1CP" | "2CP" | "1CS" | "2CS" | "3CS" | "DOCTORATE"
 
@@ -60,38 +46,6 @@ const YEAR_FILTER_OPTIONS: Array<{ value: YearFilter; labelEn: string; labelAr: 
   { value: "DOCTORATE", labelEn: "Doctorate", labelAr: "دكتوراه" },
 ]
 
-function unwrapDocumentList(raw: unknown): ScheduleDocument[] {
-  if (Array.isArray(raw)) return raw as ScheduleDocument[]
-  if (raw && typeof raw === "object") {
-    const results = (raw as ApiResponse).results
-    return Array.isArray(results) ? results : []
-  }
-  return []
-}
-
-function isExcelLikeFile(urlOrName: string): boolean {
-  return /\.(xlsx|xls|csv)(\?|#|$)/i.test(urlOrName)
-}
-
-const extractYearFromTitle = (title: string): Exclude<YearFilter, "all"> | null => {
-  const normalized = title.toUpperCase().replace(/\s+/g, "")
-  if (normalized.includes("1CP")) return "1CP"
-  if (normalized.includes("2CP")) return "2CP"
-  if (normalized.includes("3CS") || normalized.includes("5CS")) return "3CS"
-  if (normalized.includes("2CS")) return "2CS"
-  if (normalized.includes("1CS")) return "1CS"
-  if (
-    normalized.includes("DOCTORATE") ||
-    normalized.includes("DOCTORAT") ||
-    normalized.includes("DOCTORATS") ||
-    normalized.includes("PHD") ||
-    normalized.includes("دكتوراه")
-  ) {
-    return "DOCTORATE"
-  }
-  return null
-}
-
 function normalizeYearToFilter(
   raw: string | null | undefined
 ): Exclude<YearFilter, "all"> | null {
@@ -106,8 +60,8 @@ function normalizeYearToFilter(
   return null
 }
 
-function resolveDocumentYearFilter(
-  item: ScheduleDocument,
+function resolveExcelYearFilter(
+  item: ExcelScheduleRow,
   yearMap: Map<number, string>
 ): Exclude<YearFilter, "all"> | null {
   const y = item.year
@@ -119,7 +73,7 @@ function resolveDocumentYearFilter(
       return normalizeYearToFilter(yearMap.get(y))
     }
   }
-  return extractYearFromTitle(item.title)
+  return normalizeYearToFilter(item.title)
 }
 
 function ExcelGridSkeleton({ cards = 6 }: { cards?: number }) {
@@ -149,34 +103,28 @@ export default function ExcelScheduleList() {
   const router = useRouter()
   const { language, dir } = useLanguage()
   const isArabic = language === "ar"
-  const [items, setItems] = useState<ScheduleDocument[]>([])
+  const [items, setItems] = useState<ExcelScheduleRow[]>([])
   const [yearMap, setYearMap] = useState<Map<number, string>>(new Map())
   const [search, setSearch] = useState("")
   const [yearFilter, setYearFilter] = useState<YearFilter>("all")
   const [gridPage, setGridPage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<number | string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [response, years] = await Promise.all([
-        fetchDocumentsByAudience({
-          audience: "student",
-          search: search.trim() || undefined,
-        }),
+      const [rows, years] = await Promise.all([
+        loadAllExcelSchedules(),
         loadAllAcademicYears().catch(() => [] as Array<{ id: number; name: string }>),
       ])
-      const text = await response.text()
-      if (!response.ok) throw new Error(text || "Failed to load Excel files")
-      const rows = unwrapDocumentList(text ? JSON.parse(text) : null)
       setYearMap(new Map(years.map((y) => [y.id, y.name])))
       setItems(
-        rows
-          .filter((row) => isExcelLikeFile(row.pdf || row.title))
-          .map((row) => ({ ...row, pdf: getScheduleFileFetchUrl(row.pdf) }))
+        rows.map((row) => ({
+          ...row,
+          file: getScheduleFileFetchUrl(row.file),
+        }))
       )
     } catch {
       setError(
@@ -188,13 +136,10 @@ export default function ExcelScheduleList() {
     } finally {
       setLoading(false)
     }
-  }, [isArabic, search])
+  }, [isArabic])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void load()
-    }, 300)
-    return () => window.clearTimeout(timer)
+    void load()
   }, [load])
 
   const filtered = useMemo(() => {
@@ -204,13 +149,15 @@ export default function ExcelScheduleList() {
         const formattedDate = item.uploaded_at
           ? new Date(item.uploaded_at).toLocaleDateString("fr-FR").toLowerCase()
           : ""
+        const semester = item.semester?.toLowerCase() ?? ""
         const matchesSearch =
           q.length === 0 ||
           item.title.toLowerCase().includes(q) ||
+          semester.includes(q) ||
           formattedDate.includes(q)
         if (!matchesSearch) return false
         if (yearFilter === "all") return true
-        return resolveDocumentYearFilter(item, yearMap) === yearFilter
+        return resolveExcelYearFilter(item, yearMap) === yearFilter
       })
       .sort((a, b) =>
         String(b.uploaded_at ?? "").localeCompare(String(a.uploaded_at ?? ""))
@@ -239,19 +186,6 @@ export default function ExcelScheduleList() {
   useEffect(() => {
     setGridPage((p) => Math.min(p, Math.max(0, totalPages - 1)))
   }, [totalPages])
-
-  const remove = async (item: ScheduleDocument) => {
-    setDeletingId(item.id)
-    try {
-      const res = await deleteDocument(item.id)
-      if (!res.ok) throw new Error(await res.text())
-      setItems((prev) => prev.filter((x) => x.id !== item.id))
-    } catch {
-      setError(isArabic ? "تعذر حذف الملف." : "Could not delete file.")
-    } finally {
-      setDeletingId(null)
-    }
-  }
 
   const listEmptyMessage =
     items.length === 0
@@ -424,7 +358,7 @@ export default function ExcelScheduleList() {
               ) : null}
               {!error &&
                 visible.map((item) => {
-                  const yearLabel = resolveDocumentYearFilter(item, yearMap)
+                  const yearLabel = resolveExcelYearFilter(item, yearMap)
                   const yearDisplay =
                     yearLabel &&
                     YEAR_FILTER_OPTIONS.find((o) => o.value === yearLabel)
@@ -441,11 +375,12 @@ export default function ExcelScheduleList() {
                           <h2 className="truncate font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
                             {item.title}
                           </h2>
-                          {yearDisplay ? (
-                            <p className="mt-0.5 text-xs font-medium text-[#51689A] dark:text-[#9BA8C4]">
-                              {isArabic ? yearDisplay.labelAr : yearDisplay.labelEn}
-                            </p>
-                          ) : null}
+                          <p className="mt-0.5 text-xs font-medium text-[#51689A] dark:text-[#9BA8C4]">
+                            {item.semester}
+                            {yearDisplay
+                              ? ` · ${isArabic ? yearDisplay.labelAr : yearDisplay.labelEn}`
+                              : null}
+                          </p>
                           <p className="mt-1 text-xs text-[#51689A] dark:text-[#9BA8C4]">
                             {item.uploaded_at
                               ? new Date(item.uploaded_at).toLocaleString()
@@ -453,13 +388,13 @@ export default function ExcelScheduleList() {
                           </p>
                         </div>
                       </div>
-                      <div className="mt-4 flex gap-2">
+                      <div className="mt-4">
                         <Button
                           asChild
-                          className="flex-1 bg-[#51689A] text-white hover:bg-[#40547F]"
+                          className="w-full bg-[#51689A] text-white hover:bg-[#40547F]"
                         >
                           <a
-                            href={item.pdf}
+                            href={item.file}
                             target="_blank"
                             rel="noreferrer"
                             download
@@ -467,16 +402,6 @@ export default function ExcelScheduleList() {
                             <ArrowDownToLine className="me-2 size-4" />
                             {isArabic ? "تحميل" : "Download"}
                           </a>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          disabled={deletingId === item.id}
-                          onClick={() => void remove(item)}
-                          aria-label={isArabic ? "حذف" : "Delete"}
-                        >
-                          <Trash2 className="size-4 text-destructive" />
                         </Button>
                       </div>
                     </article>

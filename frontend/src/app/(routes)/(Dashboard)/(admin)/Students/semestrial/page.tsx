@@ -16,7 +16,7 @@ function Fallback() {
 
 export default function StudentSemestrialRoutePage() {
   return (
-    <div className="mx-auto w-full space-y-4 xl:p-5">
+    <div className="w-full min-w-0 space-y-4">
       <Suspense fallback={<Fallback />}>
         <SemestrialAttendancePage />
       </Suspense>

@@ -11,6 +11,7 @@ import {
   type AdminTotalsStats,
 } from "@/lib/adminTotalsMetrics";
 import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh";
+import { PROF_SESSION_SAVED_EVENT } from "@/lib/professorSessionEvents";
 
 export default function StudTotals() {
   const { language } = useLanguage();
@@ -19,16 +20,19 @@ export default function StudTotals() {
 
   useEffect(() => {
     let alive = true;
-    const load = () => {
-      void fetchAdminTotalsStats().then((m) => {
+    const load = (cacheBust = false) => {
+      void fetchAdminTotalsStats({ cacheBust }).then((m) => {
         if (alive) setStats(m);
       });
     };
     load();
     const unsub = subscribeAdminCsvUploadSuccess("student", load);
+    const onSessionSaved = () => load(true);
+    window.addEventListener(PROF_SESSION_SAVED_EVENT, onSessionSaved);
     return () => {
       alive = false;
       unsub();
+      window.removeEventListener(PROF_SESSION_SAVED_EVENT, onSessionSaved);
     };
   }, []);
 

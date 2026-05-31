@@ -68,7 +68,9 @@ export const checkinPath = {
   documents: {
     collection: "api/documents",
     detail: (id: string | number) => `api/documents/${id}` as const,
-    /** GET `ProfessorTodayView` — `professor` is the display name from the timetable PDFs. */
+    /** GET list / POST multipart — `ExcelSchedule` model. */
+    excelSchedules: "api/documents/api/excel-schedules" as const,
+    /** GET `ProfessorTodayView` — `professor` is the display name from the timetable Excel. */
     scheduleToday: (professor: string) =>
       `api/documents/schedule/today/${encodeURIComponent(professor)}` as const,
   },

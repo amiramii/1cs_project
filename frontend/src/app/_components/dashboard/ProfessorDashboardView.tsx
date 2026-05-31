@@ -17,6 +17,7 @@ import {
   formatDashboardCount,
   type ProfessorDashboardCharts as ProfessorChartsData,
 } from "@/lib/dashboardMetrics";
+import { EXCLUSIONS_RECALCULATED_EVENT } from "@/lib/moduleExclusionPolicy";
 
 export default function ProfessorDashboardView() {
   const { language, dir } = useLanguage();
@@ -56,6 +57,19 @@ export default function ProfessorDashboardView() {
     return () => {
       alive = false;
     };
+  }, [isAr]);
+
+  useEffect(() => {
+    const reloadCharts = () => {
+      queueMicrotask(() => setChartsLoading(true));
+      void fetchProfessorDashboardCharts(isAr).then((m) => {
+        setCharts(m);
+        setChartsLoading(false);
+      });
+    };
+    window.addEventListener(EXCLUSIONS_RECALCULATED_EVENT, reloadCharts);
+    return () =>
+      window.removeEventListener(EXCLUSIONS_RECALCULATED_EVENT, reloadCharts);
   }, [isAr]);
 
   const cards = [

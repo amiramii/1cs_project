@@ -26,11 +26,16 @@ export function buildSessionHistoryMatrix(
   attendance: AttendanceRow[],
   isAr: boolean
 ) {
+  const sessionIdsWithMarks = new Set<number>();
+  for (const r of attendance) {
+    if (typeof r.session === "number") sessionIdsWithMarks.add(r.session);
+  }
+
   const courseSessions = allSessions
     .filter(
       (s) =>
         s.assignment === assignmentId &&
-        isIsoDateInRange(s.date, from, to)
+        (isIsoDateInRange(s.date, from, to) || sessionIdsWithMarks.has(s.id))
     )
     .sort((a, b) =>
       a.date !== b.date
@@ -38,14 +43,44 @@ export function buildSessionHistoryMatrix(
         : a.start_time.localeCompare(b.start_time)
     );
 
-  const sessionIds = courseSessions.map((s) => s.id);
-  const bySession = new Map<number, AttendanceRow[]>();
+  const sessionIds = new Set(courseSessions.map((s) => s.id));
+  const flatById = new Map<number, AttendanceRow>();
   for (const r of attendance) {
-    if (r.session == null) continue;
-    if (!sessionIds.includes(r.session)) continue;
-    const g = bySession.get(r.session) ?? [];
-    g.push(r);
-    bySession.set(r.session, g);
+    if (typeof r.id === "number") flatById.set(r.id, r);
+  }
+
+  const bySession = new Map<number, AttendanceRow[]>();
+  for (const session of courseSessions) {
+    const sid = session.id;
+    const merged: AttendanceRow[] = [];
+    const seen = new Set<number>();
+
+    for (const nested of session.attendances ?? []) {
+      if (typeof nested.id !== "number") continue;
+      const flat = flatById.get(nested.id);
+      merged.push({
+        ...nested,
+        session: sid,
+        ...(flat
+          ? {
+              status: flat.status,
+              extra_values: flat.extra_values,
+              student_name: flat.student_name ?? nested.student_name,
+              student_email: flat.student_email ?? nested.student_email,
+            }
+          : {}),
+      });
+      seen.add(nested.id);
+    }
+
+    for (const flat of attendance) {
+      if (flat.session !== sid || typeof flat.id !== "number") continue;
+      if (seen.has(flat.id)) continue;
+      merged.push(flat);
+      seen.add(flat.id);
+    }
+
+    if (merged.length > 0) bySession.set(sid, merged);
   }
 
   const studSet = new Set<number>();
