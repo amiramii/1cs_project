@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, BookA, Search, Funnel } from "lucide-react";
+import { Check, BookA, Funnel } from "lucide-react";
 import { toast } from "sonner";
 
 import { useLanguage } from "@/app/_components/language-provider";
@@ -35,7 +35,7 @@ import {
 } from "@/lib/checkinClient";
 import {
   fetchAndApplyAbsenceConfigFromApi,
-  getAbsenceSeverityColor,
+  getAbsenceSeverityTextClass,
   getModuleExclusionCountMode,
   getModuleExclusionAbsenceLimit,
   getModuleExclusionJustifiedLimit,
@@ -534,11 +534,7 @@ export default function StudentAbsencesView() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="relative w-full sm:min-w-[200px] sm:flex-1 sm:max-w-xs bg-[#FEF9F9]">
-                <Search
-                  className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-[#51689A]/70 bg-[#FEF9F9] "
-                  aria-hidden
-                />
+              <div className="relative w-full sm:min-w-[200px] sm:flex-1 sm:max-w-xs">
                 <Input
                   type="search"
                   value={query}
@@ -547,7 +543,7 @@ export default function StudentAbsencesView() {
                     setCurrentPage(1);
                   }}
                   placeholder={isAr ? "بحث…" : "Search..."}
-                  className="h-10 rounded-xl border-[#51689A]/25 bg-[#FEF9F9] ps-9 shadow-none dark:border-[#383F58] dark:bg-[#1A2036] dark:text-[#EEF4F7]"
+                  className="h-10 rounded-xl border-[#51689A]/25 bg-transparent px-3 shadow-none placeholder:text-[#51689A]/55 dark:border-[#383F58] dark:bg-transparent dark:text-[#EEF4F7] dark:placeholder:text-[#9BA8C4]/70"
                   aria-label={isAr ? "بحث في القائمة" : "Search absence list"}
                   disabled={loading}
                 />
@@ -598,21 +594,20 @@ export default function StudentAbsencesView() {
                       {row.module}
                     </td>
                     <td
-                      className="px-4 py-4 text-center font-semibold tabular-nums"
-                      style={{
-                        color:
-                          exclusionMode === "general"
-                            ? getAbsenceSeverityColor(
-                                row.absenceCount + row.justifiedCount,
-                                exclusionLimit
+                      className={cn(
+                        "px-4 py-4 text-center font-semibold tabular-nums",
+                        exclusionMode === "general"
+                          ? getAbsenceSeverityTextClass(
+                              row.absenceCount + row.justifiedCount,
+                              exclusionLimit
+                            )
+                          : row.excluded
+                            ? "text-[#DF2D3E] dark:text-[#F0707A]"
+                            : getAbsenceSeverityTextClass(
+                                row.absenceCount,
+                                unjustifiedLimit
                               )
-                            : row.excluded
-                              ? "#DF2D3E"
-                              : getAbsenceSeverityColor(
-                                  row.absenceCount,
-                                  unjustifiedLimit
-                                ),
-                      }}
+                      )}
                     >
                       {row.absenceCount}
                     </td>

@@ -83,7 +83,7 @@ export default function DashboardLayout({
 
   const handleLogout = () => {
     clearTokens();
-    router.push("/Login");
+    router.push("/");
   };
   const activeItem =
     navItems

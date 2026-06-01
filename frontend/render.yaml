@@ -1,0 +1,18 @@
+# Render Blueprint — Chekin Next.js frontend
+# Docs: https://render.com/docs/deploy-nextjs-app
+#
+# If your Git repo root is the monorepo (1cs_project/), set Root Directory to
+# `frontend` in the Render dashboard when creating the service manually.
+services:
+  - type: web
+    name: checkin-frontend
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_PUBLIC_API_URL
+        value: https://checkin-backend-z1f2.onrender.com

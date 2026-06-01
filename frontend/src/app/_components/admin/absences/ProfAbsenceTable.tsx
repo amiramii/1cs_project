@@ -50,7 +50,7 @@ function getAbsenceStateClasses(state: string) {
     return "border-[#74A7BD] bg-[#EEFAFF] text-[#74A7BD] dark:border-[#74A7BD] dark:bg-[#152A38] dark:text-[#74A7BD]";
   }
   if (normalized === "pending") {
-    return "border-[#E7CE51F2] bg-[#FFF5C3F2] text-[#E7CE51F2] dark:border-[#E7CE51] dark:bg-[#3A3420] dark:text-[#E7CE51]";
+    return "border-[#C4A820] bg-[#FFF5C3F2] text-[#9A7B0A] dark:border-[#FFD54F]/55 dark:bg-[#3A3420] dark:text-[#FFD54F]";
   }
   if (normalized === "rejected") {
     return "border-[#DF2D3E] bg-[#FFD1D5] text-[#DF2D3E] dark:border-[#E85462] dark:bg-[#3A1A22] dark:text-[#F0707A]";

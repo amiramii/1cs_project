@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
+import RouteLoadingShell from "@/app/_components/RouteLoadingShell"
 import {
   ENABLE_AUTH_REDIRECTS,
   DEFAULT_APP_ROLE,
@@ -54,7 +55,7 @@ export default function DashboardRoleGuard({
   }
 
   if (!isClient || needsLogin || needsRoleRedirect) {
-    return null
+    return <RouteLoadingShell />
   }
 
   return <>{children}</>

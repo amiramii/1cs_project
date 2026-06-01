@@ -4,10 +4,11 @@ import LoginForm from '../../_components/login/LoginForm'
 import { ModeToggle } from '../../_components/ModeToggle'
 import { useRedirectIfAuthenticated } from '@/lib/useRedirectIfAuthenticated'
 import { AuthPageBackground } from '../../_components/login/AuthPageBackground'
+import RouteLoadingShell from '@/app/_components/RouteLoadingShell'
 
 function Page() {
   const ready = useRedirectIfAuthenticated()
-  if (!ready) return null
+  if (!ready) return <RouteLoadingShell />
 
   return (
     <div className="bg-background min-h-dvh overflow-x-hidden overflow-y-auto relative z-0 flex items-center justify-center p-4 w-full">

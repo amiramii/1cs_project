@@ -149,30 +149,26 @@ export function getSideBarItems(
       href: "/Dashboard",
     },
     {
-      iconId: "professors",
-      label: t("Professors", "الأساتذة"),
-      href: "/Professors",
-    },
-    {
-      iconId: "schedules",
-      label: t("Schedules", "الجداول"),
-      href: "/Scheduals",
-    },
-    {
       iconId: "students",
       label: t("Students", "الطلاب"),
       href: "/Students",
     },
     {
-      iconId: "justifications",
-      label: t("Justifications", "مبررات الغياب"),
-      href: "/Justifications",
+      iconId: "professors",
+      label: t("Professors", "الأساتذة"),
+      href: "/Professors",
     },
     {
       iconId: "schooling",
       label: t("Schooling", "طاقم التعليم"),
       href: "/Schooling",
     },
+    {
+      iconId: "schedules",
+      label: t("Schedules", "الجداول"),
+      href: "/Scheduals",
+    }
+    
   ]
 
   const prof: SidebarNavItem[] = [
@@ -180,11 +176,6 @@ export function getSideBarItems(
       iconId: "dashboard",
       label: t("Dashboard", "لوحة التحكم"),
       href: "/Dashboard",
-    },
-    {
-      iconId: "schedules",
-      label: t("Schedules", "الجداول"),
-      href: "/Scheduals",
     },
     {
       iconId: "sessions",
@@ -195,6 +186,11 @@ export function getSideBarItems(
       iconId: "students",
       label: t("Students", "الطلاب"),
       href: "/Students",
+    },
+    {
+      iconId: "schedules",
+      label: t("Schedules", "الجداول"),
+      href: "/Scheduals",
     },
     {
       iconId: "absences",
@@ -210,14 +206,14 @@ export function getSideBarItems(
       href: "/Dashboard",
     },
     {
-      iconId: "absences",
-      label: t("Absences", "الغياب"),
-      href: "/Absences",
-    },
-    {
       iconId: "schedules",
       label: t("Schedules", "الجداول"),
       href: "/Scheduals",
+    },
+    {
+      iconId: "absences",
+      label: t("Absences", "الغياب"),
+      href: "/Absences",
     },
     {
       iconId: "justifications",
@@ -239,15 +235,15 @@ export function getSideBarItems(
       href: "/Justifications",
     },
     {
+      iconId: "requests",
+      label: t("Session Requests", "طلبات الحصص"),
+      href: "/ProfAuditions/Requests",
+    },
+    {
       iconId: "profabsences",
       label: t("Professor Absences", "غياب الأساتذة"),
       href: "/ProfAuditions/Absences",
     },
-    {
-      iconId: "requests",
-      label: t("Session Requests", "طلبات الحصص"),
-      href: "/ProfAuditions/Requests",
-    }
   ]
 
   const byRole: Record<AppSidebarRole, SidebarNavItem[]> = {

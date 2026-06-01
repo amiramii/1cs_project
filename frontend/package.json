@@ -2,8 +2,13 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
+    "dev:mobile": "next dev --hostname 0.0.0.0",
+    "start:mobile": "next start --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

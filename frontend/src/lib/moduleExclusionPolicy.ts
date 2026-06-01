@@ -212,6 +212,21 @@ export function getAbsenceSeverityColor(
   return ABSENCE_SEVERITY_COLORS[getAbsenceSeverity(absenceCount, limit)];
 }
 
+export const ABSENCE_SEVERITY_TEXT_CLASSES: Record<AbsenceSeverity, string> = {
+  ok: "text-[#74A7BD]",
+  caution: "text-[#9BB8D4] dark:text-[#A8C4DB]",
+  warning: "text-[#B8960F] dark:text-[#FFD54F]",
+  critical: "text-[#E8943A] dark:text-[#FFB366]",
+  excluded: "text-[#DF2D3E] dark:text-[#F0707A]",
+};
+
+export function getAbsenceSeverityTextClass(
+  absenceCount: number,
+  limit = getModuleExclusionAbsenceLimit()
+): string {
+  return ABSENCE_SEVERITY_TEXT_CLASSES[getAbsenceSeverity(absenceCount, limit)];
+}
+
 /** Maps UI policy state to `AbsenceConfigSerializer` payload. */
 export function buildAbsenceConfigPayload(): AbsenceConfigDto {
   const mode = getModuleExclusionCountMode();

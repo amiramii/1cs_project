@@ -7,6 +7,7 @@ import {
   ENABLE_AUTH_REDIRECTS,
   getDashboardHomePath,
 } from "@/lib/constants"
+import RouteLoadingShell from "@/app/_components/RouteLoadingShell"
 import { isAuthRoute, isProtectedAppRoute } from "@/lib/authRoutes"
 import { useIsClient } from "@/lib/useIsClient"
 import {
@@ -54,7 +55,7 @@ export default function RoutesAuthGuard({
   }
 
   if (!isClient || redirectToDashboard || redirectToLogin) {
-    return null
+    return <RouteLoadingShell />
   }
 
   return <>{children}</>

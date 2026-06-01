@@ -26,7 +26,14 @@ async function login(email: string, password: string, remember = false) {
       }),
     },
     { withAuth: false }
-  );
+  ).catch((err: unknown) => {
+    if (err instanceof TypeError) {
+      throw new Error(
+        "Cannot reach the server. Check that the backend is running and NEXT_PUBLIC_API_URL is set correctly (e.g. https://checkin-backend-z1f2.onrender.com on Render)."
+      )
+    }
+    throw err
+  });
 
   const data = await res.json().catch(() => ({}));
 

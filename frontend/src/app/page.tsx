@@ -1,10 +1,6 @@
-import { previewLoadingDelay } from "@/lib/previewLoadingDelay"
+import LandingPage from "@/app/_components/landing/LandingPage"
 
-export default async function Home() {
-  await previewLoadingDelay()
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <h1>Hello world</h1>
-    </div>
-  )
+/** Public marketing landing page at `/`. */
+export default function Home() {
+  return <LandingPage />
 }

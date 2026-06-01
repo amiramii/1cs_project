@@ -5,6 +5,7 @@ import {
   persistTokens,
   isRememberMeSession,
 } from "./tokenStorage";
+import { getApiBaseUrl } from "./apiBase";
 import { checkinPath } from "./checkinApi";
 
 type ApiOptions = {
@@ -12,7 +13,7 @@ type ApiOptions = {
 }
 
 function buildApiUrl(path: string) {
-  const base = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  const base = getApiBaseUrl();
   let cleanPath = path.replace(/^\/+/, "").replace(/\/+$/, "");
   if (base.endsWith("/api") && cleanPath.startsWith("api/")) {
     cleanPath = cleanPath.slice(4);

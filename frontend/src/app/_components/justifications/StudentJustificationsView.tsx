@@ -144,7 +144,7 @@ function stateBadge(
     default:
       return {
         className:
-          "border border-[#E7CE51F2] bg-[#FFF5C3F2]/80 font-semibold text-[#E7CE51F2]",
+          "border border-[#C4A820] bg-[#FFF5C3F2]/80 font-semibold text-[#9A7B0A] dark:border-[#FFD54F]/55 dark:bg-[#3A3420] dark:text-[#FFD54F]",
         label: isAr ? "قيد المراجعة" : "Pending",
       };
   }
