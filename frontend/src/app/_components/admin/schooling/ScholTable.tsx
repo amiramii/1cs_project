@@ -530,7 +530,9 @@ export default function DataTable() {
       </div>
       <Drawer
         open={drawerMode !== null}
-        onOpenChange={(open) => !open && setDrawerMode(null)}
+        onOpenChange={(open: boolean) => {
+          if (!open) setDrawerMode(null)
+        }}
         direction={isArabic ? "left" : "right"}
       >
         <DrawerContent dir={isArabic ? "rtl" : "ltr"}>

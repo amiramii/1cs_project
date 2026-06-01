@@ -16,6 +16,8 @@ import {
   loadAllAcademicYears,
   postDocument,
   postExcelSchedule,
+  postReplacementSchedule,
+  getExamYearsWithJustified,
   type ExcelScheduleSemester,
 } from "@/lib/checkinClient";
 import { checkinPath } from "@/lib/checkinApi";
@@ -32,7 +34,7 @@ import { useLanguage } from "@/app/_components/language-provider";
 import StudScheduleList from "@/app/_components/admin/schedules/StudScheduleList";
 import ScheduleYearCombobox from "@/app/_components/admin/schedules/ScheduleYearCombobox";
 
-type UploadMode = "pdf" | "excel";
+type UploadMode = "pdf" | "excel" | "remplacement";
 
 function parseJsonSafe(text: string): unknown {
   const t = text.trim();
@@ -122,6 +124,7 @@ export default function SchedulsMiddleContainer({
   const [isUploading, setIsUploading] = useState(false);
   const [successMsg, setSuccessMsg] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [examYears, setExamYears] = useState<{ value: string; label: string }[]>([]);
   const router = useRouter();
   const ProfessorSchedulesPath = () => {
     router.push("/Scheduals/Professor-Schedules");
@@ -148,6 +151,11 @@ export default function SchedulsMiddleContainer({
       return fromName || prev;
     });
   }, [stagedPdf]);
+
+  useEffect(() => {
+    if (uploadMode !== "remplacement") return
+    getExamYearsWithJustified().then(setExamYears)
+  }, [uploadMode])
 
   const handleDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -177,7 +185,8 @@ export default function SchedulsMiddleContainer({
     if (uploadMode === "pdf" && !title.trim()) return;
     const needsYear =
       uploadMode === "excel" ||
-      (uploadMode === "pdf" && activeTab === "student");
+        uploadMode === "remplacement" || 
+        (uploadMode === "pdf" && activeTab === "student");
     if (needsYear && (year === "default" || year === "All")) {
       const message = isArabic ? "اختر السنة أولاً." : "Select a year first.";
       setUploadError(message);
@@ -283,6 +292,27 @@ export default function SchedulsMiddleContainer({
         }
         return;
       }
+      if (uploadMode === "remplacement" && yearPk != null) {
+        const formData = new FormData();
+        formData.append("year", String(yearPk));
+        formData.append("file", effectivePdf);
+      
+        const res = await postReplacementSchedule(formData);
+        if (res.ok) {
+          setSuccessMsg(true);
+          setTimeout(() => setSuccessMsg(false), 1000);
+          setYear("default");
+          setDroppedFile(null);
+          onStagedPdfChange?.(null);
+        } else {
+          const bodyText = await res.text();
+          const parsed = parseJsonSafe(bodyText);
+          const message = formatDocumentUploadError(res.status, bodyText, parsed, isArabic);
+          setUploadError(message);
+          toast.error(message);
+        }
+        return;
+      }
 
       const formData = new FormData();
       formData.append("title", documentTitle);
@@ -361,16 +391,18 @@ export default function SchedulsMiddleContainer({
             {isArabic ? "إضافة جدول" : "Add schedule"}
           </h1>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             {[
               { value: "pdf" as const, label: isArabic ? "ملف PDF" : "PDF file" },
               { value: "excel" as const, label: isArabic ? "ملف Excel" : "Excel file" },
+              { value: "remplacement" as const, label: isArabic ? "ملف Remplacement" : "Student Replacement"},
             ].map((mode) => (
               <Button
                 key={mode.value}
                 type="button"
                 variant={uploadMode === mode.value ? "default" : "outline"}
-                className={
+                className=
+                {
                   uploadMode === mode.value
                     ? "bg-[#51689A] text-white hover:bg-[#40547F]"
                     : "border-[#51689A]/35 text-[#1B2065] dark:text-[#EEF4F7]"
@@ -460,12 +492,15 @@ export default function SchedulsMiddleContainer({
           ) : null}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <ScheduleYearCombobox
-              value={year}
-              onChange={setYear}
-              disabled={uploadMode === "pdf" && activeTab === "professor"}
-              isArabic={isArabic}
-            />
+            <div className={uploadMode === "remplacement" ? "sm:col-span-2 sm:mx-auto sm:w-1/2" : "contents"}>
+              <ScheduleYearCombobox
+                value={year}
+                onChange={setYear}
+                disabled={uploadMode === "pdf" && activeTab === "professor"}
+                isArabic={isArabic}
+                dynamicOptions={uploadMode === "remplacement" ? examYears : undefined}
+              />
+            </div>
             {uploadMode === "pdf" ? (
               <Input
                 type="text"
@@ -491,7 +526,7 @@ export default function SchedulsMiddleContainer({
           <MyDropzone
             onDrop={handleDrop}
             accept={{
-              ...(uploadMode === "pdf"
+              ...(uploadMode === "pdf" || uploadMode === "remplacement"
                 ? { "application/pdf": [".pdf"] }
                 : {
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
@@ -507,10 +542,10 @@ export default function SchedulsMiddleContainer({
                 {effectivePdf
                   ? effectivePdf.name
                   : isArabic
-                    ? uploadMode === "pdf"
+                    ? uploadMode === "pdf" || uploadMode === "remplacement"
                       ? "قم بإفلات ملف PDF أو اختره"
                       : "قم بإفلات ملف Excel أو اختره"
-                    : uploadMode === "pdf"
+                    : uploadMode === "pdf" || uploadMode === "remplacement"
                       ? "Drop or choose a PDF file"
                       : "Drop or choose an Excel file"}
               </p>

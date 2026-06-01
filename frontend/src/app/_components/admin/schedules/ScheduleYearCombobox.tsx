@@ -26,6 +26,7 @@ type Props = {
   onChange: (next: string) => void
   disabled?: boolean
   isArabic: boolean
+  dynamicOptions?: { value: string; label: string }[]
 }
 
 /** Year selector as a dropdown (no cmdk) — frosted panel for readability over content. */
@@ -34,6 +35,7 @@ export default function ScheduleYearCombobox({
   onChange,
   disabled,
   isArabic,
+  dynamicOptions,
 }: Props) {
   const [open, setOpen] = React.useState(false)
 
@@ -41,12 +43,17 @@ export default function ScheduleYearCombobox({
     if (disabled) setOpen(false)
   }, [disabled])
 
-  const selected = YEAR_OPTIONS.find((o) => o.value === value)
-  const displayLabel = selected
-    ? isArabic
-      ? selected.labelAr
-      : selected.labelEn
-    : null
+const selected = dynamicOptions
+  ? dynamicOptions.find((o) => o.value === value)
+  : YEAR_OPTIONS.find((o) => o.value === value)
+
+const displayLabel = selected
+  ? dynamicOptions
+    ? (selected as { value: string; label: string }).label
+    : isArabic
+      ? (selected as typeof YEAR_OPTIONS[number]).labelAr
+      : (selected as typeof YEAR_OPTIONS[number]).labelEn
+  : null
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -68,23 +75,31 @@ export default function ScheduleYearCombobox({
         align="start"
         className="max-h-[min(50vh,280px)] w-[var(--radix-dropdown-menu-trigger-width)] min-w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto border-border/50 bg-popover/75 p-0 shadow-xl backdrop-blur-xl backdrop-saturate-150 dark:bg-popover/80"
       >
-        {YEAR_OPTIONS.map((opt) => (
-          <DropdownMenuItem
-            key={opt.value}
-            className="flex cursor-pointer items-center justify-between gap-2"
-            onClick={() => {
-              onChange(opt.value)
-              setOpen(false)
-            }}
-          >
-            <span>{isArabic ? opt.labelAr : opt.labelEn}</span>
-            {value === opt.value ? (
-              <span className="shrink-0 text-xs text-primary">✓</span>
-            ) : (
-              <span className="w-4 shrink-0" aria-hidden />
-            )}
-          </DropdownMenuItem>
-        ))}
+      {dynamicOptions
+        ? dynamicOptions.map((opt) => (
+            <DropdownMenuItem
+              key={opt.value}
+              className="flex cursor-pointer items-center justify-between gap-2"
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+            >
+              <span>{opt.label}</span>
+              {value === opt.value
+                ? <span className="shrink-0 text-xs text-primary">✓</span>
+                : <span className="w-4 shrink-0" aria-hidden />}
+            </DropdownMenuItem>
+          ))
+        : YEAR_OPTIONS.map((opt) => (
+            <DropdownMenuItem
+              key={opt.value}
+              className="flex cursor-pointer items-center justify-between gap-2"
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+            >
+              <span>{isArabic ? opt.labelAr : opt.labelEn}</span>
+              {value === opt.value
+                ? <span className="shrink-0 text-xs text-primary">✓</span>
+                : <span className="w-4 shrink-0" aria-hidden />}
+            </DropdownMenuItem>
+          ))}
       </DropdownMenuContent>
     </DropdownMenu>
   )

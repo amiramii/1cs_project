@@ -74,6 +74,12 @@ export const checkinPath = {
     scheduleToday: (professor: string) =>
       `api/documents/schedule/today/${encodeURIComponent(professor)}` as const,
   },
+  /** `exams` app */
+  exams: {
+    /** POST multipart — `year` (pk) + `file` (.pdf/.xlsx) */
+    replacementUpload: "api/exams/replacement-upload",
+    yearsWithJustified: "api/exams/years-with-justified",
+  },
   /** `justifications` app — router at `/api/` (`justifications/urls.py`). */
   absences: {
     /** GET `@action(by_module)` */

@@ -912,6 +912,41 @@ export async function postExcelSchedule(formData: FormData): Promise<Response> {
   return res
 }
 
+export async function postReplacementSchedule(formData: FormData): Promise<Response> {
+  const href = checkinUrl(checkinPath.exams.replacementUpload)
+  let res = await fetch(href, {
+    method: "POST",
+    headers: listAuthHeaders(),
+    body: formData,
+  })
+  if (
+    (res.status === 401 || res.status === 403) &&
+    typeof window !== "undefined" &&
+    (await attemptTokenRefresh())
+  ) {
+    res = await fetch(href, {
+      method: "POST",
+      headers: listAuthHeaders(),
+      body: formData,
+    })
+  }
+  return res
+}
+
+export async function getExamYearsWithJustified(): Promise<{ value: string; label: string }[]> {
+  const href = checkinUrl(checkinPath.exams.yearsWithJustified)
+  let res = await fetch(href, { headers: listAuthHeaders() })
+  if (
+    (res.status === 401 || res.status === 403) &&
+    typeof window !== "undefined" &&
+    (await attemptTokenRefresh())
+  ) {
+    res = await fetch(href, { headers: listAuthHeaders() })
+  }
+  if (!res.ok) return []
+  return res.json()
+}
+
 export async function loadAllExcelSchedules(): Promise<ExcelScheduleRow[]> {
   const res = await fetchExcelSchedules()
   const text = await res.text()
