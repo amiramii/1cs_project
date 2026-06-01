@@ -6,34 +6,17 @@
  */
 
 import Link from "next/link"
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { CalendarCheck, ClipboardClock, Info } from "lucide-react"
 
 import { useLanguage } from "@/app/_components/language-provider"
 import ProfessorSessionsView from "@/app/_components/sessions/ProfessorSessionsView"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants"
-import { getAccessToken } from "@/lib/tokenStorage"
 import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole"
 
 export default function Page() {
-  const router = useRouter()
   const { language } = useLanguage()
   const isAr = language === "ar"
   const role = useEffectiveAppRole("admin")
-
-  useEffect(() => {
-    if (!ENABLE_AUTH_REDIRECTS) return
-    const token = getAccessToken()
-    if (!token) {
-      router.push("/Login")
-      return
-    }
-    if (role === "student") {
-      router.replace("/Dashboard")
-    }
-  }, [router, role])
 
   if (role === "student") {
     return null

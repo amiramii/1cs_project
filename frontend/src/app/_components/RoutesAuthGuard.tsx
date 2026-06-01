@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
 import {
@@ -8,6 +8,7 @@ import {
   getDashboardHomePath,
 } from "@/lib/constants"
 import { isAuthRoute, isProtectedAppRoute } from "@/lib/authRoutes"
+import { useIsClient } from "@/lib/useIsClient"
 import {
   getCurrentAppRole,
   hasValidAccessToken,
@@ -25,32 +26,36 @@ export default function RoutesAuthGuard({
 }) {
   const pathname = usePathname()
   const router = useRouter()
-  const [canRender, setCanRender] = useState(() => !ENABLE_AUTH_REDIRECTS)
+  const isClient = useIsClient()
+
+  const path = pathname ?? "/"
+  const redirectToDashboard =
+    ENABLE_AUTH_REDIRECTS &&
+    isClient &&
+    isAuthRoute(path) &&
+    hasValidAccessToken()
+  const redirectToLogin =
+    ENABLE_AUTH_REDIRECTS &&
+    isClient &&
+    isProtectedAppRoute(path) &&
+    !hasValidAccessToken()
 
   useEffect(() => {
-    if (!ENABLE_AUTH_REDIRECTS) {
-      queueMicrotask(() => setCanRender(true))
-      return
-    }
-
-    setCanRender(false)
-    const path = pathname ?? "/"
-
-    if (isAuthRoute(path) && hasValidAccessToken()) {
+    if (redirectToDashboard) {
       const role = getCurrentAppRole("admin")
       router.replace(getDashboardHomePath(role))
-      return
-    }
-
-    if (isProtectedAppRoute(path) && !hasValidAccessToken()) {
+    } else if (redirectToLogin) {
       router.replace("/Login")
-      return
     }
+  }, [redirectToDashboard, redirectToLogin, router])
 
-    queueMicrotask(() => setCanRender(true))
-  }, [pathname, router])
+  if (!ENABLE_AUTH_REDIRECTS) {
+    return <>{children}</>
+  }
 
-  if (!canRender) return null
+  if (!isClient || redirectToDashboard || redirectToLogin) {
+    return null
+  }
 
   return <>{children}</>
 }

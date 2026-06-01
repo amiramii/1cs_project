@@ -5,7 +5,6 @@
  * language + theme + profile menu, and main content area guarded by
  * `DashboardRoleGuard`. Role comes from JWT + optional dev role switcher.
  */
-import Link from "next/link";
 import Sidebar from "../../../components/ui/siderbar";
 import { useRouter } from "next/navigation";
 import { CircleUserRound } from "lucide-react";
@@ -51,7 +50,6 @@ export default function DashboardLayout({
   const { language, setLanguage, dir } = useLanguage();
   const isRtl = dir === "rtl";
   const role = useEffectiveAppRole(DEFAULT_APP_ROLE) as AppSidebarRole;
-  const isSchooling = role === "schooling";
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
 
   const navItems = getSideBarItems(language, role);

@@ -11,7 +11,6 @@ export function useRedirectIfAuthenticated(redirectTo?: string) {
 
   useEffect(() => {
     if (!ENABLE_AUTH_REDIRECTS) return
-    setReady(false)
     if (hasValidAccessToken()) {
       const role = getCurrentAppRole("admin")
       router.replace(redirectTo ?? getDashboardHomePath(role))

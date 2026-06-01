@@ -148,11 +148,12 @@ function extractRoleFromPayload(payload: JwtPayload | null): StoredAppRole | nul
   return null;
 }
 
+/** True when a non-empty access token is present and not expired (if JWT has `exp`). */
 export function hasValidAccessToken() {
-  const token = getAccessToken();
+  const token = getAccessToken()?.trim();
   if (!token) return false;
   const payload = parseJwtPayload(token);
-  if (!payload?.exp) return false;
+  if (!payload || payload.exp == null) return true;
   const now = Math.floor(Date.now() / 1000);
   return payload.exp > now;
 }

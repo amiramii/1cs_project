@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import {
   ENABLE_AUTH_REDIRECTS,
@@ -8,6 +8,7 @@ import {
   type AppSidebarRole,
 } from "@/lib/constants"
 import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole"
+import { useIsClient } from "@/lib/useIsClient"
 import {
   getRoleViolationRedirectPath,
   isRouteAllowedForRole,
@@ -24,33 +25,37 @@ export default function DashboardRoleGuard({
   const role = useEffectiveAppRole(
     DEFAULT_APP_ROLE as AppSidebarRole
   ) as AppSidebarRole
-  const [canRender, setCanRender] = useState(() => !ENABLE_AUTH_REDIRECTS)
+  const isClient = useIsClient()
+
+  const needsLogin =
+    ENABLE_AUTH_REDIRECTS && isClient && !hasValidAccessToken()
+  const needsRoleRedirect =
+    ENABLE_AUTH_REDIRECTS &&
+    isClient &&
+    hasValidAccessToken() &&
+    !isRouteAllowedForRole(pathname, role)
 
   useEffect(() => {
-    if (!ENABLE_AUTH_REDIRECTS) {
-      queueMicrotask(() => setCanRender(true))
-      return
-    }
-
-    setCanRender(false)
-
+    if (!ENABLE_AUTH_REDIRECTS || !isClient) return
     if (!hasValidAccessToken()) {
       router.replace("/Login")
       return
     }
-
     if (!isRouteAllowedForRole(pathname, role)) {
       const target = getRoleViolationRedirectPath(role)
       if (target !== pathname) {
         router.replace(target)
       }
-      return
     }
+  }, [isClient, pathname, router, role])
 
-    queueMicrotask(() => setCanRender(true))
-  }, [pathname, router, role])
+  if (!ENABLE_AUTH_REDIRECTS) {
+    return <>{children}</>
+  }
 
-  if (!canRender) return null
+  if (!isClient || needsLogin || needsRoleRedirect) {
+    return null
+  }
 
   return <>{children}</>
 }

@@ -42,10 +42,10 @@ function pct(part: number, total: number): number {
 }
 
 function assignmentLine(a: AssignmentApi): string {
-  const module = a.module_name?.trim() || "—";
+  const moduleName = a.module_name?.trim() || "—";
   const group = a.group_name?.trim() || "—";
   const sem = a.semester?.trim() || "—";
-  return `${module} - ${group} - ${sem}`;
+  return `${moduleName} - ${group} - ${sem}`;
 }
 
 function cardMatchesSearch(
