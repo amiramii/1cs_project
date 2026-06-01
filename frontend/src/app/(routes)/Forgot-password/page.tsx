@@ -18,13 +18,13 @@ import {
 import { useLanguage } from "@/app/_components/language-provider"
 import SubmitButton from "@/app/_components/login/SubmitButton"
 import LanguageMenu from "../../_components/login/LanguageMenu"
-//import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
+import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
 
 function Page() {
   const router = useRouter()
   const pathname = usePathname()
   const prevPathRef = useRef<string | undefined>(undefined)
-  //const ready = useRedirectIfAuthenticated()
+  const ready = useRedirectIfAuthenticated()
   const { language, setLanguage } = useLanguage()
   const [email, setEmail] = useState("")
   const [touched, setTouched] = useState(false)
@@ -57,7 +57,7 @@ function Page() {
     }
   }, [pathname])
 
-  // if (!ready) return null
+  if (!ready) return null
 
   const emailError = !email
     ? t.emailRequired

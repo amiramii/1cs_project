@@ -1,95 +1,68 @@
 import type { AppSidebarRole } from "./constants"
+import { getSideBarItems } from "./constants"
+
+/** Normalize `usePathname()` for stable prefix checks. */
+function normalizePathname(pathname: string): string {
+  const path = (pathname.split("?")[0] ?? "/").replace(/\/$/, "") || "/"
+  return path === "" ? "/" : path
+}
+
+function matchesHref(path: string, href: string): boolean {
+  return path === href || path.startsWith(`${href}/`)
+}
+
+/** Routes reachable from the sidebar but not listed as top-level hrefs. */
+const EXTRA_ROUTE_PREFIXES: Record<AppSidebarRole, string[]> = {
+  admin: ["/Sessions"],
+  prof: [],
+  student: [],
+  schooling: [],
+}
+
+/** Paths that must stay blocked even if they share a prefix with an allowed href. */
+const DENIED_ROUTE_PREFIXES: Record<AppSidebarRole, string[]> = {
+  admin: ["/Absences"],
+  prof: [
+    "/Professors",
+    "/Scheduals/Student-Schedules",
+    "/Justifications",
+    "/Schooling",
+  ],
+  student: [
+    "/Professors",
+    "/Students",
+    "/Scheduals/Professor-Schedules",
+    "/Sessions",
+    "/Schooling",
+    "/ProfAuditions",
+  ],
+  schooling: [
+    "/Professors",
+    "/Students",
+    "/Sessions",
+    "/Scheduals",
+    "/Schooling",
+    "/Absences",
+  ],
+}
 
 /**
  * Returns true when `pathname` (from `usePathname()`) may be shown for this role.
- * Paths are matched case-sensitively to match Next.js routing.
+ * Allowed routes = sidebar hrefs for the role + nested paths under those hrefs.
  */
 export function isRouteAllowedForRole(pathname: string, role: AppSidebarRole): boolean {
-  const path = (pathname.split("?")[0] ?? "/").replace(/\/$/, "") || "/"
-  const p = path === "" ? "/" : path
+  const p = normalizePathname(pathname)
 
-  if (role === "admin") {
-    return (
-      p === "/Dashboard" ||
-      p.startsWith("/Dashboard/") ||
-      p === "/Professors" ||
-      p.startsWith("/Professors/") ||
-      p === "/Students" ||
-      p.startsWith("/Students/") ||
-      p === "/Scheduals" ||
-      p.startsWith("/Scheduals/") ||
-      p === "/Sessions" ||
-      p.startsWith("/Sessions/") ||
-      p === "/Justifications" ||
-      p.startsWith("/Justifications/")
-    )
+  for (const denied of DENIED_ROUTE_PREFIXES[role]) {
+    if (matchesHref(p, denied)) return false
   }
 
-  if (role === "schooling") {
-    return (
-      p === "/Dashboard" ||
-      p.startsWith("/Dashboard/") ||
-      p === "/Justifications" ||
-      p === "/Justifications/Schooling-Justifications" ||
-      p.startsWith("/Justifications/Schooling-Justifications/") ||
-      p === "/Justifications/Justification-details" ||
-      p.startsWith("/Justifications/Justification-details/") ||
-      p === "/ProfAuditions/Absences" ||
-      p.startsWith("/ProfAuditions/Absences/") ||
-      p === "/ProfAuditions/Requests" ||
-      p.startsWith("/ProfAuditions/Requests/")
-    )
-  }
+  const allowedPrefixes = [
+    ...getSideBarItems("en", role).map((item) => item.href),
+    ...EXTRA_ROUTE_PREFIXES[role],
+  ]
 
-  if (role === "prof") {
-    if (
-      p === "/Professors" ||
-      p.startsWith("/Professors/") ||
-      p === "/Scheduals/Student-Schedules" ||
-      p.startsWith("/Scheduals/Student-Schedules/") ||
-      p === "/Justifications" ||
-      p.startsWith("/Justifications/")
-    ) {
-      return false
-    }
-    return (
-      p === "/Dashboard" ||
-      p.startsWith("/Dashboard/") ||
-      p === "/Students" ||
-      p.startsWith("/Students/") ||
-      p === "/Scheduals" ||
-      p.startsWith("/Scheduals/") ||
-      p === "/Sessions" ||
-      p.startsWith("/Sessions/") ||
-      p === "/Absences" ||
-      p.startsWith("/Absences/")
-    )
-  }
-
-  // student
-  if (
-    p === "/Professors" ||
-    p.startsWith("/Professors/") ||
-    p === "/Students" ||
-    p.startsWith("/Students/") ||
-    p === "/Scheduals/Professor-Schedules" ||
-    p.startsWith("/Scheduals/Professor-Schedules/") ||
-    p === "/Justifications/Student-Justifications" ||
-    p.startsWith("/Justifications/Student-Justifications/")
-  ) {
-    return false
-  }
-
-  return (
-    p === "/Dashboard" ||
-    p.startsWith("/Dashboard/") ||
-    p === "/Scheduals" ||
-    p.startsWith("/Scheduals/") ||
-    p === "/Justifications" ||
-    p.startsWith("/Justifications/") ||
-    p === "/Absences" ||
-    p.startsWith("/Absences/")
-  )
+  return allowedPrefixes.some((href) => matchesHref(p, href))
 }
 
 /** Where to send the user if they open a route their role cannot access. */

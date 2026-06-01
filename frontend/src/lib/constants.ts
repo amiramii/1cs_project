@@ -2,14 +2,14 @@ export type Language = "en" | "ar"
 export const LANGUAGE_STORAGE_KEY = "preferred_language"
 export const RESET_EMAIL_STORAGE_KEY = "reset_email"
 
-/** When false, skip token checks that send users to `/Login` or away from `/Login`. Turn on when routes are ready. */
-export const ENABLE_AUTH_REDIRECTS = false
+/** When true, enforce login + role-based route access and block auth pages when logged in. */
+export const ENABLE_AUTH_REDIRECTS = true
 
 /** Until the API returns a role, treat new sessions as admin. Other roles will use the same paths while routing is open. */
 export const DEFAULT_APP_ROLE = "admin" as const
 
 /**
- * Home dashboard URL. Folders like `(admin)` are route groups and do not appear in the path.
+ * Home dashboard URL. Route groups like `(Dashboard)` do not appear in the path.
  * Later: switch to `/Dashboard/${role}/...` when those segments exist under `app/`.
  */
 export function getDashboardHomePath(_role: string = DEFAULT_APP_ROLE) {
@@ -164,10 +164,15 @@ export function getSideBarItems(
       href: "/Students",
     },
     {
+      iconId: "justifications",
+      label: t("Justifications", "مبررات الغياب"),
+      href: "/Justifications",
+    },
+    {
       iconId: "schooling",
       label: t("Schooling", "طاقم التعليم"),
       href: "/Schooling",
-    }
+    },
   ]
 
   const prof: SidebarNavItem[] = [

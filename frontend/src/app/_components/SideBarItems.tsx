@@ -21,8 +21,9 @@ const SideBarItems = ({
     {items.map((item) => {
         const isActive =
           pathName === item.href ||
-          pathName.startsWith(`${item.href}/`) ||
-          (item.href === "/Dashboard" && pathName.startsWith("/Dashboard"))
+          (item.href === "/Dashboard"
+            ? pathName === "/Dashboard" || pathName.startsWith("/Dashboard/")
+            : pathName.startsWith(`${item.href}/`) || pathName.startsWith(item.href))
         return(
             <li key={item.href} className={`${isActive ? 'border-b-2 border-[#51689A] bg-[#51689A]/15 dark:border-[#74A7BD] dark:bg-[#182449]/35 md:border-b-0 md:border-s-4 md:border-[#51689A] dark:md:border-[#74A7BD] text-[#1B2065F2] dark:text-[#EEF4F7]' : 'border-b-2 border-transparent text-[#1B2065F2]/85 md:border-s-4 md:border-transparent dark:text-[#9BA8C4]'} group relative rounded-t-xl p-3 transition-colors md:w-full md:rounded-none md:rounded-e-xl md:pr-2 md:pe-2 `}>
                 <Link

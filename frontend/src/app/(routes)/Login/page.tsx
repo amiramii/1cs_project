@@ -6,8 +6,8 @@ import { useRedirectIfAuthenticated } from '@/lib/useRedirectIfAuthenticated'
 import { AuthPageBackground } from '../../_components/login/AuthPageBackground'
 
 function Page() {
-  useRedirectIfAuthenticated()
-  // When ENABLE_AUTH_REDIRECTS is true in lib/constants, use `ready` from the hook and `if (!ready) return null` to avoid a flash.
+  const ready = useRedirectIfAuthenticated()
+  if (!ready) return null
 
   return (
     <div className="bg-background min-h-dvh overflow-x-hidden overflow-y-auto relative z-0 flex items-center justify-center p-4 w-full">

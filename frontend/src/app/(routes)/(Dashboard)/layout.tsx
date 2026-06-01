@@ -57,24 +57,6 @@ export default function DashboardLayout({
   const navItems = getSideBarItems(language, role);
   const sidebarTx = getSidebarChromeTexts(language);
 
-  const DASHBOARD_HOME_SEEN_KEY = "chekin:dashboard-home-seen";
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const path = (pathname ?? "/").split("?")[0]?.replace(/\/$/, "") || "/";
-    if (path === "/Dashboard") {
-      sessionStorage.setItem(DASHBOARD_HOME_SEEN_KEY, "1");
-      return;
-    }
-    const onSidebarRoute = navItems.some(
-      (item) => path === item.href || path.startsWith(`${item.href}/`)
-    );
-    if (!onSidebarRoute) return;
-    if (!sessionStorage.getItem(DASHBOARD_HOME_SEEN_KEY)) {
-      router.replace("/Dashboard");
-    }
-  }, [pathname, router, navItems]);
-
   useEffect(() => {
     queueMicrotask(() => setUserDisplayName(getCurrentUserDisplayName()));
   }, []);
@@ -106,13 +88,19 @@ export default function DashboardLayout({
     router.push("/Login");
   };
   const activeItem =
-    navItems.find((item) => pathname === item.href) ??
-    navItems.find((item) =>
-      item.href === "/Dashboard"
-        ? pathname.startsWith("/Dashboard")
-        : pathname.startsWith(`${item.href}/`) || pathname.startsWith(item.href)
-    ) ??
-    navItems[0];
+    navItems
+      .filter((item) => {
+        if (pathname === item.href) return true;
+        if (item.href === "/Dashboard") {
+          return (
+            pathname === "/Dashboard" || pathname.startsWith("/Dashboard/")
+          );
+        }
+        return (
+          pathname.startsWith(`${item.href}/`) || pathname.startsWith(item.href)
+        );
+      })
+      .sort((a, b) => b.href.length - a.href.length)[0] ?? navItems[0];
 
   /** Fixed sidebar sits on the start edge (left LTR / right RTL) — inset with padding-inline-start. */
   const shellClass = `box-border flex min-h-screen w-full min-w-0 max-w-full flex-col pb-24 transition-[padding] duration-200 md:pb-0 ${

@@ -18,8 +18,10 @@ import {
   getLoginTexts,
 } from "@/lib/constants"
 import { useLanguage } from "@/app/_components/language-provider"
+import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
 
 export default function ResetPasswordPage() {
+  const ready = useRedirectIfAuthenticated()
   const router = useRouter()
   // useParams() gives the already-decoded route segments.
   // We strip any "=" characters because the console email backend uses quoted-printable
@@ -122,6 +124,8 @@ export default function ResetPasswordPage() {
       }
     }
   }
+
+  if (!ready) return null
 
   return (
     <div className="bg-background min-h-dvh overflow-hidden relative z-0 flex items-center justify-center p-4 w-full">
