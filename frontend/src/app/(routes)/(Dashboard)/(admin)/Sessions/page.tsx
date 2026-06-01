@@ -1,13 +1,8 @@
 "use client"
 
 /**
- * `/Sessions` — route shape varies by role:
- * - Admin: links into professor/student schedule management (different from teacher/student “live” sessions).
- * - Professor (`ProfessorSessionsView`): create sessions, attendance sheet, exports.
- * - Student: `StudentSessionsHub` (mockups + PDF list via `StudScheduleList`).
- *
- * Notification prompts are scoped: professors get session reminders; students get
- * “timetable ready” hints tied to `ScheduleListShell`.
+ * `/Sessions` — admin links to schedule management; professors manage attendance here.
+ * Students use Schedules (`/Scheduals`) and Absences only — no Sessions tab.
  */
 
 import Link from "next/link"
@@ -17,7 +12,6 @@ import { CalendarCheck, ClipboardClock, Info } from "lucide-react"
 
 import { useLanguage } from "@/app/_components/language-provider"
 import ProfessorSessionsView from "@/app/_components/sessions/ProfessorSessionsView"
-import StudentSessionsHub from "@/app/_components/sessions/StudentSessionsHub"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants"
 import { getAccessToken } from "@/lib/tokenStorage"
@@ -32,8 +26,18 @@ export default function Page() {
   useEffect(() => {
     if (!ENABLE_AUTH_REDIRECTS) return
     const token = getAccessToken()
-    if (!token) router.push("/Login")
-  }, [router])
+    if (!token) {
+      router.push("/Login")
+      return
+    }
+    if (role === "student") {
+      router.replace("/Dashboard")
+    }
+  }, [router, role])
+
+  if (role === "student") {
+    return null
+  }
 
   if (role === "admin") {
     return (
@@ -46,8 +50,8 @@ export default function Page() {
             </AlertTitle>
             <AlertDescription>
               {isAr
-                ? "كمسؤول، افتح قائمة جداول الأساتذة أو الطلاب. المحتوى هنا يختلف عن ما يراه الأستاذ أو الطالب في صفحة «الحصص»."
-                : "As an admin, open either professor or student schedule lists. This is separate from what teachers or students see under Sessions."}
+                ? "كمسؤول، افتح قائمة جداول الأساتذة أو الطلاب. المحتوى هنا يختلف عن ما يراه الأستاذ في صفحة «الحصص»."
+                : "As an admin, open either professor or student schedule lists. This is separate from what teachers see under Sessions."}
             </AlertDescription>
           </div>
         </Alert>
@@ -90,9 +94,5 @@ export default function Page() {
     )
   }
 
-  return (
-    <div className="w-full space-y-4">
-      <StudentSessionsHub />
-    </div>
-  )
+  return null
 }

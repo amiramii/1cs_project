@@ -75,7 +75,7 @@ function normalizeNotificationLink(link: string | undefined): string | undefined
     "/exclusions/": "/Absences",
     "/documents": "/Scheduals",
     "/documents/": "/Scheduals",
-    "/attendance/sessions/": "/Sessions",
+    "/attendance/sessions/": "/Dashboard",
   };
   if (map[raw]) return map[raw];
   if (raw.startsWith("/") && !raw.includes("://")) {

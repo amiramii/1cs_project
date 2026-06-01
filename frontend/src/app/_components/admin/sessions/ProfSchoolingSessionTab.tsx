@@ -141,6 +141,8 @@ export function ProfessorSessionTable() {
                   modules,
                   yearNameById
                 );
+                // Keep rows we cannot map (avoid hiding valid API requests)
+                if (dept === null) return true;
                 return dept === currentDept;
               });
         const mapped = scopedRows
@@ -271,19 +273,19 @@ export function ProfessorSessionTable() {
 
     if (decision === "accepted") {
       pushRoleNotification({
-        audience: ["prof", "student"],
+        audience: ["prof"],
         title: isArabic ? "تمت الموافقة على الحصة" : "Session approved",
         body: isArabic
-          ? `حصة جديدة (${when}). الشعب: ${groups}.`
-          : `Your session was approved (${when}). Groups: ${groups}.`,
+          ? `طلبك مقبول (${when}). الشعب: ${groups}. ستظهر الحصة في «حصص اليوم» يومها لفتح سجل الحضور.`
+          : `Your request was approved (${when}). Groups: ${groups}. It will appear under today's sessions on that date to open attendance.`,
       });
     } else {
       pushRoleNotification({
-        audience: ["prof", "student"],
+        audience: ["prof"],
         title: isArabic ? "تم رفض طلب الحصة" : "Session request declined",
         body: isArabic
-          ? `لم تُوافق الشؤون التعليمية على الحصة (${when}).`
-          : `The schooling office declined the session request (${when}).`,
+          ? `لم تُوافق الشؤون التعليمية على الطلب (${when}).`
+          : `Schooling declined the session request (${when}).`,
       });
     }
   };
@@ -301,8 +303,8 @@ export function ProfessorSessionTable() {
       );
       toast.success(
         isArabic
-          ? "تمت الموافقة. أُبلغ الأستاذ والطلاب."
-          : "Approved. The professor and students were notified."
+          ? "تمت الموافقة. أُبلغ الأستاذ؛ الحصة ستظهر في upcoming يومها بعد الموافقة."
+          : "Approved. The professor was notified; the session appears in upcoming on that day."
       );
       handlePopupClose();
     } catch {

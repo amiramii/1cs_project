@@ -39,9 +39,7 @@ import {
 import { cn, notifyUser } from "@/lib/utils";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
-import ScheduleSessionForm, {
-  buildSessionCreateBody,
-} from "@/app/_components/sessions/ScheduleSessionForm";
+import ScheduleSessionForm from "@/app/_components/sessions/ScheduleSessionForm";
 import {
   loadProfessorSessionData,
   type AssignmentApi,
@@ -53,13 +51,20 @@ import { getApiBaseUrl } from "@/lib/apiBase";
 import {
   createAttendanceSession,
   getAttendanceSessionById,
+  loadExtraSessionUpcoming,
   patchAttendanceRow,
+  postExtraSessionOpenSession,
+  postExtraSessionRequest,
+  type ExtraSessionRequestRow,
 } from "@/lib/checkinClient";
 import { hydrateAttendanceRowsStudentInfo } from "@/lib/attendanceStudentHydrate";
 import { checkinPath } from "@/lib/checkinApi";
 import { loadDrfListAll } from "@/lib/drfPaginatedList";
 import { dispatchProfSessionSaved } from "@/lib/professorSessionEvents";
-import { sessionHasRecordedAttendance } from "@/lib/sessionHistoryEligibility";
+import {
+  markProfessorSessionClosedLocally,
+  readClosedProfessorSessionIdsForDate,
+} from "@/lib/professorClosedSessions";
 import { SessionTypeBadge } from "@/lib/SessionTypeBadge";
 import { getAccessToken, getStoredUserEmail } from "@/lib/tokenStorage";
 import {
@@ -276,7 +281,11 @@ export default function ProfessorSessionsView() {
   const [timetableLoading, setTimetableLoading] = useState(true);
   const [timetableError, setTimetableError] = useState<string | null>(null);
   const [startingSlotKey, setStartingSlotKey] = useState<string | null>(null);
-  /** In-memory only (not localStorage): sessions just saved this visit. */
+  const [upcomingExtraSessions, setUpcomingExtraSessions] = useState<
+    ExtraSessionRequestRow[]
+  >([]);
+  const [openingRequestId, setOpeningRequestId] = useState<number | null>(null);
+  /** Sessions saved/completed this browser (local); still reopenable from today's list. */
   const [savedSessionIds, setSavedSessionIds] = useState<Set<number>>(
     () => new Set()
   );
@@ -287,10 +296,22 @@ export default function ProfessorSessionsView() {
     [rowOverrides]
   );
 
+  const refreshUpcomingExtraSessions = useCallback(async () => {
+    try {
+      const rows = await loadExtraSessionUpcoming();
+      setUpcomingExtraSessions(rows);
+    } catch {
+      setUpcomingExtraSessions([]);
+    }
+  }, []);
+
   const refreshData = useCallback(async () => {
     const ar = isArRef.current;
     try {
-      const bundle = await loadProfessorSessionData(ar, { cacheBust: true });
+      const [bundle] = await Promise.all([
+        loadProfessorSessionData(ar, { cacheBust: true }),
+        refreshUpcomingExtraSessions(),
+      ]);
       setSessions(bundle.sessions);
       setTeacherAttendanceRows(bundle.teacherAttendanceRows);
       setAssignments(bundle.assignments);
@@ -307,7 +328,7 @@ export default function ProfessorSessionsView() {
       }
       throw e;
     }
-  }, [apiBase]);
+  }, [apiBase, refreshUpcomingExtraSessions]);
 
   useEffect(() => {
     let alive = true;
@@ -399,6 +420,10 @@ export default function ProfessorSessionsView() {
 
   const todayStr = todayLocalIso();
 
+  useEffect(() => {
+    setSavedSessionIds(readClosedProfessorSessionIdsForDate(todayStr));
+  }, [todayStr]);
+
   const sessionsWithCatalogLabels = useMemo(
     () =>
       sessions.map((s) => applyAssignmentCatalogLabels(s, assignments)),
@@ -413,6 +438,29 @@ export default function ProfessorSessionsView() {
           String(a.start_time).localeCompare(String(b.start_time))
         ),
     [sessionsWithCatalogLabels, todayStr]
+  );
+
+  const timetableLinkedSessionIds = useMemo(() => {
+    const ids = new Set<number>();
+    const slots = todayTimetable?.sessions ?? [];
+    for (const slot of slots) {
+      const times = parseFrenchTimeSlot(slot.time_slot);
+      const assignment = resolveAssignmentForTimetableSlot(slot, assignments);
+      if (!assignment || !times) continue;
+      const existing = findTodaySessionForTimetableSlot(
+        assignment.id,
+        times,
+        todayStr,
+        allTodaySessions
+      );
+      if (existing?.id) ids.add(existing.id);
+    }
+    return ids;
+  }, [todayTimetable, assignments, todayStr, allTodaySessions]);
+
+  const todaySessionsNotOnTimetable = useMemo(
+    () => allTodaySessions.filter((s) => !timetableLinkedSessionIds.has(s.id)),
+    [allTodaySessions, timetableLinkedSessionIds]
   );
 
   const startWorking = async (
@@ -621,13 +669,15 @@ export default function ProfessorSessionsView() {
         if (!res.ok) throw new Error(await res.text());
       }
       const savedSessionId = workingSession.id;
+      const savedDate = workingSession.date;
       await refreshData();
+      markProfessorSessionClosedLocally(savedSessionId, savedDate);
       setSavedSessionIds((prev) => new Set(prev).add(savedSessionId));
       dispatchProfSessionSaved(savedSessionId, workingSession.assignment);
       setSaveMsg(
         isAr
-          ? "تم حفظ الورقة وإنهاء الحصة."
-          : "Session saved and completed."
+          ? "تم الحفظ. يمكنك فتح الحصة مجدداً من قائمة حصص اليوم لتعديل الحضور."
+          : "Saved. Reopen this session from today's list anytime to edit attendance."
       );
       void notifyUser({
         title: isAr ? "انتهت الحصة" : "Session complete",
@@ -684,51 +734,90 @@ export default function ProfessorSessionsView() {
     URL.revokeObjectURL(url);
   };
 
-  const createSession = async () => {
+  const openUpcomingExtraSession = async (req: ExtraSessionRequestRow) => {
+    setOpeningRequestId(req.id);
+    try {
+      const res = await postExtraSessionOpenSession(req.id);
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(text || "open_session failed");
+      }
+      let sessionId: number | null = null;
+      try {
+        const parsed = JSON.parse(text) as { session_id?: number };
+        if (typeof parsed.session_id === "number") sessionId = parsed.session_id;
+      } catch {
+        sessionId = null;
+      }
+      const bundle = await loadProfessorSessionData(isAr, { cacheBust: true });
+      setSessions(bundle.sessions);
+      setTeacherAttendanceRows(bundle.teacherAttendanceRows);
+      setAssignments(bundle.assignments);
+      await refreshUpcomingExtraSessions();
+
+      let session: SessionApi | null =
+        sessionId != null
+          ? bundle.sessions.find((s) => s.id === sessionId) ?? null
+          : null;
+      if (!session && sessionId != null) {
+        const detailRes = await getAttendanceSessionById(sessionId);
+        if (detailRes.ok) {
+          session = (await detailRes.json()) as SessionApi;
+        }
+      }
+      if (!session) {
+        throw new Error("session missing after open_session");
+      }
+      await startWorking(session, { resetFeedback: true });
+      toast.success(
+        isAr
+          ? "تم فتح الحصة. يمكنك تعديل سجل الحضور."
+          : "Session opened. You can edit the attendance sheet."
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error(
+        isAr ? "تعذر فتح الحصة." : "Could not open this session."
+      );
+    } finally {
+      setOpeningRequestId(null);
+    }
+  };
+
+  const submitExtraSessionRequest = async () => {
     if (newAssignmentId === "") return;
     if (!sessionStart.isAfter(dayjs(), "day")) {
       toast.error(
         isAr
-          ? "لا يمكن إنشاء حصة بتاريخ اليوم أو تاريخ سابق."
-          : "You can only schedule sessions for a future date."
+          ? "لا يمكن طلب حصة بتاريخ اليوم أو تاريخ سابق."
+          : "You can only request sessions for a future date."
       );
       return;
     }
 
     setCreating(true);
     try {
-      const payload = buildSessionCreateBody(
-        newAssignmentId,
-        sessionStart,
-        sessionEnd,
-        classRoom
-      );
-      const res = await createAttendanceSession(
-        payload as Record<string, unknown>
-      );
+      const res = await postExtraSessionRequest({
+        teaching_assignment: newAssignmentId,
+        date: sessionStart.format("YYYY-MM-DD"),
+        start_time: sessionStart.format("HH:mm:ss"),
+        end_time: sessionEnd.format("HH:mm:ss"),
+      });
       const text = await res.text();
       if (!res.ok) {
-        throw new Error(text || "create failed");
+        throw new Error(text || "request failed");
       }
-      await refreshData();
       setShowScheduleForm(false);
       toast.success(
         isAr
-          ? "تم إنشاء الحصة. تم إشعار الطلاب."
-          : "Session created. Students have been notified."
+          ? "تم إرسال الطلب. ستُبلَّغ الشؤون التعليمية وستظهر الحصة بعد الموافقة."
+          : "Request sent. Schooling was notified; the session appears after approval."
       );
-      let created: SessionApi | null = null;
-      try {
-        created = text ? (JSON.parse(text) as SessionApi) : null;
-      } catch {
-        created = null;
-      }
-      if (created?.id) {
-        await startWorking(created);
-      }
     } catch (e) {
       console.error(e);
-      toast.error(isAr ? "تعذر إنشاء الحصة." : "Could not create session.");
+      toast.error(
+        isAr ? "تعذر إرسال طلب الحصة." : "Could not submit the session request."
+      );
     } finally {
       setCreating(false);
     }
@@ -1344,8 +1433,8 @@ export default function ProfessorSessionsView() {
         </p>
         <p className="mb-4 text-xs text-[#51689A] dark:text-[#9BA8C4]">
           {isAr
-            ? "من جدول Excel — اضغط «بدء الحصة» لفتح سجل الحضور (تُنشأ الحصة تلقائياً إن لم تكن موجودة)."
-            : "From your Excel timetable — tap Start Session to open the attendance sheet (creates the session if needed)."}
+            ? "جدول Excel، الحصص المسجّلة اليوم، والحصص الإضافية الموافق عليها (upcoming) — يمكن دائماً مراجعة الحضور بعد الحفظ."
+            : "Excel timetable, recorded sessions today, and approved extra sessions (upcoming) — you can always review attendance after saving."}
         </p>
         {timetableLoading ? (
           <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
@@ -1380,11 +1469,8 @@ export default function ProfessorSessionsView() {
                   : null;
               const isClosed =
                 existing != null &&
-                (savedSessionIds.has(existing.id) ||
-                  sessionHasRecordedAttendance(
-                    existing.id,
-                    teacherAttendanceRows
-                  ));
+                existing.date === todayStr &&
+                savedSessionIds.has(existing.id);
               const busy = startingSlotKey === key;
               const canStart = assignment != null && times != null;
 
@@ -1418,38 +1504,153 @@ export default function ProfessorSessionsView() {
                   </div>
                   <Button
                     type="button"
-                    disabled={!canStart || busy || isClosed}
+                    disabled={!canStart || busy}
                     className="h-9 shrink-0 rounded-md bg-[#51689A] px-6 text-sm font-medium text-white shadow-md hover:bg-[#51689A]/90 disabled:opacity-50"
                     onClick={() => void startTimetableSlot(slot)}
                   >
                     <CirclePlay className="me-2 size-4" strokeWidth={2} />
-                    {isClosed
+                    {busy
                       ? isAr
-                        ? "منتهية"
-                        : "Completed"
-                      : busy
-                        ? isAr
-                          ? "جارٍ…"
-                          : "Starting…"
-                        : existing
+                        ? "جارٍ…"
+                        : "Starting…"
+                      : existing
+                        ? isClosed
                           ? isAr
+                            ? "مراجعة الحضور"
+                            : "Review attendance"
+                          : isAr
                             ? "متابعة الحصة"
                             : "Continue"
-                          : isAr
-                            ? "بدء الحصة"
-                            : "Start Session"}
+                        : isAr
+                          ? "بدء الحصة"
+                          : "Start Session"}
                   </Button>
                 </li>
               );
             })}
           </ul>
-        ) : (
+        ) : null}
+
+        {upcomingExtraSessions.length > 0 ? (
+          <ul className="mt-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#51689A] dark:text-[#9BA8C4]">
+              {isAr
+                ? "حصص إضافية موافق عليها (اليوم)"
+                : "Approved extra sessions (today)"}
+            </p>
+            {upcomingExtraSessions.map((req) => {
+              const busyReq = openingRequestId === req.id;
+              const label = [
+                req.start_time?.slice(0, 5),
+                req.end_time?.slice(0, 5),
+              ]
+                .filter(Boolean)
+                .join(" – ");
+              return (
+                <li
+                  key={`upcoming-${req.id}`}
+                  className="flex flex-col gap-3 rounded-md border border-emerald-500/30 bg-emerald-50/80 px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-500/25 dark:bg-emerald-950/30"
+                >
+                  <div className="min-w-0 text-sm">
+                    <p className="font-medium text-[#1B2065] dark:text-[#EEF4F7]">
+                      {label ? `${label} · ` : ""}
+                      {req.module_name ?? "—"}
+                    </p>
+                    <p className="text-[#51689A] dark:text-[#9BA8C4]">
+                      {req.group_name ?? "—"}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={busyReq}
+                    className="h-9 shrink-0 rounded-md bg-emerald-700 px-6 text-sm font-medium text-white hover:bg-emerald-700/90 disabled:opacity-50"
+                    onClick={() => void openUpcomingExtraSession(req)}
+                  >
+                    {busyReq
+                      ? isAr
+                        ? "جارٍ…"
+                        : "Opening…"
+                      : isAr
+                        ? "فتح الحصة"
+                        : "Open session"}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        {todaySessionsNotOnTimetable.length > 0 ? (
+          <ul className="mt-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#51689A] dark:text-[#9BA8C4]">
+              {isAr ? "حصص مسجّلة اليوم" : "Recorded sessions today"}
+            </p>
+            {todaySessionsNotOnTimetable.map((session) => {
+              const busySess = startingSlotKey === `sess-${session.id}`;
+              const isClosed = savedSessionIds.has(session.id);
+              return (
+                <li
+                  key={`today-sess-${session.id}`}
+                  className="flex flex-col gap-3 rounded-md border border-[#51689A]/20 bg-white/80 px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-[#383F58] dark:bg-[#242A40]/60"
+                >
+                  <div className="min-w-0 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-[#1B2065] dark:text-[#EEF4F7]">
+                        {formatSessionSubtitle(
+                          session,
+                          locale,
+                          isAr ? "اليوم" : "Today"
+                        )}
+                      </p>
+                      {isClosed ? (
+                        <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
+                          {isAr ? "محفوظة" : "Saved"}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={busySess}
+                    className="h-9 shrink-0 rounded-md bg-[#51689A] px-6 text-sm font-medium text-white shadow-md hover:bg-[#51689A]/90 disabled:opacity-50"
+                    onClick={() => {
+                      setStartingSlotKey(`sess-${session.id}`);
+                      void startWorking(session).finally(() =>
+                        setStartingSlotKey(null)
+                      );
+                    }}
+                  >
+                    <CirclePlay className="me-2 size-4" strokeWidth={2} />
+                    {busySess
+                      ? isAr
+                        ? "جارٍ…"
+                        : "Opening…"
+                      : isClosed
+                        ? isAr
+                          ? "مراجعة الحضور"
+                          : "Review attendance"
+                        : isAr
+                          ? "متابعة الحصة"
+                          : "Continue"}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        {!timetableLoading &&
+        !timetableError &&
+        !todayTimetable?.is_weekend &&
+        !(todayTimetable?.sessions?.length ?? 0) &&
+        upcomingExtraSessions.length === 0 &&
+        todaySessionsNotOnTimetable.length === 0 ? (
           <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
             {isAr
               ? "لا حصص في الجدول لهذا اليوم."
               : "No classes on your timetable for today."}
           </p>
-        )}
+        ) : null}
       </section>
 
       <section className="space-y-3">
@@ -1459,8 +1660,8 @@ export default function ProfessorSessionsView() {
           </h2>
           <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
             {isAr
-              ? "اطلب تعويضًا أو حصة إضافية"
-              : "Request a replacement or extra session"}
+              ? "اطلب حصة إضافية — تُرسل للشؤون التعليمية للموافقة"
+              : "Request an extra session — sent to schooling for approval"}
           </p>
         </div>
         <div className="flex w-full justify-center">
@@ -1583,8 +1784,8 @@ export default function ProfessorSessionsView() {
             </DialogTitle>
             <DialogDescription className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
               {isAr
-                ? "أدخل التفاصيل لبدء الحصة."
-                : "Fill in the details to start your session."}
+                ? "يُرسل الطلب إلى الشؤون التعليمية. بعد الموافقة، تظهر الحصة في «upcoming» في يومها لفتح سجل الحضور."
+                : "This sends a request to schooling. After approval, it appears under upcoming on that day so you can open the attendance sheet."}
             </DialogDescription>
             {assignments.length === 0 && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100">
@@ -1610,20 +1811,20 @@ export default function ProfessorSessionsView() {
             <Button
               type="button"
               className="h-12 w-full max-w-sm cursor-pointer self-center rounded-full bg-[#51689A] text-base font-medium text-white shadow-sm hover:bg-[#51689A]/90 disabled:cursor-not-allowed disabled:opacity-60 p-2"
-              onClick={() => void createSession()}
+              onClick={() => void submitExtraSessionRequest()}
               disabled={creating || newAssignmentId === ""}
             >
               <span className="inline-flex items-center gap-2">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white dark:bg-[#1A2036]/15">
-                  <Play className="size-4 fill-white text-white" />
+                  <Play className="size-4 fill-[#51689A] text-[#51689A] dark:fill-[#EEF4F7] dark:text-[#EEF4F7]" />
                 </span>
                 {creating
                   ? isAr
-                    ? "جارٍ الإنشاء…"
-                    : "Creating…"
+                    ? "جارٍ الإرسال…"
+                    : "Sending…"
                   : isAr
-                    ? "إنشاء الحصة"
-                    : "Create session"}
+                    ? "إرسال الطلب"
+                    : "Submit request"}
               </span>
             </Button>
           </DialogFooter>

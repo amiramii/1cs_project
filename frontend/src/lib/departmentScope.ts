@@ -25,14 +25,21 @@ export function inferDepartmentFromYearName(
   yearName: string | null | undefined
 ): SchoolingDepartment | null {
   if (typeof yearName !== "string") return null
-  const n = yearName.trim().toLowerCase()
+  const n = yearName.trim().toLowerCase().replace(/\s+/g, "")
   if (!n) return null
 
-  // Accept common variants like "1CS", "1 cs", "cycle supérieur", etc.
-  if (/(^|[^a-z])cs([^a-z]|$)/i.test(n) || n.includes("cycle superieur") || n.includes("cycle supérieur")) {
+  // Numeric names from CSV import (aligned with scheduleDocumentHelpers)
+  if (n === "1" || n === "1cp") return "CP"
+  if (n === "2" || n === "2cp") return "CP"
+  if (n === "3" || n === "1cs") return "CS"
+  if (n === "4" || n === "2cs") return "CS"
+  if (n === "5" || n === "5cs" || n === "3cs") return "CS"
+
+  // Label variants
+  if (/(^|[^a-z])cs([^a-z]|$)/i.test(n) || n.includes("cyclesuperieur") || n.includes("cyclesupérieur")) {
     return "CS"
   }
-  if (/(^|[^a-z])cp([^a-z]|$)/i.test(n) || n.includes("cycle preparatoire") || n.includes("cycle préparatoire")) {
+  if (/(^|[^a-z])cp([^a-z]|$)/i.test(n) || n.includes("cyclepreparatoire") || n.includes("cyclepréparatoire")) {
     return "CP"
   }
   return null

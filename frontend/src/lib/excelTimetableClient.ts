@@ -7,6 +7,7 @@ import {
 } from "@/lib/checkinClient"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
 import { getScheduleFileFetchUrl } from "@/lib/scheduleMediaUrl"
+import { yearNameToGradeKey } from "@/lib/scheduleDocumentHelpers"
 import { getAccessToken, getStoredUserEmail } from "@/lib/tokenStorage"
 
 export type TimetableSlotRow = {
@@ -47,15 +48,10 @@ const SLOT_ORDER: Record<string, number> = {
 function normalizeYearToFilter(
   raw: string | null | undefined
 ): Exclude<GradeFilter, "all"> | null {
-  if (!raw?.trim()) return null
-  const n = raw.toUpperCase().replace(/\s+/g, "")
-  if (n === "1" || n.includes("1CP")) return "1CP"
-  if (n === "2" || n.includes("2CP")) return "2CP"
-  if (n.includes("3CS") || n.includes("5CS") || n === "5") return "3CS"
-  if (n.includes("2CS") || n === "4") return "2CS"
-  if (n.includes("1CS") || n === "3") return "1CS"
-  if (n.includes("DOCTOR")) return "DOCTORATE"
-  return null
+  const grade = yearNameToGradeKey(raw)
+  if (!grade) return null
+  if (grade === "Doctorats") return "DOCTORATE"
+  return grade
 }
 
 export function normalizeGroupToken(value: string): string {
@@ -82,7 +78,9 @@ export function pickLatestExcelForGrade(
   items: ExcelScheduleRow[],
   yearMap: Map<number, string>,
   gradeFilter: GradeFilter,
-  semester?: "S1" | "S2"
+  semester?: "S1" | "S2",
+  /** When set, prefer Excel rows whose `year` FK matches the student profile. */
+  preferredYearId?: number | null
 ): ExcelScheduleRow | null {
   let filtered =
     gradeFilter === "all"
@@ -92,6 +90,17 @@ export function pickLatestExcelForGrade(
     filtered = filtered.filter((row) => row.semester === semester)
   }
   if (filtered.length === 0) return null
+
+  if (preferredYearId != null) {
+    const byStudentYear = filtered.filter((row) => {
+      const y = row.year
+      if (typeof y === "number") return y === preferredYearId
+      if (y && typeof y === "object" && "id" in y) return y.id === preferredYearId
+      return false
+    })
+    if (byStudentYear.length > 0) filtered = byStudentYear
+  }
+
   return [...filtered].sort(
     (a, b) =>
       new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
@@ -170,6 +179,8 @@ export async function loadWeeklyTimetableSlots(options: {
   gradeFilter: GradeFilter
   groupName?: string | null
   semester?: "S1" | "S2"
+  /** Prefer schedules linked to this academic year id (student profile). */
+  studentYearId?: number | null
 }): Promise<{ slots: TimetableSlotRow[]; sourceTitle: string | null }> {
   const token = getAccessToken()
   const headers: HeadersInit = {
@@ -184,7 +195,8 @@ export async function loadWeeklyTimetableSlots(options: {
     excelRows,
     yearMap,
     options.gradeFilter,
-    options.semester
+    options.semester,
+    options.studentYearId
   )
   if (!latest?.file) {
     return { slots: [], sourceTitle: null }

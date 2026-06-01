@@ -204,88 +204,21 @@ function sundayStartWeekIsoBounds(): { start: string; end: string } {
   return { start: iso(start), end: iso(end) };
 }
 
-type StudentSessionSlotRow = {
-  date?: string;
-  module?: string;
-  start_time?: string;
-};
-
-function studentSessionSlotKey(row: StudentSessionSlotRow): string {
-  return `${row.date ?? ""}|${row.module ?? ""}|${row.start_time ?? ""}`;
-}
-
-/**
- * Best-effort count of today's class slots for the signed-in student (frontend only).
- * Derives from attendance sessions, then falls back to absence + justification-linked slots.
- */
-async function countStudentSessionsToday(): Promise<number> {
-  const today = todayLocalIso();
-  const apiBase = getApiBaseUrl();
-  const headers = listHeaders();
-
-  try {
-    const sessions = await loadDrfListAll<{ date?: string }>(
-      apiBase,
-      `${checkinPath.attendance.sessions}/`,
-      headers,
-      {}
-    );
-    if (sessions.length > 0) {
-      return sessions.filter((s) => s.date === today).length;
-    }
-  } catch {
-    /* ignore */
-  }
-
-  const slotKeys = new Set<string>();
-
-  try {
-    const dateRes = await fetchStudentAbsencesByDate();
-    if (dateRes.ok) {
-      const raw: unknown = await dateRes.json();
-      const arr = unwrapList<StudentSessionSlotRow>(raw);
-      for (const row of arr) {
-        if (row.date === today) slotKeys.add(studentSessionSlotKey(row));
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    const justRows = await loadStudentJustificationsList();
-    for (const row of justRows) {
-      const atts = row.attendances;
-      if (!Array.isArray(atts)) continue;
-      for (const att of atts) {
-        const slot = att as StudentSessionSlotRow;
-        if (slot.date === today) slotKeys.add(studentSessionSlotKey(slot));
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  return slotKeys.size;
-}
-
 export async function fetchStudentDashboardMetrics(): Promise<{
   pendingJustifications: number;
-  sessionsToday: number;
 }> {
   try {
-    const [justRows, sessionsToday] = await Promise.all([
-      loadStudentJustificationsList().catch(() => [] as Record<string, unknown>[]),
-      countStudentSessionsToday(),
-    ]);
+    const justRows = await loadStudentJustificationsList().catch(
+      () => [] as Record<string, unknown>[]
+    );
 
     const pendingJustifications = justRows.filter(
       (j) => String(j.status ?? "").toLowerCase() === "pending"
     ).length;
 
-    return { pendingJustifications, sessionsToday };
+    return { pendingJustifications };
   } catch {
-    return { pendingJustifications: 0, sessionsToday: 0 };
+    return { pendingJustifications: 0 };
   }
 }
 

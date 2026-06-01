@@ -519,7 +519,10 @@ export function loadExtraSessionSchoolingList() {
     getApiBaseUrl(),
     `${checkinPath.extraSessions.collection}/`,
     listAuthHeaders(),
-    {}
+    {
+      requireFirstOk: true,
+      errorMessage: "Failed to load extra session requests",
+    }
   )
 }
 

@@ -36,7 +36,7 @@ export default function Page() {
 
   if (appRole === "prof") {
     return (
-      <div className="mx-auto w-full max-w-6xl flex-1 pb-6 pt-2 sm:pt-4">
+      <div className="w-full min-w-0 max-w-full flex-1 pb-6 pt-2 sm:pt-4">
         <ProfScheduleList variant="prof-tab" />
       </div>
     );

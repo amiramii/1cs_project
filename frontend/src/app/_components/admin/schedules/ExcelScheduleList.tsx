@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation"
 import SearchBar from "../SearchBar"
 import { useLanguage } from "@/app/_components/language-provider"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   Select,
   SelectContent,
@@ -25,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SCHEDULE_LIST_EMPTY_CLASS } from "@/lib/scheduleUiClasses"
 import {
   loadAllAcademicYears,
   loadAllExcelSchedules,
@@ -200,8 +202,8 @@ export default function ExcelScheduleList() {
     "absolute top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-[#1B2065]/85 text-white shadow-md transition-colors hover:!bg-[#1B2065] hover:!text-white focus-visible:!bg-[#1B2065] focus-visible:!text-white [&_svg]:shrink-0 [&_svg]:text-inherit disabled:pointer-events-none disabled:opacity-35"
 
   return (
-    <section className="mt-4 flex min-h-[calc(100dvh-7.5rem)] w-full min-w-0 max-w-none flex-1 flex-col space-y-4 self-stretch">
-      <div className="flex w-full max-w-none flex-wrap items-center justify-between gap-2 sm:gap-3">
+    <section className="mt-4 flex min-h-[calc(100dvh-7.5rem)] w-full min-w-0 max-w-full flex-1 flex-col space-y-4 self-stretch">
+      <div className="flex w-full max-w-full flex-wrap items-center justify-between gap-2 sm:gap-3">
         <Button
           type="button"
           variant="outline"
@@ -209,12 +211,12 @@ export default function ExcelScheduleList() {
           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border-border bg-card px-3 text-sm text-foreground hover:bg-accent"
           aria-label={isArabic ? "الطلاب" : "Students"}
         >
-          <MoveLeft size={18} />
+          {dir === "rtl" ? <MoveRight size={18} /> : <MoveLeft size={18} />}
           <span className="hidden sm:inline">
             {isArabic ? "الطلاب" : "Students"}
           </span>
         </Button>
-        <h1 className="font-montserrat text-sm font-semibold text-foreground sm:text-xl xl:text-2xl">
+        <h1 className="min-w-0 flex-1 text-center font-montserrat text-sm font-semibold text-foreground sm:text-xl xl:text-2xl">
           {isArabic ? "ملفات Excel" : "Excel Files"}
         </h1>
         <Button
@@ -227,12 +229,12 @@ export default function ExcelScheduleList() {
           <span className="hidden sm:inline">
             {isArabic ? "العودة للتحميل" : "Back to Upload"}
           </span>
-          <MoveRight size={18} />
+          {dir === "rtl" ? <MoveLeft size={18} /> : <MoveRight size={18} />}
         </Button>
       </div>
 
-      <div className="flex w-full min-w-0 max-w-none flex-1 flex-col gap-6 bg-transparent">
-        <div className="flex w-full flex-col gap-4 rounded-xl border border-blue-primary/50 bg-[#F6F9FB] p-3 shadow-md lg:flex-row lg:items-center lg:justify-between dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
+      <div className="flex w-full min-w-0 max-w-full flex-1 flex-col gap-6 bg-transparent">
+        <div className="flex w-full min-w-0 flex-col gap-4 rounded-xl border border-blue-primary/50 bg-[#F6F9FB] p-3 text-start shadow-md lg:flex-row lg:items-center lg:justify-between dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
           <div className="flex min-w-0 shrink-0 items-center gap-3">
             <div className="flex h-fit w-fit shrink-0 items-center justify-center rounded-sm border border-blue-primary bg-slate-50 dark:border-[#383F58] dark:bg-[#242A40]">
               <FileSpreadsheet
@@ -257,8 +259,8 @@ export default function ExcelScheduleList() {
             </div>
           </div>
 
-          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center lg:w-auto lg:shrink-0 lg:justify-end">
-            <div className="w-full max-w-[7.5rem] shrink-0 sm:w-32 sm:max-w-none md:w-48">
+          <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:shrink-0">
+            <div className="w-full min-w-0 shrink-0 sm:max-w-xs md:max-w-sm">
               <SearchBar
                 value={search}
                 onChange={setSearch}
@@ -306,7 +308,11 @@ export default function ExcelScheduleList() {
 
         {!loading ? (
           <div
-            className={showCarousel ? "relative px-2 sm:px-12" : "relative"}
+            className={
+              showCarousel
+                ? "relative min-w-0 max-w-full px-2 sm:px-12 md:px-14"
+                : "relative min-w-0 max-w-full"
+            }
           >
             {showCarousel ? (
               <>
@@ -352,7 +358,7 @@ export default function ExcelScheduleList() {
                 </div>
               ) : null}
               {!error && filteredCount === 0 ? (
-                <div className="col-span-full flex min-h-[12rem] w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center text-sm text-muted-foreground dark:border-[#383F58] dark:bg-[#1A2036]/40">
+                <div className={cn("col-span-full", SCHEDULE_LIST_EMPTY_CLASS)}>
                   {listEmptyMessage}
                 </div>
               ) : null}

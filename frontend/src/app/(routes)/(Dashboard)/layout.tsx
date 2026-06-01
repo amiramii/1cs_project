@@ -114,15 +114,9 @@ export default function DashboardLayout({
     ) ??
     navItems[0];
 
-  /** Sidebar is fixed: use padding (not margin) so w-full does not overflow the viewport. */
+  /** Fixed sidebar sits on the start edge (left LTR / right RTL) — inset with padding-inline-start. */
   const shellClass = `box-border flex min-h-screen w-full min-w-0 max-w-full flex-col pb-24 transition-[padding] duration-200 md:pb-0 ${
-    expanded
-      ? isRtl
-        ? "md:pe-64"
-        : "md:ps-64"
-      : isRtl
-        ? "md:pe-24"
-        : "md:ps-24"
+    expanded ? "md:ps-64" : "md:ps-24"
   }`;
 
   return (

@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import PdfPreview from "./PdfPreview"
-import StudentExcelTimetablePanel from "./StudentExcelTimetablePanel"
+import { SCHEDULE_LIST_EMPTY_CLASS } from "@/lib/scheduleUiClasses"
 
 type ScheduleListShellProps = {
   titleEn: string
@@ -507,13 +507,13 @@ export default function ScheduleListShell({
     <section
       className={
         isStudentBrowse || hideTopNavigation
-          ? "mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col gap-5 self-stretch"
-          : "mt-4 flex min-h-[calc(100dvh-7.5rem)] w-full min-w-0 max-w-none flex-1 flex-col space-y-4 self-stretch"
+          ? "flex w-full min-w-0 max-w-full flex-1 flex-col gap-5 self-stretch"
+          : "mt-4 flex min-h-[calc(100dvh-7.5rem)] w-full min-w-0 max-w-full flex-1 flex-col space-y-4 self-stretch"
       }
     >
       {isStudentBrowse ? (
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
+          <div className="min-w-0 text-start">
             <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl dark:text-[#EEF4F7]">
               {title}
             </h1>
@@ -528,7 +528,10 @@ export default function ScheduleListShell({
             disabled={
               headerDownloading || loading || !!error || !visibleSchedules[0]
             }
-            className="inline-flex self-end h-fit py-2 shrink-0 items-center justify-center gap-2 rounded-lg border-0 bg-[#51689A] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#51689A]/90 disabled:opacity-50"
+            className={cn(
+              "inline-flex h-fit shrink-0 items-center justify-center gap-2 self-end rounded-lg border-0 bg-[#51689A] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#51689A]/90 disabled:opacity-50 sm:self-auto",
+              dir === "rtl" && "sm:ms-0"
+            )}
             onClick={() => void downloadScheduleItem(visibleSchedules[0])}
           >
             <ArrowDownToLine className="size-4 shrink-0" aria-hidden />
@@ -542,11 +545,11 @@ export default function ScheduleListShell({
           </Button>
         </header>
       ) : hideTopNavigation ? (
-        <h1 className="text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl dark:text-[#EEF4F7]">
+        <h1 className="text-start text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl dark:text-[#EEF4F7]">
           {title}
         </h1>
       ) : (
-        <div className="flex w-full max-w-none flex-wrap items-center justify-between gap-2 sm:gap-3">
+        <div className="flex w-full max-w-full flex-wrap items-center justify-between gap-2 sm:gap-3">
           <Button
             type="button"
             variant="outline"
@@ -554,10 +557,10 @@ export default function ScheduleListShell({
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border-border bg-card px-3 text-sm text-foreground hover:bg-accent"
             aria-label={backLabel}
           >
-            <MoveLeft size={18} />
+            {dir === "rtl" ? <MoveRight size={18} /> : <MoveLeft size={18} />}
             <span className="hidden sm:inline">{backLabel}</span>
           </Button>
-          <h1 className="font-montserrat text-sm font-semibold text-foreground sm:text-xl xl:text-2xl">
+          <h1 className="min-w-0 flex-1 text-center font-montserrat text-sm font-semibold text-foreground sm:text-xl xl:text-2xl">
             {title}
           </h1>
           <Button
@@ -568,22 +571,14 @@ export default function ScheduleListShell({
             aria-label={nextLabel}
           >
             <span className="hidden sm:inline">{nextLabel}</span>
-            <MoveRight size={18} />
+            {dir === "rtl" ? <MoveLeft size={18} /> : <MoveRight size={18} />}
           </Button>
         </div>
       )}
 
-      <div className="flex w-full min-w-0 max-w-none flex-1 flex-col gap-6 bg-transparent">
-        {audience === "student" ? (
-          <StudentExcelTimetablePanel
-            isArabic={isArabic}
-            gradeFilter={gradeFilter}
-            studentBrowse={isStudentBrowse}
-          />
-        ) : null}
-
+      <div className="flex w-full min-w-0 max-w-full flex-1 flex-col gap-6 bg-transparent">
         {!isStudentBrowse ? (
-          <div className="flex w-full flex-col gap-4 rounded-xl border border-blue-primary/50 bg-[#F6F9FB] p-3 shadow-md lg:flex-row lg:items-center lg:justify-between dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
+          <div className="flex w-full min-w-0 flex-col gap-4 rounded-xl border border-blue-primary/50 bg-[#F6F9FB] p-3 text-start shadow-md lg:flex-row lg:items-center lg:justify-between dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
             <div className="flex min-w-0 shrink-0 items-center gap-3">
               <div className="flex h-fit w-fit shrink-0 items-center justify-center rounded-sm border border-blue-primary bg-slate-50 dark:border-[#383F58] dark:bg-[#242A40] ">
                 <Users className="text-[#1B2065] dark:text-[#EEF4F7]" size={20} aria-hidden />
@@ -606,8 +601,8 @@ export default function ScheduleListShell({
               </div>
             </div>
 
-            <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center lg:w-auto lg:shrink-0 lg:justify-end">
-              <div className="w-full max-w-[7.5rem] shrink-0 sm:w-32 sm:max-w-none md:w-48">
+            <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-end lg:w-auto lg:shrink-0">
+              <div className="w-full min-w-0 shrink-0 sm:max-w-xs md:max-w-sm">
                 <SearchBar
                   value={search}
                   onChange={setSearch}
@@ -681,7 +676,7 @@ export default function ScheduleListShell({
                 </div>
               ) : null}
               {!error && filteredSchedules.length === 0 ? (
-                <div className="flex min-h-[12rem] w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center text-sm text-muted-foreground">
+                <div className={SCHEDULE_LIST_EMPTY_CLASS}>
                   {listEmptyMessage}
                 </div>
               ) : null}
@@ -690,8 +685,8 @@ export default function ScheduleListShell({
                   <div
                     className={
                       showScheduleCarousel
-                        ? "relative px-2 sm:px-12 md:px-16"
-                        : "relative"
+                        ? "relative min-w-0 max-w-full px-2 sm:px-12 md:px-14"
+                        : "relative min-w-0 max-w-full"
                     }
                   >
                     {showScheduleCarousel ? (
@@ -824,7 +819,9 @@ export default function ScheduleListShell({
           ) : (
             <div
               className={
-                showScheduleCarousel ? "relative px-2 sm:px-12" : "relative"
+                showScheduleCarousel
+                  ? "relative min-w-0 max-w-full px-2 sm:px-12 md:px-14"
+                  : "relative min-w-0 max-w-full"
               }
             >
               {showScheduleCarousel ? (
@@ -895,7 +892,7 @@ export default function ScheduleListShell({
                   </div>
                 ) : null}
                 {!error && filteredSchedules.length === 0 ? (
-                  <div className="col-span-full flex min-h-[12rem] w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center text-sm text-muted-foreground">
+                  <div className={cn("col-span-full", SCHEDULE_LIST_EMPTY_CLASS)}>
                     {listEmptyMessage}
                   </div>
                 ) : null}

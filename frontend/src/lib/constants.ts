@@ -205,11 +205,6 @@ export function getSideBarItems(
       href: "/Dashboard",
     },
     {
-      iconId: "sessions",
-      label: t("Sessions", "الحصص"),
-      href: "/Sessions",
-    },
-    {
       iconId: "absences",
       label: t("Absences", "الغياب"),
       href: "/Absences",

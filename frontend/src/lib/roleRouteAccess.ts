@@ -87,8 +87,6 @@ export function isRouteAllowedForRole(pathname: string, role: AppSidebarRole): b
     p.startsWith("/Scheduals/") ||
     p === "/Justifications" ||
     p.startsWith("/Justifications/") ||
-    p === "/Sessions" ||
-    p.startsWith("/Sessions/") ||
     p === "/Absences" ||
     p.startsWith("/Absences/")
   )
