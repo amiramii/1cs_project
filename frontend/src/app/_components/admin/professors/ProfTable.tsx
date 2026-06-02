@@ -47,7 +47,8 @@ import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
 import { deleteTeacherById } from "@/lib/checkinClient"
 import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
-import { uploadSingleCsvRow } from "@/lib/singleCsvUpload"
+import { createTeacherManual } from "@/lib/manualUserCreate"
+import { isNetworkFailure, apiUnreachableMessage } from "@/lib/fetchErrors"
 
 type Semester = "S1" | "S2"
 
@@ -400,10 +401,7 @@ export default function DataTable() {
     setSavingDrawer(true)
     setLoadError(null)
     try {
-      const res = await uploadSingleCsvRow(
-        "teacher",
-        ["full_name", "email", "module", "groups", "semester", "section", "year"],
-        {
+      await createTeacherManual({
         full_name: teacherForm.full_name,
         email: teacherForm.email,
         module: teacherForm.module,
@@ -412,16 +410,17 @@ export default function DataTable() {
         section: teacherForm.section,
         year: teacherForm.year,
       })
-      if (!res.ok) throw new Error(await res.text())
       setDrawerMode(null)
       await loadProfessors()
     } catch (error) {
       setLoadError(
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : isArabic
-            ? "تعذر حفظ الأستاذ."
-            : "Could not save professor."
+        isNetworkFailure(error)
+          ? apiUnreachableMessage(getApiBaseUrl(), isArabic)
+          : error instanceof Error && error.message.trim()
+            ? error.message
+            : isArabic
+              ? "تعذر حفظ الأستاذ."
+              : "Could not save professor."
       )
     } finally {
       setSavingDrawer(false)

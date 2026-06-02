@@ -5,7 +5,7 @@
 import api, { attemptTokenRefresh } from "./api"
 import { checkinPath } from "./checkinApi"
 import { buildApiAbsoluteUrl, getApiBaseUrl } from "./apiBase"
-import { getAccessToken } from "./tokenStorage"
+import { clearTokens, getAccessToken } from "./tokenStorage"
 import { loadDrfListAll, unwrapList } from "./drfPaginatedList"
 import { summarizeUpstreamError } from "./drfError"
 
@@ -59,6 +59,33 @@ export async function postTokenRefresh(refresh: string) {
 
 // --- `authentication` app (router mounted at /api/) ---
 
+async function fetchWithAuth(
+  url: string,
+  init: RequestInit,
+  retry = true
+): Promise<Response> {
+  const headers = new Headers(init.headers)
+  const token = getAccessToken()
+  if (token) headers.set("Authorization", `Bearer ${token}`)
+
+  let res = await fetch(url, { ...init, headers })
+
+  if (res.status === 401 && retry && typeof window !== "undefined") {
+    const refreshed = await attemptTokenRefresh()
+    if (refreshed) {
+      const nextToken = getAccessToken()
+      if (nextToken) headers.set("Authorization", `Bearer ${nextToken}`)
+      else headers.delete("Authorization")
+      res = await fetch(url, { ...init, headers })
+    } else {
+      clearTokens()
+      window.location.href = "/Login"
+    }
+  }
+
+  return res
+}
+
 export async function uploadCheckinCsv(
   file: File,
   userType: "student" | "teacher" | "schooling"
@@ -66,9 +93,8 @@ export async function uploadCheckinCsv(
   const formData = new FormData()
   formData.append("file", file)
   formData.append("user_type", userType)
-  return fetch(checkinUrl(checkinPath.upload), {
+  return fetchWithAuth(checkinUrl(checkinPath.upload), {
     method: "POST",
-    headers: listAuthHeaders(),
     body: formData,
   })
 }

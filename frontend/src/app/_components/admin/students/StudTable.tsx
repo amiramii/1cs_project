@@ -56,7 +56,8 @@ import {
   notifyAdminCsvUploadSuccess,
   subscribeAdminCsvUploadSuccess,
 } from "@/lib/adminCsvUploadRefresh"
-import { uploadSingleCsvRow } from "@/lib/singleCsvUpload"
+import { createStudentManual } from "@/lib/manualUserCreate"
+import { isNetworkFailure, apiUnreachableMessage } from "@/lib/fetchErrors"
 import { EXCLUSIONS_RECALCULATED_EVENT } from "@/lib/moduleExclusionPolicy"
 import { PROF_SESSION_SAVED_EVENT } from "@/lib/professorSessionEvents"
 
@@ -363,10 +364,7 @@ export default function StudTable() {
         )
         return
       }
-      const res = await uploadSingleCsvRow(
-        "student",
-        ["full_name", "email", "n_inscript", "year", "section", "group"],
-        {
+      await createStudentManual({
         full_name: studentForm.full_name,
         email: studentForm.email,
         n_inscript: studentForm.n_inscript,
@@ -374,18 +372,19 @@ export default function StudTable() {
         section: studentForm.section,
         group: studentForm.group,
       })
-      if (!res.ok) throw new Error(await res.text())
       setDrawerMode(null)
       setSelectedIds(new Set())
       notifyAdminCsvUploadSuccess("student")
       await loadStudents()
     } catch (error) {
       setLoadError(
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : isArabic
-            ? "تعذر حفظ الطالب."
-            : "Could not save student."
+        isNetworkFailure(error)
+          ? apiUnreachableMessage(getApiBaseUrl(), isArabic)
+          : error instanceof Error && error.message.trim()
+            ? error.message
+            : isArabic
+              ? "تعذر حفظ الطالب."
+              : "Could not save student."
       )
     } finally {
       setSavingDrawer(false)

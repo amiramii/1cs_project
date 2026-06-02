@@ -36,7 +36,8 @@ import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
 import { deleteSchoolingById, patchSchooling } from "@/lib/checkinClient"
 import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
-import { uploadSingleCsvRow } from "@/lib/singleCsvUpload"
+import { createSchoolingManual } from "@/lib/manualUserCreate"
+import { isNetworkFailure, apiUnreachableMessage } from "@/lib/fetchErrors"
 
 type StaffRow = {
   id: string
@@ -253,30 +254,33 @@ export default function DataTable() {
     setSavingDrawer(true)
     setLoadError(null)
     try {
-      const res =
-        drawerMode === "add"
-          ? await uploadSingleCsvRow(
-              "schooling",
-              ["full_name", "email", "department"],
-              {
-              full_name: staffForm.full_name,
-              email: staffForm.email,
-              department: staffForm.department,
-            })
-          : await patchSchooling(selectedStaff?.id ?? "", {
-              department: staffForm.department,
-            })
-      if (!res.ok) throw new Error(await res.text())
+      if (drawerMode === "add") {
+        await createSchoolingManual({
+          full_name: staffForm.full_name,
+          email: staffForm.email,
+          department: staffForm.department,
+        })
+      } else {
+        const res = await patchSchooling(selectedStaff?.id ?? "", {
+          department: staffForm.department,
+        })
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(text.trim() || "Could not update staff member.")
+        }
+      }
       setDrawerMode(null)
       setSelectedIds(new Set())
       await loadStaff()
     } catch (error) {
       setLoadError(
-        error instanceof Error && error.message.trim()
-          ? error.message
-          : isArabic
-            ? "تعذر حفظ الموظف."
-            : "Could not save staff member."
+        isNetworkFailure(error)
+          ? apiUnreachableMessage(getApiBaseUrl(), isArabic)
+          : error instanceof Error && error.message.trim()
+            ? error.message
+            : isArabic
+              ? "تعذر حفظ الموظف."
+              : "Could not save staff member."
       )
     } finally {
       setSavingDrawer(false)
