@@ -11,25 +11,31 @@ import {
 
 const ROLE_PROBED_SESSION_KEY = "chekin:role-probed";
 
+type ProbeResult = { ok: boolean; status: number };
+
 async function probeAuthenticatedGet(
   path: string,
   accessToken: string
-): Promise<boolean> {
+): Promise<ProbeResult> {
   try {
     const res = await fetch(buildApiAbsoluteUrl(path), {
       method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
       cache: "no-store",
     });
-    return res.ok;
+    return { ok: res.ok, status: res.status };
   } catch {
-    return false;
+    return { ok: false, status: 0 };
   }
 }
 
 /**
  * Infer the signed-in user's UI role using existing backend permissions (no backend changes).
- * Probes role-specific endpoints that return 200 only for the matching Django `User.role`.
+ * Probes role-specific endpoints; admin is inferred when the token is valid but the user
+ * is not student, teacher, or schooling (matches Django's four `User.role` values).
  */
 export async function resolveAppRoleFromApi(
   accessToken?: string | null
@@ -37,19 +43,40 @@ export async function resolveAppRoleFromApi(
   const token = accessToken ?? getAccessToken();
   if (!token) return null;
 
-  if (await probeAuthenticatedGet(checkinPath.absences.byModule, token)) {
+  if ((await probeAuthenticatedGet(checkinPath.absences.byModule, token)).ok) {
     return "student";
   }
 
-  if (await probeAuthenticatedGet(checkinPath.teacherAbsence.myRequests, token)) {
+  if (
+    (await probeAuthenticatedGet(checkinPath.teacherAbsence.myRequests, token)).ok
+  ) {
     return "prof";
   }
 
-  if (await probeAuthenticatedGet(checkinPath.justifications.collection, token)) {
+  if (
+    (await probeAuthenticatedGet(checkinPath.justifications.collection, token)).ok
+  ) {
     return "schooling";
   }
 
-  if (await probeAuthenticatedGet(checkinPath.attendance.sessions, token)) {
+  // Django staff admin (`is_staff`) — UserViewSet uses IsAdminUser
+  if ((await probeAuthenticatedGet(checkinPath.users, token)).ok) {
+    return "admin";
+  }
+
+  // Role-based admin / professor session access
+  if (
+    (await probeAuthenticatedGet(checkinPath.attendance.sessions, token)).ok
+  ) {
+    return "admin";
+  }
+
+  // Any other authenticated account (typically `User.role == ADMIN`)
+  const ping = await probeAuthenticatedGet(
+    checkinPath.notifications.unreadCount,
+    token
+  );
+  if (ping.ok) {
     return "admin";
   }
 

@@ -62,7 +62,7 @@ async function login(email: string, password: string, remember = false) {
   if (!appRole) {
     clearTokens();
     throw new Error(
-      "Could not determine your account role. Please contact support."
+      "Could not determine your account role. Check your connection and try again."
     );
   }
 
