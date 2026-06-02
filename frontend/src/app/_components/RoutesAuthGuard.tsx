@@ -43,8 +43,8 @@ export default function RoutesAuthGuard({
 
   useEffect(() => {
     if (redirectToDashboard) {
-      const role = getCurrentAppRole("admin")
-      router.replace(getDashboardHomePath(role))
+      const role = getCurrentAppRole()
+      router.replace(role ? getDashboardHomePath(role) : "/Login")
     } else if (redirectToLogin) {
       router.replace("/Login")
     }

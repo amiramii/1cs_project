@@ -16,9 +16,17 @@ function isDevRolePreviewEnabled(): boolean {
 /** Fired when dev role preview changes (development only). */
 export const DEV_APP_ROLE_CHANGED_EVENT = "dev-app-role-override-changed";
 
+/** Fired when the resolved app role is persisted (login / API probe). */
+export const APP_ROLE_CHANGED_EVENT = "chekin-app-role-changed";
+
 function dispatchDevRoleChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(DEV_APP_ROLE_CHANGED_EVENT));
+}
+
+export function dispatchAppRoleChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(APP_ROLE_CHANGED_EVENT));
 }
 
 /** Clear preview mode (use JWT / stored role again). */
@@ -93,17 +101,21 @@ export function normalizeRole(raw: unknown): StoredAppRole | null {
     return "admin";
   }
 
-  if (
-    role === "prof" ||
-    role === "professor" ||
-    role === "teacher" ||
-    role === "teaching"
-  ) {
+  /** Django `User.Roles` — TEACHER, STUDENT, ADMIN, SCHOOLING */
+  if (role === "teacher") {
     return "prof";
   }
 
   if (role === "student" || role === "etudiant") {
     return "student";
+  }
+
+  if (
+    role === "prof" ||
+    role === "professor" ||
+    role === "teaching"
+  ) {
+    return "prof";
   }
 
   /** Django `User.Roles.SCHOOLING` — academic office / scolarité */
@@ -134,7 +146,11 @@ function extractRoleFromPayload(payload: JwtPayload | null): StoredAppRole | nul
     if (mapped) return mapped;
   }
 
-  if (payload.is_superuser === true || payload.is_staff === true) {
+  if (payload.is_superuser === true) {
+    return "admin";
+  }
+
+  if (payload.is_staff === true && !payload.role) {
     return "admin";
   }
 
@@ -249,7 +265,7 @@ export function getCurrentUserDisplayName(): string | null {
   return null;
 }
 
-export function getCurrentAppRole(fallback: StoredAppRole = "admin"): StoredAppRole {
+export function getCurrentAppRole(fallback?: StoredAppRole): StoredAppRole | null {
   const devOverride = getDevRoleOverride();
   if (devOverride) return devOverride;
 
@@ -260,9 +276,12 @@ export function getCurrentAppRole(fallback: StoredAppRole = "admin"): StoredAppR
   }
 
   const fromStorage = getStoredAppRole();
-  return fromStorage ?? fallback;
+  if (fromStorage) return fromStorage;
+
+  return fallback ?? null;
 }
 export function clearTokens(){
+  sessionStorage.removeItem("chekin:role-probed");
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(APP_ROLE_KEY);

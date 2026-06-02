@@ -142,7 +142,8 @@ function filterNotificationsForRole(
 }
 
 function mergeClientNotifications(base: NotificationDto[]): NotificationDto[] {
-  const role = getCurrentAppRole("admin");
+  const role = getCurrentAppRole();
+  if (!role) return base;
   const pushed = mergeUniqueById(
     clientPushedNotifications,
     readStoredRoleNotifications()
@@ -278,7 +279,8 @@ export async function markNotificationRead(id: string): Promise<boolean> {
 }
 
 export async function markAllNotificationsRead(): Promise<boolean> {
-  const role = getCurrentAppRole("admin");
+  const role = getCurrentAppRole();
+  if (!role) return false;
 
   clientPushedNotifications.forEach((n) => {
     if (!n.audience || n.audience.length === 0 || n.audience.includes(role)) {

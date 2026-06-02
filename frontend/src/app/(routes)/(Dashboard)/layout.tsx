@@ -3,7 +3,7 @@
 /**
  * Dashboard shell: sidebar (or top nav for schooling), sticky header with
  * language + theme + profile menu, and main content area guarded by
- * `DashboardRoleGuard`. Role comes from JWT + optional dev role switcher.
+ * `DashboardRoleGuard`. Role comes from JWT.
  */
 import Sidebar from "../../../components/ui/siderbar";
 import { useRouter } from "next/navigation";
@@ -14,9 +14,9 @@ import { usePathname } from "next/navigation";
 import { SidebarMenuIcon } from "../../../components/ui/sidebarMenuIcon";
 import { useLanguage } from "../../_components/language-provider";
 import LanguageMenu from "../../_components/login/LanguageMenu";
-import { clearTokens, getCurrentUserDisplayName } from "../../../lib/tokenStorage";
+import { clearTokens, getCurrentUserDisplayName, hasValidAccessToken } from "../../../lib/tokenStorage";
+import { useIsClient } from "../../../lib/useIsClient";
 import { useEffectiveAppRole } from "../../../lib/useEffectiveAppRole";
-import DevRoleSwitcher from "../../_components/DevRoleSwitcher";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,12 +26,12 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu";
 import {
-  DEFAULT_APP_ROLE,
   getSideBarItems,
   getSidebarChromeTexts,
   type AppSidebarRole,
 } from "../../../lib/constants";
 import DashboardRoleGuard from "../../_components/DashboardRoleGuard";
+import RouteLoadingShell from "../../_components/RouteLoadingShell";
 import NotificationBell from "../../_components/notifications/NotificationBell";
 import NotificationOnboardingDialog from "../../_components/notifications/NotificationOnboardingDialog";
 import { NotificationProvider } from "../../_components/notifications/NotificationProvider";
@@ -49,10 +49,12 @@ export default function DashboardLayout({
   const router = useRouter();
   const { language, setLanguage, dir } = useLanguage();
   const isRtl = dir === "rtl";
-  const role = useEffectiveAppRole(DEFAULT_APP_ROLE) as AppSidebarRole;
+  const isClient = useIsClient();
+  const role = useEffectiveAppRole() as AppSidebarRole | null;
   const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
 
-  const navItems = getSideBarItems(language, role);
+  const resolvedRole = role as AppSidebarRole;
+  const navItems = getSideBarItems(language, resolvedRole);
   const sidebarTx = getSidebarChromeTexts(language);
 
   useEffect(() => {
@@ -105,6 +107,22 @@ export default function DashboardLayout({
     expanded ? "md:ps-64" : "md:ps-24"
   }`;
 
+  if (isClient && hasValidAccessToken() && !role) {
+    return (
+      <NotificationProvider>
+        <RouteLoadingShell />
+      </NotificationProvider>
+    );
+  }
+
+  if (!role) {
+    return (
+      <NotificationProvider>
+        <RouteLoadingShell />
+      </NotificationProvider>
+    );
+  }
+
   return (
     <NotificationProvider>
     <div className="relative min-h-screen w-full max-w-[100vw] text-foreground font-montserrat">
@@ -128,7 +146,7 @@ export default function DashboardLayout({
         <Sidebar
           expanded={expanded}
           setExpanded={setExpanded}
-          role={role}
+          role={resolvedRole}
         />
       <div className={shellClass}>
       <header className="z-50 box-border flex h-16 w-full max-w-full shrink-0 items-center justify-between gap-3 border-b border-[#74A7BD]/20 bg-[#FEF9F9] px-4 shadow-md backdrop-blur-md max-md:fixed max-md:start-0 max-md:end-0 max-md:top-0 sm:px-6 md:sticky md:top-0 dark:border-[#51689A]/30 dark:bg-[#141726] dark:text-[#EEF4F7] dark:shadow-black/25">
@@ -174,7 +192,6 @@ export default function DashboardLayout({
       <main className="flex w-full min-w-0 flex-1 flex-col items-stretch bg-transparent px-4 pb-6 pt-3 sm:px-6 lg:px-8">
         <DashboardRoleGuard>{children}</DashboardRoleGuard>
       </main>
-      <DevRoleSwitcher />
       <Toaster richColors position={isRtl ? "top-left" : "top-right"} />
       </div>
     </div>

@@ -16,7 +16,7 @@ import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole"
 export default function Page() {
   const { language } = useLanguage()
   const isAr = language === "ar"
-  const role = useEffectiveAppRole("admin")
+  const role = useEffectiveAppRole()
 
   if (role === "student") {
     return null

@@ -15,7 +15,7 @@ import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole"
 
 export default function Page() {
   const router = useRouter()
-  const role = useEffectiveAppRole("admin")
+  const role = useEffectiveAppRole()
 
   useEffect(() => {
     if (!ENABLE_AUTH_REDIRECTS) return

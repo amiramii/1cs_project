@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import RouteLoadingShell from "@/app/_components/RouteLoadingShell";
 import { ENABLE_AUTH_REDIRECTS } from "@/lib/constants";
 import { getAccessToken } from "@/lib/tokenStorage";
 import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole";
@@ -13,7 +14,7 @@ import NotificationPermissionPrompt from "@/app/_components/notifications/Notifi
 
 export default function Page() {
   const router = useRouter();
-  const role = useEffectiveAppRole("admin");
+  const role = useEffectiveAppRole();
 
   useEffect(() => {
     if (!ENABLE_AUTH_REDIRECTS) return;
@@ -22,6 +23,10 @@ export default function Page() {
       router.push("/Login");
     }
   }, [router]);
+
+  if (!role) {
+    return <RouteLoadingShell />;
+  }
 
   if (role === "prof") {
     return <ProfessorDashboardView />;
@@ -32,6 +37,9 @@ export default function Page() {
   if (role === "schooling") {
     return <SchoolingDashboardView/>;
   }
+  if (role === "admin") {
+    return <AdminDashboardView />;
+  }
 
-  return <AdminDashboardView />;
+  return <RouteLoadingShell />;
 }

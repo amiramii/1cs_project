@@ -12,7 +12,7 @@ import ProfScheduleList from "@/app/_components/admin/schedules/ProfScheduleList
 
 export default function Page() {
   const router = useRouter();
-  const appRole = useEffectiveAppRole("admin");
+  const appRole = useEffectiveAppRole();
   const [stagedPdf, setStagedPdf] = useState<File | null>(null);
 
   useEffect(() => {

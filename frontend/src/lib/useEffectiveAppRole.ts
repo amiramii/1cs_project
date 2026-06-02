@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import {
+  APP_ROLE_CHANGED_EVENT,
   DEV_APP_ROLE_CHANGED_EVENT,
   getCurrentAppRole,
   type StoredAppRole,
@@ -15,9 +16,7 @@ import {
  * `fallback` (no token on server). After hydration, the real role is read from
  * the JWT / storage so the sidebar and guards align with the signed-in user.
  */
-export function useEffectiveAppRole(
-  fallback: StoredAppRole = "admin"
-): StoredAppRole {
+export function useEffectiveAppRole(): StoredAppRole | null {
   return useSyncExternalStore(
     (onStoreChange) => {
       if (typeof window === "undefined") {
@@ -25,10 +24,13 @@ export function useEffectiveAppRole(
       }
       const listener = () => onStoreChange();
       window.addEventListener(DEV_APP_ROLE_CHANGED_EVENT, listener);
-      return () =>
+      window.addEventListener(APP_ROLE_CHANGED_EVENT, listener);
+      return () => {
         window.removeEventListener(DEV_APP_ROLE_CHANGED_EVENT, listener);
+        window.removeEventListener(APP_ROLE_CHANGED_EVENT, listener);
+      };
     },
-    () => getCurrentAppRole(fallback),
-    () => fallback
+    () => getCurrentAppRole(),
+    () => null
   );
 }

@@ -9,7 +9,7 @@ import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole";
  * Role access is enforced by `DashboardRoleGuard`.
  */
 export default function Page() {
-  const role = useEffectiveAppRole("admin");
+  const role = useEffectiveAppRole();
 
   if (role !== "student" && role !== "prof") {
     return null;

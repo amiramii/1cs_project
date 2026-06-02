@@ -1,11 +1,10 @@
 "use client"
 
-import { DEFAULT_APP_ROLE } from "@/lib/constants"
 import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole"
 import ScheduleListShell from "./ScheduleListShell"
 
 export default function StudScheduleList() {
-  const role = useEffectiveAppRole(DEFAULT_APP_ROLE)
+  const role = useEffectiveAppRole()
   const allowDelete = role === "admin"
   const isStudentRole = role === "student"
 

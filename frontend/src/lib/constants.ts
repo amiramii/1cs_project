@@ -5,7 +5,7 @@ export const RESET_EMAIL_STORAGE_KEY = "reset_email"
 /** When true, enforce login + role-based route access and block auth pages when logged in. */
 export const ENABLE_AUTH_REDIRECTS = true
 
-/** Until the API returns a role, treat new sessions as admin. Other roles will use the same paths while routing is open. */
+/** Used only for non-auth UI defaults — never as a fallback for the signed-in user's role. */
 export const DEFAULT_APP_ROLE = "admin" as const
 
 /**

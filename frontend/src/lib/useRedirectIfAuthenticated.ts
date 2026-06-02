@@ -12,8 +12,8 @@ export function useRedirectIfAuthenticated(redirectTo?: string) {
   useEffect(() => {
     if (!ENABLE_AUTH_REDIRECTS) return
     if (hasValidAccessToken()) {
-      const role = getCurrentAppRole("admin")
-      router.replace(redirectTo ?? getDashboardHomePath(role))
+      const role = getCurrentAppRole()
+      router.replace(redirectTo ?? (role ? getDashboardHomePath(role) : "/Login"))
       return
     }
     queueMicrotask(() => setReady(true))

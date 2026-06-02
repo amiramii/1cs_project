@@ -113,8 +113,8 @@ export default function LoginForm() {
     try {
       await login(values.email, values.password, rememberMe)
 
-      const role = getCurrentAppRole("admin")
-      router.push(getDashboardHomePath(role))
+      const role = getCurrentAppRole()
+      router.push(role ? getDashboardHomePath(role) : "/Login")
     } catch (err) {
       setApiError(
         err instanceof Error && err.message

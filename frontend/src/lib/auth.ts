@@ -1,8 +1,10 @@
 import api from "./api";
 import { checkinPath } from "./checkinApi";
+import { resolveAppRoleFromApi } from "./resolveAppRole";
 import {
   clearDevRoleOverride,
-  clearStoredAppRole,
+  clearTokens,
+  dispatchAppRoleChanged,
   getRoleFromAccessToken,
   normalizeRole,
   persistAppRole,
@@ -48,15 +50,28 @@ async function login(email: string, password: string, remember = false) {
   }
 
   persistTokens(data.access, data.refresh, remember);
+
   const fromJwt = getRoleFromAccessToken(data.access);
   const fromBody = normalizeRole(data.role as unknown);
-  const appRole = fromJwt ?? fromBody;
-  if (appRole) {
-    persistAppRole(appRole, remember);
-  } else {
-    clearStoredAppRole();
+  let appRole = fromJwt ?? fromBody;
+
+  if (!appRole) {
+    appRole = await resolveAppRoleFromApi(data.access);
   }
+
+  if (!appRole) {
+    clearTokens();
+    throw new Error(
+      "Could not determine your account role. Please contact support."
+    );
+  }
+
+  persistAppRole(appRole, remember);
   persistUserEmail(email, remember);
+  dispatchAppRoleChanged();
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem("chekin:role-probed", "1");
+  }
   if (process.env.NODE_ENV === "development") {
     clearDevRoleOverride();
   }
