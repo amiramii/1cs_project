@@ -1,12 +1,55 @@
 /**
- * Django API origin (same as `NEXT_PUBLIC_API_URL`, trailing slashes stripped).
- * Backend routes are mounted under `/api/...` (see Checkin_backend `urls.py`).
+ * Django API origin (trailing slashes stripped).
+ * When the app runs on localhost / LAN, uses `NEXT_PUBLIC_API_URL_LOCAL`.
+ * On the deployed site, uses `NEXT_PUBLIC_API_URL`.
  */
-export function getApiBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(
-    /\/+$/,
-    ""
+const DEFAULT_PRODUCTION_API = "https://checkin-backend-z1f2.onrender.com"
+const DEFAULT_LOCAL_API = "http://127.0.0.1:8000"
+
+function stripTrailingSlashes(url: string): string {
+  return url.replace(/\/+$/, "")
+}
+
+function isLocalFrontendHost(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)
   )
+}
+
+function getProductionApiUrl(): string {
+  return stripTrailingSlashes(
+    process.env.NEXT_PUBLIC_API_URL || DEFAULT_PRODUCTION_API
+  )
+}
+
+function getLocalApiUrl(): string {
+  return stripTrailingSlashes(
+    process.env.NEXT_PUBLIC_API_URL_LOCAL || DEFAULT_LOCAL_API
+  )
+}
+
+function useLocalApiOnDevHost(): boolean {
+  const flag = process.env.NEXT_PUBLIC_USE_LOCAL_API?.trim().toLowerCase()
+  if (flag === "0" || flag === "false" || flag === "no") return false
+  return true
+}
+
+export function getApiBaseUrl(): string {
+  const production = getProductionApiUrl()
+  const local = getLocalApiUrl()
+
+  if (!useLocalApiOnDevHost()) return production
+
+  if (typeof window !== "undefined") {
+    return isLocalFrontendHost(window.location.hostname) ? local : production
+  }
+
+  if (process.env.NODE_ENV === "development") return local
+  return production
 }
 
 /**
