@@ -1,7 +1,9 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { authorizedFetchBare } from "@/lib/checkinClient"
 
 type Props = {
   open: boolean
@@ -10,7 +12,7 @@ type Props = {
   onReject: () => void
   absenceDate: string
   absenceCause: string
-  justificationPdfUrl?: string  // URL or base64 data URI of the PDF
+  justificationPdfUrl?: string
 }
 
 export default function ProfAbsencePopUpWindow({
@@ -22,6 +24,35 @@ export default function ProfAbsencePopUpWindow({
   absenceCause,
   justificationPdfUrl,
 }: Props) {
+  const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open || !justificationPdfUrl) {
+      setPdfObjectUrl(null)
+      return
+    }
+
+    let objectUrl: string | null = null
+
+    authorizedFetchBare(justificationPdfUrl, { method: "GET" })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.blob()
+      })
+      .then(blob => {
+        objectUrl = URL.createObjectURL(blob)
+        setPdfObjectUrl(objectUrl)
+      })
+      .catch((e) => {
+        console.error("PDF fetch failed:", e)
+        setPdfObjectUrl(null)
+      })
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [open, justificationPdfUrl])
+
   if (!open) return null
 
   return (
@@ -32,7 +63,6 @@ export default function ProfAbsencePopUpWindow({
       }}
     >
       <div className="relative w-full max-w-[860px] rounded-2xl border border-[#74A7BD]/30 bg-white shadow-xl mx-4 dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
-        {/* Close button */}
         <button
           type="button"
           onClick={onClose}
@@ -42,19 +72,18 @@ export default function ProfAbsencePopUpWindow({
           <X size={15} strokeWidth={2} />
         </button>
 
-        {/* Body — two-column layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 min-h-[480px]">
           {/* Left — PDF viewer */}
           <div className="flex items-center justify-center rounded-tl-2xl rounded-bl-2xl bg-[#F6F7FE]/60 border-r border-[#D6DEEF] p-4 dark:bg-[#242A40]/60 dark:border-[#383F58]">
-            {justificationPdfUrl ? (
+            {pdfObjectUrl ? (
               <iframe
-                src={justificationPdfUrl}
+                src={pdfObjectUrl}
                 title="Justification document"
                 className="h-[460px] w-full rounded-lg border border-[#D6DEEF] shadow-sm dark:border-[#383F58]"
               />
             ) : (
               <div className="flex h-64 w-full items-center justify-center rounded-lg border border-dashed border-[#51689A]/40 text-sm text-[#5D719D] dark:border-[#383F58] dark:text-[#9BA8C4]">
-                No document uploaded
+                {justificationPdfUrl ? "Loading document…" : "No document uploaded"}
               </div>
             )}
           </div>
