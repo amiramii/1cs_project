@@ -8,9 +8,9 @@ type Props = {
   onClose: () => void
   onAccept: () => void
   onReject: () => void
-  absenceDate: string        // e.g. "04/02/2026"
-  absenceCause: string       // e.g. "Illness (Cold)"
-  justificationImageUrl?: string  // URL or base64 of the uploaded justification doc
+  absenceDate: string
+  absenceCause: string
+  justificationPdfUrl?: string  // URL or base64 data URI of the PDF
 }
 
 export default function ProfAbsencePopUpWindow({
@@ -20,19 +20,17 @@ export default function ProfAbsencePopUpWindow({
   onReject,
   absenceDate,
   absenceCause,
-  justificationImageUrl,
+  justificationPdfUrl,
 }: Props) {
   if (!open) return null
 
   return (
-    /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px]"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      {/* Modal card */}
       <div className="relative w-full max-w-[860px] rounded-2xl border border-[#74A7BD]/30 bg-white shadow-xl mx-4 dark:border-[#74A7BD]/25 dark:bg-[#1A2036]">
         {/* Close button */}
         <button
@@ -46,13 +44,13 @@ export default function ProfAbsencePopUpWindow({
 
         {/* Body — two-column layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 min-h-[480px]">
-          {/* Left — justification image */}
-          <div className="flex items-center justify-center rounded-tl-2xl rounded-bl-2xl bg-[#F6F7FE]/60 border-r border-[#D6DEEF] p-6 dark:bg-[#242A40]/60 dark:border-[#383F58]">
-            {justificationImageUrl ? (
-              <img
-                src={justificationImageUrl}
-                alt="Justification document"
-                className="max-h-[460px] w-full object-contain rounded-lg border border-[#D6DEEF] shadow-sm dark:border-[#383F58]"
+          {/* Left — PDF viewer */}
+          <div className="flex items-center justify-center rounded-tl-2xl rounded-bl-2xl bg-[#F6F7FE]/60 border-r border-[#D6DEEF] p-4 dark:bg-[#242A40]/60 dark:border-[#383F58]">
+            {justificationPdfUrl ? (
+              <iframe
+                src={justificationPdfUrl}
+                title="Justification document"
+                className="h-[460px] w-full rounded-lg border border-[#D6DEEF] shadow-sm dark:border-[#383F58]"
               />
             ) : (
               <div className="flex h-64 w-full items-center justify-center rounded-lg border border-dashed border-[#51689A]/40 text-sm text-[#5D719D] dark:border-[#383F58] dark:text-[#9BA8C4]">
@@ -63,24 +61,20 @@ export default function ProfAbsencePopUpWindow({
 
           {/* Right — details + actions */}
           <div className="flex flex-col justify-between px-8 py-10">
-            {/* Title */}
             <div className="space-y-8">
               <h2 className="text-xl font-bold text-[#1B2065] dark:text-[#EEF4F7]">Absences details</h2>
 
-              {/* Absence date */}
               <div className="space-y-1.5">
                 <p className="text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7]">Absence date :</p>
                 <p className="text-base font-semibold text-[#1B6EBF]">{absenceDate}</p>
               </div>
 
-              {/* Absence cause */}
               <div className="space-y-1.5">
                 <p className="text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7]">Absence cause :</p>
                 <p className="text-sm font-semibold text-[#1B2065] dark:text-[#EEF4F7]">{absenceCause}</p>
               </div>
             </div>
 
-            {/* Accept / Reject */}
             <div className="flex items-center gap-3 pt-8">
               <Button
                 type="button"

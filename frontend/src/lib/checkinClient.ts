@@ -24,7 +24,7 @@ function jsonAuthHeaders(): Record<string, string> {
   }
 }
 
-function listAuthHeaders(): HeadersInit {
+export function listAuthHeaders(): HeadersInit {
   const t = getAccessToken()
   return { ...(t && { Authorization: `Bearer ${t}` }) }
 }
@@ -1032,7 +1032,7 @@ export async function deleteDocument(
 
 // --- student absences + justifications (`justifications` Django app at `/api/`) ---
 
-async function authorizedFetchBare(
+export async function authorizedFetchBare(
   input: RequestInfo | URL,
   init: Omit<RequestInit, "headers"> & { headers?: HeadersInit }
 ): Promise<Response> {

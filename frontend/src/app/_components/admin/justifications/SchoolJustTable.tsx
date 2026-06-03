@@ -523,7 +523,7 @@ export function SchoolingJustificationsTable({
 
                     <td className="min-w-0 max-w-[min(28vw,8rem)] break-words px-2 py-2.5 align-middle sm:max-w-none">
                       <Link
-                        href={`${studentDetailBase}?student=${encodeURIComponent(row.email)}`}
+                        href={`${studentDetailBase}?student=${encodeURIComponent(row.email)}&ids=${row.requestIds.join(",")}`}
                         className="font-medium text-[#1B2065F2] underline decoration-[#51689A]/40 underline-offset-2 hover:text-[#51689A] hover:decoration-[#51689A] dark:text-[#EEF4F7] dark:hover:text-[#74A7BD] dark:hover:decoration-[#74A7BD]"
                       >
                         {row.name}

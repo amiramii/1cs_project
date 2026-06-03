@@ -539,7 +539,7 @@ export function ProfessorAbsenceTable({
           onReject={handlePopupReject}
           absenceDate={selectedRow.startDate}
           absenceCause={selectedRow.absenceCause}
-          justificationImageUrl={selectedRow.justificationImageUrl}
+          justificationPdfUrl={selectedRow.justificationImageUrl}
         />
       )}
     </section>
