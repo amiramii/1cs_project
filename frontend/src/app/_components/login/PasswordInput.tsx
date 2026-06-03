@@ -18,6 +18,7 @@ type PasswordInputProps = {
   onChange: (value: string) => void
   onToggleShow: () => void
   onEnter?: () => void
+  disabled?: boolean
 }
 
 export default function PasswordInput({
@@ -32,6 +33,7 @@ export default function PasswordInput({
   onChange,
   onToggleShow,
   onEnter,
+  disabled = false,
 }: PasswordInputProps) {
   return (
     <Field className="gap-1">
@@ -49,6 +51,7 @@ export default function PasswordInput({
           id={id}
           type={showPassword ? "text" : "password"}
           placeholder={placeholder}
+          disabled={disabled}
           aria-invalid={touched && !!error}
           className={cn(
             "pl-10 pr-10 border-0 border-b-2 border-border rounded-none transition-all focus-visible:ring-0",

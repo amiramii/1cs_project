@@ -20,7 +20,7 @@ export function formatDrfError(body: unknown, fallback: string): string {
       }
     }
   }
-  return messages[0] ?? fallback
+  return messages.length > 0 ? messages.join(" ") : fallback
 }
 
 /**

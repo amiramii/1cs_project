@@ -10,6 +10,7 @@ import EmailInput from "../../_components/login/EmailInput"
 import api from "@/lib/api"
 import { checkinPath } from "@/lib/checkinApi"
 import { formatDrfError } from "@/lib/drfError"
+import { getApiBaseUrl } from "@/lib/apiBase"
 import {
   EMAIL_REGEX,
   RESET_EMAIL_STORAGE_KEY,
@@ -95,7 +96,13 @@ function Page() {
       )
       setSuccess(t.resetSuccess)
     } catch (e) {
-      setError("Failed to send reset link")
+      if (e instanceof TypeError) {
+        setError(
+          `Cannot reach the server at ${getApiBaseUrl()}. Start Django and check NEXT_PUBLIC_API_URL.`
+        )
+      } else {
+        setError("Failed to send reset link")
+      }
     } finally {
       setLoading(false)
     }
@@ -161,7 +168,14 @@ function Page() {
             ) : error ? (
               <FieldError>{error}</FieldError>
             ) : success ? (
-              <p className="text-sm text-foreground">{success}</p>
+              <div className="space-y-1 text-sm text-foreground">
+                <p>{success}</p>
+                {typeof window !== "undefined" &&
+                (window.location.hostname === "localhost" ||
+                  window.location.hostname === "127.0.0.1") ? (
+                  <p className="text-muted-foreground">{t.resetDevHint}</p>
+                ) : null}
+              </div>
             ) : null}
           </div>
 

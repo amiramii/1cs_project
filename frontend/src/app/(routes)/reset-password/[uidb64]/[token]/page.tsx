@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { AuthPageBackground } from "@/app/_components/login/AuthPageBackground"
 import { ModeToggle } from "@/app/_components/ModeToggle"
@@ -10,8 +11,9 @@ import { AnimatedFormButton } from "@/app/_components/login/AnimatedFormButton"
 import PasswordInput from "@/app/_components/login/PasswordInput"
 import api from "@/lib/api"
 import { checkinPath } from "@/lib/checkinApi"
+import { getApiBaseUrl } from "@/lib/apiBase"
 import login from "@/lib/auth"
-import { formatDrfError } from "@/lib/drfError"
+import { formatDrfError, summarizeUpstreamError } from "@/lib/drfError"
 import {
   PASSWORD_SYMBOL_REGEX,
   RESET_EMAIL_STORAGE_KEY,
@@ -20,17 +22,22 @@ import {
 import { useLanguage } from "@/app/_components/language-provider"
 import { useRedirectIfAuthenticated } from "@/lib/useRedirectIfAuthenticated"
 
+/** Strip quoted-printable line-break markers from copied terminal links. */
+function normalizeResetSegment(raw: string): string {
+  const decoded = decodeURIComponent(raw.trim())
+  return decoded.replace(/=/g, "")
+}
+
 export default function ResetPasswordPage() {
   const ready = useRedirectIfAuthenticated()
   const router = useRouter()
-  // useParams() gives the already-decoded route segments.
-  // We strip any "=" characters because the console email backend uses quoted-printable
-  // encoding which wraps long lines with "=\n". When the URL is copied from the terminal
-  // the "=" soft-line-break marker ends up in the path. Django's token and uidb64 never
-  // legitimately contain "=" (Django strips base64 padding), so this is always safe.
   const routeParams = useParams()
-  const uidb64 = (typeof routeParams?.uidb64 === "string" ? routeParams.uidb64 : "").replace(/=/g, "")
-  const token  = (typeof routeParams?.token  === "string" ? routeParams.token  : "").replace(/=/g, "")
+  const uidb64 = normalizeResetSegment(
+    typeof routeParams?.uidb64 === "string" ? routeParams.uidb64 : ""
+  )
+  const token = normalizeResetSegment(
+    typeof routeParams?.token === "string" ? routeParams.token : ""
+  )
   const { language, setLanguage } = useLanguage()
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -38,10 +45,19 @@ export default function ResetPasswordPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [touched, setTouched] = useState({ password: false, confirmPassword: false })
   const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
   const [loading, setLoading] = useState(false)
   const [cancelLoading, setCancelLoading] = useState(false)
   const submitLockRef = useRef(false)
   const t = getLoginTexts(language)
+
+  const linkInvalid = !uidb64 || !token
+
+  useEffect(() => {
+    if (linkInvalid) {
+      setError(t.invalidLink)
+    }
+  }, [linkInvalid, t.invalidLink])
 
   const passwordError = useMemo(() => {
     if (!password) return t.passwordRequired
@@ -59,12 +75,16 @@ export default function ResetPasswordPage() {
     return ""
   }, [confirmPassword, password, t.confirmPasswordRequired, t.passwordMismatch])
 
+  const goToLoginAfterReset = () => {
+    router.push("/Login?reset=success")
+  }
+
   const handleSave = async () => {
     setTouched({ password: true, confirmPassword: true })
     if (passwordError || confirmPasswordError) return
 
-    if (!uidb64 || !token) {
-      setError(t.resetFailed)
+    if (linkInvalid) {
+      setError(t.invalidLink)
       return
     }
 
@@ -72,6 +92,7 @@ export default function ResetPasswordPage() {
     submitLockRef.current = true
 
     setError("")
+    setSuccess("")
     setLoading(true)
     let leavePageAfterSuccess = false
     try {
@@ -89,17 +110,34 @@ export default function ResetPasswordPage() {
         { withAuth: false }
       )
 
-      const resetBody = await resetRes.json().catch(() => ({}))
+      const resetText = await resetRes.text()
+      let resetBody: unknown = {}
+      try {
+        resetBody = resetText ? JSON.parse(resetText) : {}
+      } catch {
+        resetBody = resetText
+      }
+
       if (!resetRes.ok) {
-        setError(formatDrfError(resetBody, t.resetFailed))
+        const msg = summarizeUpstreamError(
+          typeof resetBody === "string" ? resetBody : resetText,
+          resetRes.status
+        )
+        setError(
+          formatDrfError(
+            resetBody,
+            msg || t.resetFailed
+          )
+        )
         return
       }
 
+      setSuccess(t.resetCompleteSuccess)
       const storedEmail = localStorage.getItem(RESET_EMAIL_STORAGE_KEY)
+
       if (!storedEmail) {
-        setError(t.autoLoginFailed)
         leavePageAfterSuccess = true
-        router.push("/Login")
+        window.setTimeout(() => goToLoginAfterReset(), 1200)
         return
       }
 
@@ -109,15 +147,19 @@ export default function ResetPasswordPage() {
         leavePageAfterSuccess = true
         router.push("/Dashboard")
       } catch {
-        setError(t.autoLoginFailed)
+        localStorage.removeItem(RESET_EMAIL_STORAGE_KEY)
         leavePageAfterSuccess = true
-        router.push("/Login")
+        window.setTimeout(() => goToLoginAfterReset(), 1200)
       }
-    } catch {
-      setError(t.resetFailed)
+    } catch (e) {
+      if (e instanceof TypeError) {
+        setError(
+          `Cannot reach the server at ${getApiBaseUrl()}. Start Django and try again.`
+        )
+      } else {
+        setError(t.resetFailed)
+      }
     } finally {
-      // Do not re-enable after a successful reset: the token is one-time and the password
-      // hash changes; a second click would call the API again and get "Invalid or expired token".
       if (!leavePageAfterSuccess) {
         submitLockRef.current = false
         setLoading(false)
@@ -145,6 +187,19 @@ export default function ResetPasswordPage() {
           {t.resetTitle}
         </FieldTitle>
 
+        {linkInvalid ? (
+          <div className="mb-4 space-y-3 rounded-xl border border-[#DF2D3E]/30 bg-[#FEF2F2] px-4 py-3 text-sm dark:bg-[#3A1A1F]">
+            <p className="font-medium text-[#B91C1C] dark:text-[#FCA5A5]">{t.invalidLink}</p>
+            <p className="text-muted-foreground">{t.invalidLinkHint}</p>
+            <Link
+              href="/Forgot-password"
+              className="inline-block font-semibold text-[#51689A] underline underline-offset-2"
+            >
+              {t.requestNewLink}
+            </Link>
+          </div>
+        ) : null}
+
         <form
           className="w-full flex flex-col gap-4"
           onSubmit={(e) => {
@@ -163,6 +218,7 @@ export default function ResetPasswordPage() {
             onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
             onChange={setPassword}
             onToggleShow={() => setShowPassword((prev) => !prev)}
+            disabled={linkInvalid}
           />
 
           <PasswordInput
@@ -176,6 +232,7 @@ export default function ResetPasswordPage() {
             onBlur={() => setTouched((prev) => ({ ...prev, confirmPassword: true }))}
             onChange={setConfirmPassword}
             onToggleShow={() => setShowConfirmPassword((prev) => !prev)}
+            disabled={linkInvalid}
           />
 
           <div className="min-h-[20px]">
@@ -183,6 +240,10 @@ export default function ResetPasswordPage() {
               <FieldError>{passwordError}</FieldError>
             ) : touched.confirmPassword && confirmPasswordError ? (
               <FieldError>{confirmPasswordError}</FieldError>
+            ) : success ? (
+              <p className="text-sm font-medium text-[#15803D] dark:text-[#86EFAC]">
+                {success}
+              </p>
             ) : error ? (
               <FieldError>{error}</FieldError>
             ) : null}
@@ -217,6 +278,7 @@ export default function ResetPasswordPage() {
               loadingLabel={
                 language === "ar" ? "جارٍ الحفظ..." : "Saving..."
               }
+              disabled={linkInvalid}
             >
               {t.saveChanges}
             </AnimatedFormButton>

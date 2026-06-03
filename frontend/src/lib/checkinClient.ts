@@ -780,27 +780,28 @@ export async function loadSessionShareSent(): Promise<
 export async function patchSessionShareAccept(
   id: string | number,
   body: {
-    module_name: string
-    group_name: string
+    assignment_id?: number
+    module_name?: string
+    group_name?: string
     time_slot: string
     room: string
   }
 ): Promise<Response> {
-  return fetch(checkinUrl(checkinPath.sessionSharing.accept(id)), {
+  return fetchWithAuth(checkinUrl(checkinPath.sessionSharing.accept(id)), () => ({
     method: "PATCH",
     headers: jsonAuthHeaders(),
     body: JSON.stringify(body),
-  })
+  }))
 }
 
 export async function patchSessionShareRefuse(
   id: string | number
 ): Promise<Response> {
-  return fetch(checkinUrl(checkinPath.sessionSharing.refuse(id)), {
+  return fetchWithAuth(checkinUrl(checkinPath.sessionSharing.refuse(id)), () => ({
     method: "PATCH",
     headers: jsonAuthHeaders(),
     body: JSON.stringify({}),
-  })
+  }))
 }
 
 export async function loadSessionShareBorrowedToday(): Promise<unknown[]> {

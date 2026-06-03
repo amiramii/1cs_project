@@ -1,12 +1,12 @@
 "use client"
-import React from 'react'
+import React, { Suspense } from 'react'
 import LoginForm from '../../_components/login/LoginForm'
 import { ModeToggle } from '../../_components/ModeToggle'
 import { useRedirectIfAuthenticated } from '@/lib/useRedirectIfAuthenticated'
 import { AuthPageBackground } from '../../_components/login/AuthPageBackground'
 import RouteLoadingShell from '@/app/_components/RouteLoadingShell'
 
-function Page() {
+function LoginPageContent() {
   const ready = useRedirectIfAuthenticated()
   if (!ready) return <RouteLoadingShell />
 
@@ -21,6 +21,14 @@ function Page() {
       </div>
       <LoginForm />
     </div>
+  )
+}
+
+function Page() {
+  return (
+    <Suspense fallback={<RouteLoadingShell />}>
+      <LoginPageContent />
+    </Suspense>
   )
 }
 

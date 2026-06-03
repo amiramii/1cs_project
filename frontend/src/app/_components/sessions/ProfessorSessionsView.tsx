@@ -1942,11 +1942,10 @@ export default function ProfessorSessionsView() {
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
-                className="h-8"
+                className="h-8 bg-[#1B2065] text-white hover:bg-[#51689A]"
                 onClick={() => setShareDialogRequest(incomingShareRequests[0]!)}
               >
-                {isAr ? "فتح الطلب" : "Open request"}
+                {isAr ? "مراجعة الطلب" : "Review request"}
               </Button>
             </AlertDescription>
           </Alert>

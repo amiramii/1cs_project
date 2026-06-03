@@ -14,7 +14,7 @@ import {
   FieldContent,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import EmailInput from "./EmailInput"
 import login from "@/lib/auth"
 import {
@@ -32,6 +32,8 @@ import PasswordInput from "./PasswordInput"
 export default function LoginForm() {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const resetSuccess = searchParams.get("reset") === "success"
 
   const { language, setLanguage } = useLanguage()
   const [showPassword, setShowPassword] = useState(false)
@@ -176,6 +178,15 @@ export default function LoginForm() {
             <FieldTitle className="text-center text-2xl mb-2 self-center font-montserrat font-semi-bold ">
               {t.title}
             </FieldTitle>
+
+            {resetSuccess ? (
+              <p
+                role="status"
+                className="mb-1 rounded-lg border border-[#16A34A]/35 bg-[#F0FDF4] px-3 py-2 text-center text-sm text-[#15803D] dark:border-[#22C55E]/30 dark:bg-[#14291A] dark:text-[#86EFAC]"
+              >
+                {t.resetCompleteSuccess}
+              </p>
+            ) : null}
 
             {/* EMAIL */}
             <EmailInput

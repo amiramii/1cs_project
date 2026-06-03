@@ -57,8 +57,16 @@ export function getLoginTexts(language: Language) {
       language === "ar" ? "إرسال الرابط" : "Send Link",
     resetSuccess:
       language === "ar"
-        ? "إذا كان البريد موجودا، تم إرسال رابط إعادة التعيين."
+        ? "إذا كان البريد مسجّلاً، تم إرسال رابط إعادة التعيين."
         : "If this email exists, a reset link has been sent.",
+    resetDevHint:
+      language === "ar"
+        ? "في التطوير المحلي: افتح طرفية Django (runserver) وانسخ الرابط من هناك — لا يُرسل بريد حقيقي."
+        : "Local dev: open the Django runserver terminal and copy the reset link from there (no real email is sent).",
+    resetCompleteSuccess:
+      language === "ar"
+        ? "تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن."
+        : "Your password was reset successfully. You can log in now.",
     confirmPassword:
       language === "ar" ? "تأكيد كلمة المرور" : "Confirm Password",
     confirmPasswordRequired:
