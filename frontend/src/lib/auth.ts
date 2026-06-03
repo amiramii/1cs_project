@@ -1,5 +1,6 @@
 import api from "./api";
 import { checkinPath } from "./checkinApi";
+import { getApiBaseUrl } from "./apiBase";
 import { resolveAppRoleFromApi } from "./resolveAppRole";
 import {
   clearDevRoleOverride,
@@ -30,8 +31,9 @@ async function login(email: string, password: string, remember = false) {
     { withAuth: false }
   ).catch((err: unknown) => {
     if (err instanceof TypeError) {
+      const apiBase = getApiBaseUrl()
       throw new Error(
-        "Cannot reach the server. Check that the backend is running and NEXT_PUBLIC_API_URL is set correctly (e.g. https://checkin-backend-z1f2.onrender.com on Render)."
+        `Cannot reach the server. Check that Django is running on ${apiBase} and NEXT_PUBLIC_API_URL is set correctly.`
       )
     }
     throw err

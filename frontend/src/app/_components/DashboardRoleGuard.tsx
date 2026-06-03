@@ -34,8 +34,10 @@ export default function DashboardRoleGuard({
     if (!ENABLE_AUTH_REDIRECTS || !isClient) return
 
     if (!hasValidAccessToken()) {
-      setRoleReady(true)
-      router.replace("/Login")
+      queueMicrotask(() => {
+        setRoleReady(true)
+        router.replace("/Login")
+      })
       return
     }
 

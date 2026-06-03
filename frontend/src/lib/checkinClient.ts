@@ -61,14 +61,17 @@ export async function postTokenRefresh(refresh: string) {
 
 async function fetchWithAuth(
   url: string,
-  init: RequestInit,
+  init: RequestInit | (() => RequestInit),
   retry = true
 ): Promise<Response> {
-  const headers = new Headers(init.headers)
+  const resolveInit = (): RequestInit =>
+    typeof init === "function" ? init() : init
+
+  const headers = new Headers(resolveInit().headers)
   const token = getAccessToken()
   if (token) headers.set("Authorization", `Bearer ${token}`)
 
-  let res = await fetch(url, { ...init, headers })
+  let res = await fetch(url, { ...resolveInit(), headers })
 
   if (res.status === 401 && retry && typeof window !== "undefined") {
     const refreshed = await attemptTokenRefresh()
@@ -76,7 +79,7 @@ async function fetchWithAuth(
       const nextToken = getAccessToken()
       if (nextToken) headers.set("Authorization", `Bearer ${nextToken}`)
       else headers.delete("Authorization")
-      res = await fetch(url, { ...init, headers })
+      res = await fetch(url, { ...resolveInit(), headers })
     } else {
       clearTokens()
       window.location.href = "/Login"
@@ -416,6 +419,95 @@ export async function patchAttendanceSession(
   body: Record<string, unknown>
 ): Promise<Response> {
   return fetch(checkinUrl(checkinPath.attendance.session(id)), {
+    method: "PATCH",
+    headers: jsonAuthHeaders(),
+    body: JSON.stringify(body),
+  })
+}
+
+export type AiSyncResponse = {
+  status: string
+  scanned_count: number
+  marked_present: number
+  message: string
+}
+
+export async function postSessionAiSync(
+  sessionId: string | number
+): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.attendance.sessionAiSync(sessionId)), {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+  })
+}
+
+export async function postExamAiSync(
+  examId: string | number
+): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.exams.examAiSync(examId)), {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+  })
+}
+
+export type ExamAttendanceRow = {
+  id: number
+  student_name: string
+  student_email: string
+  status: "present" | "absent" | "justified"
+}
+
+export type ExamSessionTodayRow = {
+  id: number
+  module_name: string
+  date: string
+  start_time: string
+  end_time: string
+  room: string
+  student_count: number
+}
+
+export type ExamSessionDetail = {
+  id: number
+  module_name: string
+  date: string
+  start_time: string
+  end_time: string
+  room: string
+  teachers_list: { email: string; name: string }[]
+  attendances: ExamAttendanceRow[]
+}
+
+export async function loadExamsToday(): Promise<ExamSessionTodayRow[]> {
+  const res = await fetch(checkinUrl(`${checkinPath.exams.today}/`), {
+    headers: listAuthHeaders(),
+  })
+  if (!res.ok) return []
+  return res.json()
+}
+
+export async function postExamOpen(
+  examId: string | number
+): Promise<Response> {
+  return fetch(checkinUrl(`${checkinPath.exams.open(examId)}/`), {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+  })
+}
+
+export async function getExamById(
+  examId: string | number
+): Promise<Response> {
+  return fetch(checkinUrl(`${checkinPath.exams.detail(examId)}/`), {
+    headers: listAuthHeaders(),
+  })
+}
+
+export async function patchExamAttendance(
+  attendanceId: string | number,
+  body: { status: "present" | "absent" }
+): Promise<Response> {
+  return fetch(checkinUrl(`${checkinPath.exams.examAttendance(attendanceId)}/`), {
     method: "PATCH",
     headers: jsonAuthHeaders(),
     body: JSON.stringify(body),
@@ -880,15 +972,7 @@ export async function fetchProfessorScheduleToday(
   if (query?.day != null && query.day !== "") {
     u.searchParams.set("day", query.day)
   }
-  let res = await fetch(u.toString(), { headers: listAuthHeaders() })
-  if (
-    (res.status === 401 || res.status === 403) &&
-    typeof window !== "undefined" &&
-    (await attemptTokenRefresh())
-  ) {
-    res = await fetch(u.toString(), { headers: listAuthHeaders() })
-  }
-  return res
+  return fetchWithAuth(u.toString(), { method: "GET" })
 }
 
 export type ExcelScheduleSemester = "S1" | "S2"
@@ -904,59 +988,57 @@ export type ExcelScheduleRow = {
 
 /** GET all rows from `ExcelScheduleView`. */
 export async function fetchExcelSchedules(): Promise<Response> {
-  const href = checkinUrl(checkinPath.documents.excelSchedules)
-  let res = await fetch(href, { headers: listAuthHeaders() })
-  if (
-    (res.status === 401 || res.status === 403) &&
-    typeof window !== "undefined" &&
-    (await attemptTokenRefresh())
-  ) {
-    res = await fetch(href, { headers: listAuthHeaders() })
-  }
-  return res
+  return fetchWithAuth(checkinUrl(checkinPath.documents.excelSchedules), {
+    method: "GET",
+  })
 }
 
 /** POST multipart — `file`, `title`, `year` (pk), `semester` (`S1` | `S2`). */
 export async function postExcelSchedule(formData: FormData): Promise<Response> {
-  const href = checkinUrl(checkinPath.documents.excelSchedules)
-  let res = await fetch(href, {
-    method: "POST",
-    headers: listAuthHeaders(),
-    body: formData,
+  const entries = [...formData.entries()]
+  return fetchWithAuth(checkinUrl(checkinPath.documents.excelSchedules), () => {
+    const body = new FormData()
+    for (const [key, value] of entries) {
+      body.append(key, value)
+    }
+    return { method: "POST", body }
   })
-  if (
-    (res.status === 401 || res.status === 403) &&
-    typeof window !== "undefined" &&
-    (await attemptTokenRefresh())
-  ) {
-    res = await fetch(href, {
-      method: "POST",
-      headers: listAuthHeaders(),
-      body: formData,
-    })
-  }
-  return res
+}
+
+export async function deleteExcelSchedule(
+  id: string | number
+): Promise<Response> {
+  return fetchWithAuth(checkinUrl(checkinPath.documents.excelSchedule(id)), {
+    method: "DELETE",
+  })
 }
 
 export async function postReplacementSchedule(formData: FormData): Promise<Response> {
-  const href = checkinUrl(checkinPath.exams.replacementUpload)
-  let res = await fetch(href, {
-    method: "POST",
-    headers: listAuthHeaders(),
-    body: formData,
+  const entries = [...formData.entries()]
+  return fetchWithAuth(checkinUrl(checkinPath.exams.replacementUpload), () => {
+    const body = new FormData()
+    for (const [key, value] of entries) {
+      body.append(key, value)
+    }
+    return { method: "POST", body }
   })
-  if (
-    (res.status === 401 || res.status === 403) &&
-    typeof window !== "undefined" &&
-    (await attemptTokenRefresh())
-  ) {
-    res = await fetch(href, {
-      method: "POST",
-      headers: listAuthHeaders(),
-      body: formData,
-    })
-  }
-  return res
+}
+
+export type ExamCsvUploadResult = {
+  created: number
+  errors: string[]
+}
+
+/** POST multipart — admin exam CSV (`module`, `date`, `teachers`, `students`, …). */
+export async function postExamCsvUpload(formData: FormData): Promise<Response> {
+  const entries = [...formData.entries()]
+  return fetchWithAuth(checkinUrl(`${checkinPath.exams.examUpload}/`), () => {
+    const body = new FormData()
+    for (const [key, value] of entries) {
+      body.append(key, value)
+    }
+    return { method: "POST", body }
+  })
 }
 
 export async function getExamYearsWithJustified(): Promise<{ value: string; label: string }[]> {
@@ -994,10 +1076,13 @@ export async function getDocumentById(
 }
 
 export async function postDocument(formData: FormData): Promise<Response> {
-  return fetch(checkinUrl(checkinPath.documents.collection), {
-    method: "POST",
-    headers: listAuthHeaders(),
-    body: formData,
+  const entries = [...formData.entries()]
+  return fetchWithAuth(checkinUrl(checkinPath.documents.collection), () => {
+    const body = new FormData()
+    for (const [key, value] of entries) {
+      body.append(key, value)
+    }
+    return { method: "POST", body }
   })
 }
 
@@ -1024,9 +1109,8 @@ export async function putDocument(
 export async function deleteDocument(
   id: string | number
 ): Promise<Response> {
-  return fetch(checkinUrl(checkinPath.documents.detail(id)), {
+  return fetchWithAuth(checkinUrl(checkinPath.documents.detail(id)), {
     method: "DELETE",
-    headers: listAuthHeaders(),
   })
 }
 

@@ -1,0 +1,4 @@
+module,date,start_time,end_time,room,teachers,students
+Network 1,2026-06-03,08:00,10:00,AMPHI DEMO,ahmed@gmail.com,ho.khaldi@esi-sba.dz
+Network 1,2026-06-07,08:00,10:00,AMPHI A,ahmed@gmail.com,ma.bouabdelli@esi-sba.dz;ho.khaldi@esi-sba.dz
+Database,2026-06-08,09:00,11:00,SALLE 08,sara@gmail.com,ma.bouabdelli@esi-sba.dz

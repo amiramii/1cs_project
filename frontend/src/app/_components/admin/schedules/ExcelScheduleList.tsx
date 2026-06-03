@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
+  Trash2,
   ArrowDownToLine,
   CalendarCheck,
   ChevronLeft,
@@ -30,9 +31,13 @@ import { SCHEDULE_LIST_EMPTY_CLASS } from "@/lib/scheduleUiClasses"
 import {
   loadAllAcademicYears,
   loadAllExcelSchedules,
+  deleteExcelSchedule,
   type ExcelScheduleRow,
 } from "@/lib/checkinClient"
 import { getScheduleFileFetchUrl } from "@/lib/scheduleMediaUrl"
+import { useEffectiveAppRole } from "@/lib/useEffectiveAppRole"
+import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors"
+import { getApiBaseUrl } from "@/lib/apiBase"
 
 type YearFilter = "all" | "1CP" | "2CP" | "1CS" | "2CS" | "3CS" | "DOCTORATE"
 
@@ -105,6 +110,8 @@ export default function ExcelScheduleList() {
   const router = useRouter()
   const { language, dir } = useLanguage()
   const isArabic = language === "ar"
+  const appRole = useEffectiveAppRole()
+  const allowDelete = appRole === "admin"
   const [items, setItems] = useState<ExcelScheduleRow[]>([])
   const [yearMap, setYearMap] = useState<Map<number, string>>(new Map())
   const [search, setSearch] = useState("")
@@ -112,6 +119,7 @@ export default function ExcelScheduleList() {
   const [gridPage, setGridPage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -128,11 +136,13 @@ export default function ExcelScheduleList() {
           file: getScheduleFileFetchUrl(row.file),
         }))
       )
-    } catch {
+    } catch (err) {
       setError(
-        isArabic
-          ? "تعذر تحميل ملفات Excel."
-          : "Could not load Excel files."
+        isNetworkFailure(err)
+          ? apiUnreachableMessage(getApiBaseUrl(), isArabic)
+          : isArabic
+            ? "تعذر تحميل ملفات Excel."
+            : "Could not load Excel files."
       )
       setItems([])
     } finally {
@@ -143,6 +153,39 @@ export default function ExcelScheduleList() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const deleteExcelItem = useCallback(
+    async (item: ExcelScheduleRow) => {
+      if (!allowDelete) return
+      const confirmed = window.confirm(
+        isArabic
+          ? `حذف «${item.title}»؟`
+          : `Delete «${item.title}»?`
+      )
+      if (!confirmed) return
+      setDeletingId(item.id)
+      try {
+        const res = await deleteExcelSchedule(item.id)
+        if (!res.ok) {
+          const text = await res.text().catch(() => "")
+          throw new Error(text || res.statusText)
+        }
+        setError(null)
+        setItems((prev) => prev.filter((row) => row.id !== item.id))
+      } catch (e) {
+        setError(
+          isNetworkFailure(e)
+            ? apiUnreachableMessage(getApiBaseUrl(), isArabic)
+            : isArabic
+              ? "تعذر حذف الملف."
+              : "Could not delete this file."
+        )
+      } finally {
+        setDeletingId(null)
+      }
+    },
+    [allowDelete, isArabic]
+  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -394,7 +437,7 @@ export default function ExcelScheduleList() {
                           </p>
                         </div>
                       </div>
-                      <div className="mt-4">
+                      <div className="mt-4 flex flex-col gap-2">
                         <Button
                           asChild
                           className="w-full bg-[#51689A] text-white hover:bg-[#40547F]"
@@ -409,6 +452,24 @@ export default function ExcelScheduleList() {
                             {isArabic ? "تحميل" : "Download"}
                           </a>
                         </Button>
+                        {allowDelete ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={deletingId === item.id}
+                            onClick={() => void deleteExcelItem(item)}
+                            className="w-full border-destructive/40 text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="me-2 size-4" />
+                            {deletingId === item.id
+                              ? isArabic
+                                ? "جارٍ الحذف…"
+                                : "Deleting…"
+                              : isArabic
+                                ? "حذف"
+                                : "Delete"}
+                          </Button>
+                        ) : null}
                       </div>
                     </article>
                   )

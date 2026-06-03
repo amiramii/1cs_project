@@ -17,6 +17,7 @@ import {
   postDocument,
   postExcelSchedule,
   postReplacementSchedule,
+  postExamCsvUpload,
   getExamYearsWithJustified,
   type ExcelScheduleSemester,
 } from "@/lib/checkinClient";
@@ -31,10 +32,11 @@ import {
   type TeacherRow,
 } from "@/lib/scheduleDocumentHelpers";
 import { useLanguage } from "@/app/_components/language-provider";
+import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors";
 import StudScheduleList from "@/app/_components/admin/schedules/StudScheduleList";
 import ScheduleYearCombobox from "@/app/_components/admin/schedules/ScheduleYearCombobox";
 
-type UploadMode = "pdf" | "excel" | "remplacement";
+type UploadMode = "pdf" | "excel" | "remplacement" | "exams";
 
 function parseJsonSafe(text: string): unknown {
   const t = text.trim();
@@ -314,6 +316,41 @@ export default function SchedulsMiddleContainer({
         return;
       }
 
+      if (uploadMode === "exams") {
+        const formData = new FormData();
+        formData.append("file", effectivePdf);
+
+        const res = await postExamCsvUpload(formData);
+        const bodyText = await res.text();
+        const parsed = parseJsonSafe(bodyText);
+        if (res.ok) {
+          const result = (parsed ?? {}) as { created?: number; errors?: string[] };
+          const created = result.created ?? 0;
+          const errCount = result.errors?.length ?? 0;
+          const message = isArabic
+            ? `تم إنشاء ${created} امتحان${errCount ? ` (${errCount} تحذير)` : ""}.`
+            : `Created ${created} exam session${created === 1 ? "" : "s"}${errCount ? ` (${errCount} warning${errCount === 1 ? "" : "s"})` : ""}.`;
+          toast.success(message);
+          if (errCount && result.errors) {
+            console.warn("Exam CSV upload warnings:", result.errors);
+          }
+          setSuccessMsg(true);
+          setTimeout(() => setSuccessMsg(false), 2000);
+          setDroppedFile(null);
+          onStagedPdfChange?.(null);
+        } else {
+          const message = formatDocumentUploadError(
+            res.status,
+            bodyText,
+            parsed,
+            isArabic
+          );
+          setUploadError(message);
+          toast.error(message);
+        }
+        return;
+      }
+
       const formData = new FormData();
       formData.append("title", documentTitle);
       formData.append("pdf", effectivePdf);
@@ -359,9 +396,11 @@ export default function SchedulsMiddleContainer({
         );
       }
     } catch (err) {
-      const message = isArabic
-        ? "تعذّر إكمال الرفع. تحقق من الاتصال بالخادم."
-        : "Could not complete upload. Check your connection to the server.";
+      const message = isNetworkFailure(err)
+        ? apiUnreachableMessage(getApiBaseUrl(), isArabic)
+        : isArabic
+          ? "تعذّر إكمال الرفع. تحقق من الاتصال بالخادم."
+          : "Could not complete upload. Check your connection to the server.";
       setUploadError(message);
       toast.error(message);
       console.error("Error uploading:", err);
@@ -381,6 +420,7 @@ export default function SchedulsMiddleContainer({
   const showAudienceToggle = variant === "admin";
   const uploadNeedsYear =
     uploadMode === "excel" ||
+    uploadMode === "remplacement" ||
     (uploadMode === "pdf" && activeTab === "student");
 
   return (
@@ -391,11 +431,12 @@ export default function SchedulsMiddleContainer({
             {isArabic ? "إضافة جدول" : "Add schedule"}
           </h1>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { value: "pdf" as const, label: isArabic ? "ملف PDF" : "PDF file" },
               { value: "excel" as const, label: isArabic ? "ملف Excel" : "Excel file" },
               { value: "remplacement" as const, label: isArabic ? "ملف Remplacement" : "Student Replacement"},
+              { value: "exams" as const, label: isArabic ? "امتحانات CSV" : "Exam CSV" },
             ].map((mode) => (
               <Button
                 key={mode.value}
@@ -425,6 +466,12 @@ export default function SchedulsMiddleContainer({
               {isArabic
                 ? "يمكنك إفلات ملف PDF في أي مكان في الصفحة لتحديده، ثم اضغط «رفع الجدول» لحفظه في قاعدة البيانات."
                 : "Drop a PDF anywhere on this page to select it, then click “Upload Schedule” to save it to the database."}
+            </p>
+          ) : uploadMode === "exams" ? (
+            <p className="text-center text-xs text-muted-foreground sm:text-sm">
+              {isArabic
+                ? "ارفع ملف CSV للامتحانات (module, date, start_time, end_time, room, teachers, students). يظهر الامتحان للأستاذ في «الامتحانات» في يومه."
+                : "Upload an exam CSV (module, date, start_time, end_time, room, teachers, students). Teachers see it under Exams on the scheduled day."}
             </p>
           ) : (
             <p className="text-center text-xs text-muted-foreground sm:text-sm">
@@ -492,6 +539,7 @@ export default function SchedulsMiddleContainer({
           ) : null}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {uploadMode !== "exams" ? (
             <div className={uploadMode === "remplacement" ? "sm:col-span-2 sm:mx-auto sm:w-1/2" : "contents"}>
               <ScheduleYearCombobox
                 value={year}
@@ -501,6 +549,7 @@ export default function SchedulsMiddleContainer({
                 dynamicOptions={uploadMode === "remplacement" ? examYears : undefined}
               />
             </div>
+            ) : null}
             {uploadMode === "pdf" ? (
               <Input
                 type="text"
@@ -528,7 +577,9 @@ export default function SchedulsMiddleContainer({
             accept={{
               ...(uploadMode === "pdf" || uploadMode === "remplacement"
                 ? { "application/pdf": [".pdf"] }
-                : {
+                : uploadMode === "exams"
+                  ? { "text/csv": [".csv"], "application/vnd.ms-excel": [".csv"] }
+                  : {
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
                     "application/vnd.ms-excel": [".xls"],
                     "text/csv": [".csv"],
@@ -544,9 +595,13 @@ export default function SchedulsMiddleContainer({
                   : isArabic
                     ? uploadMode === "pdf" || uploadMode === "remplacement"
                       ? "قم بإفلات ملف PDF أو اختره"
+                      : uploadMode === "exams"
+                        ? "قم بإفلات ملف CSV أو اختره"
                       : "قم بإفلات ملف Excel أو اختره"
                     : uploadMode === "pdf" || uploadMode === "remplacement"
                       ? "Drop or choose a PDF file"
+                      : uploadMode === "exams"
+                        ? "Drop or choose a CSV file"
                       : "Drop or choose an Excel file"}
               </p>
             </div>
@@ -573,7 +628,11 @@ export default function SchedulsMiddleContainer({
                   ? "جارٍ الرفع..."
                   : "Uploading..."
                 : isArabic
-                  ? "رفع الجدول"
+                  ? uploadMode === "exams"
+                    ? "رفع الامتحانات"
+                    : "رفع الجدول"
+                  : uploadMode === "exams"
+                    ? "Upload Exams"
                   : "Upload Schedule"}
             </Button>
           </div>

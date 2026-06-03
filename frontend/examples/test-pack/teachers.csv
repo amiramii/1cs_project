@@ -1,0 +1,4 @@
+full_name,email,module,groups,semester,section,year
+Dr Ahmed,ahmed@gmail.com,Network 1,G1,S1,A,1
+Dr Import New,dr.import.new@test.com,Network 1,G1;G2,S1,A,1
+Dr Import Two,dr.import.two@test.com,Database,G3,S1,B,2

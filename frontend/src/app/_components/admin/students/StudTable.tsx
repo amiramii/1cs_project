@@ -4,6 +4,8 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import {
   ChevronDown,
   ChevronRight,
+  ChevronUp,
+  Check,
   Funnel,
   Pencil,
   Trash2,
@@ -15,14 +17,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import SearchBar from "@/app/_components/admin/SearchBar"
 import { Input } from "@/components/ui/input"
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Drawer,
   DrawerClose,
@@ -107,6 +108,7 @@ export default function StudTable() {
   const [search, setSearch] = useState("")
   const [yearFilter, setYearFilter] = useState<string>("all")
   const [exclusionFilter, setExclusionFilter] = useState<"all" | "excluded" | "notExcluded">("all")
+  const [openFilter, setOpenFilter] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -212,6 +214,18 @@ export default function StudTable() {
   }, [loadStudents])
 
   const yearOptions = useMemo(() => collectYears(data), [data])
+
+  const filterLabelText = useMemo(() => {
+    const parts: string[] = []
+    if (yearFilter !== "all") parts.push(yearFilter)
+    if (exclusionFilter === "excluded") {
+      parts.push(isArabic ? "مستبعد" : "Excluded")
+    } else if (exclusionFilter === "notExcluded") {
+      parts.push(isArabic ? "غير مستبعد" : "Not excluded")
+    }
+    if (parts.length === 0) return isArabic ? "الكل" : "All"
+    return parts.join(" · ")
+  }, [yearFilter, exclusionFilter, isArabic])
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -422,86 +436,87 @@ export default function StudTable() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-full min-w-[7.5rem] sm:w-32 md:w-36">
-              <Funnel
-                className="pointer-events-none absolute start-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground"
-                size={16}
-                aria-hidden
-              />
-              <Select
-                value={yearFilter}
-                onValueChange={(v) => {
-                  setYearFilter(v)
-                  setCurrentPage(1)
-                }}
-              >
-                <SelectTrigger className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-sm font-medium text-[#1B2065] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]">
-                  <SelectValue placeholder={isArabic ? "تصفية" : "Filter"} />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  side="bottom"
-                  align="start"
-                  sideOffset={6}
-                  className="min-w-[var(--radix-select-trigger-width)] border border-slate-200/40 bg-popover/75 shadow-lg backdrop-blur-xl dark:border-border/50 dark:bg-popover/70"
+            <DropdownMenu open={openFilter} onOpenChange={setOpenFilter}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={`${controlBtnClass} inline-flex h-10 min-w-[7.5rem] w-full items-center justify-center gap-1.5 bg-[#FEF9F9] px-3 sm:w-auto sm:min-w-[9rem]`}
                 >
-                  <SelectGroup>
-                    <SelectLabel className="px-2 font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
-                      {isArabic ? "السنة" : "Year"}
-                    </SelectLabel>
-                    <SelectItem value="all">
-                      {isArabic ? "كل السنوات" : "All years"}
-                    </SelectItem>
-                    {yearOptions.map((y) => (
-                      <SelectItem key={y} value={y}>
-                        {y}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="relative w-full min-w-[7.5rem] sm:w-32 md:w-40">
-              <Funnel
-                className="pointer-events-none absolute start-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground"
-                size={16}
-                aria-hidden
-              />
-              <Select
-                value={exclusionFilter}
-                onValueChange={(v) => {
-                  setExclusionFilter(v as "all" | "excluded" | "notExcluded")
-                  setCurrentPage(1)
-                }}
-              >
-                <SelectTrigger className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-9 pe-2 text-sm font-medium text-[#1B2065] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]">
-                  <SelectValue placeholder={isArabic ? "تصفية" : "Filter"} />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  side="bottom"
-                  align="start"
-                  sideOffset={6}
-                  className="min-w-[var(--radix-select-trigger-width)] border border-slate-200/40 bg-popover/75 shadow-lg backdrop-blur-xl dark:border-border/50 dark:bg-popover/70"
+                  <Funnel size={16} className="shrink-0" strokeWidth={1.75} />
+                  <span className="font-medium">{isArabic ? "تصفية" : "Filter"}</span>
+                  <span className="max-w-[6rem] truncate text-xs text-[#1B2065F2]/80 dark:text-[#9BA8C4] sm:max-w-none">
+                    ({filterLabelText})
+                  </span>
+                  {openFilter ? (
+                    <ChevronUp size={14} className="shrink-0" />
+                  ) : (
+                    <ChevronDown size={14} className="shrink-0" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[11rem]">
+                <DropdownMenuLabel>
+                  {isArabic ? "السنة" : "Year"}
+                </DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setYearFilter("all")
+                    setCurrentPage(1)
+                  }}
                 >
-                  <SelectGroup>
-                    <SelectLabel className="px-2 font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
-                      {isArabic ? "الاستبعاد" : "Exclusion"}
-                    </SelectLabel>
-                    <SelectItem value="all">
-                      {isArabic ? "الكل" : "All"}
-                    </SelectItem>
-                    <SelectItem value="excluded">
-                      {isArabic ? "مستبعد" : "Excluded"}
-                    </SelectItem>
-                    <SelectItem value="notExcluded">
-                      {isArabic ? "غير مستبعد" : "Not excluded"}
-                    </SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+                  <span>{isArabic ? "كل السنوات" : "All years"}</span>
+                  {yearFilter === "all" && <Check className="ms-auto size-4" />}
+                </DropdownMenuItem>
+                {yearOptions.map((y) => (
+                  <DropdownMenuItem
+                    key={y}
+                    onClick={() => {
+                      setYearFilter(y)
+                      setCurrentPage(1)
+                    }}
+                  >
+                    <span>{y}</span>
+                    {yearFilter === y && <Check className="ms-auto size-4" />}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>
+                  {isArabic ? "الاستبعاد" : "Exclusion"}
+                </DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setExclusionFilter("all")
+                    setCurrentPage(1)
+                  }}
+                >
+                  <span>{isArabic ? "الكل" : "All"}</span>
+                  {exclusionFilter === "all" && <Check className="ms-auto size-4" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setExclusionFilter("excluded")
+                    setCurrentPage(1)
+                  }}
+                >
+                  <span>{isArabic ? "مستبعد" : "Excluded"}</span>
+                  {exclusionFilter === "excluded" && (
+                    <Check className="ms-auto size-4" />
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setExclusionFilter("notExcluded")
+                    setCurrentPage(1)
+                  }}
+                >
+                  <span>{isArabic ? "غير مستبعد" : "Not excluded"}</span>
+                  {exclusionFilter === "notExcluded" && (
+                    <Check className="ms-auto size-4" />
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <div className="flex items-center gap-1 border-[#51689A]/30 dark:border-[#383F58] sm:gap-1.5 sm:border-s sm:ps-2">
               <Button

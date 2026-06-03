@@ -15,4 +15,4 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: NEXT_PUBLIC_API_URL
-        value: https://checkin-backend-z1f2.onrender.com
+        value: http://127.0.0.1:8000

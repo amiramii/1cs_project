@@ -3,6 +3,7 @@ import {
   ClipboardClock,
   Calendars,
   CircleCheckBig,
+  ClipboardList,
   GraduationCap,
   LayoutDashboard,
   School,
@@ -16,6 +17,7 @@ import type { SidebarIconId } from "@/lib/constants"
 const SIDEBAR_ICONS: Record<SidebarIconId, LucideIcon> = {
   dashboard: LayoutDashboard,
   sessions: ClipboardClock,
+  exams: ClipboardList,
   students: GraduationCap,
   schedules: Calendars,
   justifications: CircleCheckBig,

@@ -112,6 +112,7 @@ export type SidebarIconId =
   | "dashboard"
   | "professors"
   | "sessions"
+  | "exams"
   | "students"
   | "schedules"
   | "justifications"
@@ -181,6 +182,11 @@ export function getSideBarItems(
       iconId: "sessions",
       label: t("Sessions", "الحصص"),
       href: "/Sessions",
+    },
+    {
+      iconId: "exams",
+      label: t("Exams", "الامتحانات"),
+      href: "/Exams",
     },
     {
       iconId: "students",

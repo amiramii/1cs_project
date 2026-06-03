@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
-import { getScheduleFileFetchUrl } from '@/lib/scheduleMediaUrl'
+import { getScheduleFileFetchUrl } from "@/lib/scheduleMediaUrl"
 import { getAccessToken } from '@/lib/tokenStorage'
 import { useLanguage } from '@/app/_components/language-provider'
 import { Download, FileSpreadsheet, FileText, Trash2 } from 'lucide-react'
@@ -131,7 +131,11 @@ export default function PdfPreviewClient({
 
   const { language } = useLanguage()
   const isArabic = language === 'ar'
-  const isLocalAsset = url.startsWith('/')
+  /** Static files under /public — not Django media. */
+  const isPublicAsset =
+    url.startsWith('/') &&
+    !url.startsWith('/api/media/') &&
+    !url.startsWith('/media/')
   const urlKind = fileKindFromUrl(url)
   const effectiveKind = resolvedKind ?? urlKind
 
@@ -141,7 +145,7 @@ export default function PdfPreviewClient({
     setPreviewBlob(null)
     setResolvedKind(null)
 
-    if (isLocalAsset) {
+    if (isPublicAsset) {
       setResolvedKind(urlKind === 'spreadsheet' ? 'spreadsheet' : null)
       setLoadingRemote(false)
       return
@@ -163,7 +167,10 @@ export default function PdfPreviewClient({
         const res = await fetch(fetchUrl, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
-        if (!res.ok) throw new Error('fetch failed')
+        if (!res.ok) {
+          if (!cancelled) setLoadError(true)
+          return
+        }
         const contentType = res.headers.get('content-type')
         const buf = await res.arrayBuffer()
         if (cancelled) return
@@ -182,8 +189,7 @@ export default function PdfPreviewClient({
         }
         setResolvedKind('pdf')
         setPreviewBlob(resolved.blob)
-      } catch (err) {
-        console.error('Failed to load schedule file:', err)
+      } catch {
         if (!cancelled) setLoadError(true)
       } finally {
         if (!cancelled) setLoadingRemote(false)
@@ -193,7 +199,7 @@ export default function PdfPreviewClient({
     return () => {
       cancelled = true
     }
-  }, [url, isLocalAsset, urlKind])
+  }, [url, isPublicAsset, urlKind])
 
   useLayoutEffect(() => {
     const el = thumbHostRef.current
@@ -225,7 +231,7 @@ export default function PdfPreviewClient({
 
   const pdfHash = 'toolbar=0&navpanes=0&scrollbar=0&view=FitH'
   const iframeSrc =
-    effectiveKind === 'pdf' && !isLocalAsset && viewerObjectUrl
+    effectiveKind === 'pdf' && !isPublicAsset && viewerObjectUrl
       ? `${viewerObjectUrl}#${pdfHash}`
       : null
 
@@ -250,7 +256,7 @@ export default function PdfPreviewClient({
       }
 
       const token = getAccessToken()
-      const fetchUrl = isLocalAsset
+      const fetchUrl = isPublicAsset
         ? `${window.location.origin}${url}`
         : getScheduleFileFetchUrl(url)
       const res = await fetch(fetchUrl, {
@@ -297,7 +303,7 @@ export default function PdfPreviewClient({
     )
 
   const showPdfThumb =
-    !isLocalAsset &&
+    !isPublicAsset &&
     effectiveKind === 'pdf' &&
     previewBlob &&
     previewBlob.size > 0 &&
@@ -356,7 +362,7 @@ export default function PdfPreviewClient({
             aria-label={isArabic ? 'فتح المعاينة' : 'Open schedule preview'}
           >
           <div className="flex h-full min-h-0 w-full min-w-0 items-start justify-center transition duration-200 group-hover:blur-[2px]">
-            {loadingRemote && urlKind === 'pdf' && !isLocalAsset ? (
+            {loadingRemote && urlKind === 'pdf' && !isPublicAsset ? (
               <div className="mt-8 h-7 w-7 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-primary" />
             ) : showPdfThumb ? (
               <Document
@@ -454,7 +460,7 @@ export default function PdfPreviewClient({
                     : 'Spreadsheet file — use Download below.'}
                 </p>
               </div>
-            ) : isLocalAsset ? (
+            ) : isPublicAsset ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
                 <p className="text-sm text-muted-foreground">
                   {isArabic

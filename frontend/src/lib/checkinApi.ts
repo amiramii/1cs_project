@@ -57,6 +57,8 @@ export const checkinPath = {
   attendance: {
     sessions: "api/attendance/sessions",
     session: (id: string | number) => `api/attendance/sessions/${id}` as const,
+    sessionAiSync: (id: string | number) =>
+      `api/attendance/sessions/${id}/sync-ai` as const,
     attendance: "api/attendance/attendance",
     attendanceRow: (id: string | number) =>
       `api/attendance/attendance/${id}` as const,
@@ -70,15 +72,24 @@ export const checkinPath = {
     detail: (id: string | number) => `api/documents/${id}` as const,
     /** GET list / POST multipart — `ExcelSchedule` model. */
     excelSchedules: "api/documents/api/excel-schedules" as const,
+    excelSchedule: (id: string | number) =>
+      `api/documents/api/excel-schedules/${id}` as const,
     /** GET `ProfessorTodayView` — `professor` is the display name from the timetable Excel. */
     scheduleToday: (professor: string) =>
       `api/documents/schedule/today/${encodeURIComponent(professor)}` as const,
   },
   /** `exams` app */
   exams: {
+    collection: "api/exams",
+    detail: (id: string | number) => `api/exams/${id}` as const,
+    today: "api/exams/today",
+    open: (id: string | number) => `api/exams/${id}/open` as const,
+    examAttendance: (id: string | number) => `api/exams-attendance/${id}` as const,
+    examUpload: "api/exams/upload",
     /** POST multipart — `year` (pk) + `file` (.pdf/.xlsx) */
     replacementUpload: "api/exams/replacement-upload",
     yearsWithJustified: "api/exams/years-with-justified",
+    examAiSync: (id: string | number) => `api/exams/${id}/sync-ai` as const,
   },
   /** `justifications` app — router at `/api/` (`justifications/urls.py`). */
   absences: {

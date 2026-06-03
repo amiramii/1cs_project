@@ -44,8 +44,9 @@ function pct(part: number, total: number): number {
 function assignmentLine(a: AssignmentApi): string {
   const moduleName = a.module_name?.trim() || "—";
   const group = a.group_name?.trim() || "—";
+  const year = a.year_name?.trim() || "—";
   const sem = a.semester?.trim() || "—";
-  return `${moduleName} - ${group} - ${sem}`;
+  return `${moduleName} - ${group} - ${sem} - ${year}`;
 }
 
 function cardMatchesSearch(

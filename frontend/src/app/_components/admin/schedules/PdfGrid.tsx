@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import PdfPreview from './PdfPreview';
 import { getAccessToken } from "@/lib/tokenStorage";
-import { getApiBaseUrl } from "@/lib/apiBase";
+import { getScheduleFileFetchUrl } from "@/lib/scheduleMediaUrl";
 import { useLanguage } from "@/app/_components/language-provider";
 // export default function PdfGrid({ pdfs }: { pdfs: { url: string; title: string; date: string; professor: string }[] }) {}
 type Schedule = {
@@ -33,10 +33,7 @@ export default function PdfGrid({ link, schedules: schedulesProp }: PdfGridProps
 
 const normalizePdfUrl = (rawUrl: string) => {
   if (!rawUrl) return rawUrl
-  if (/^https?:\/\//i.test(rawUrl)) return rawUrl
-  const apiBase = getApiBaseUrl()
-  if (rawUrl.startsWith("/")) return `${apiBase}${rawUrl}`
-  return `${apiBase}/${rawUrl}`
+  return getScheduleFileFetchUrl(rawUrl)
 }
 
     useEffect(() => {

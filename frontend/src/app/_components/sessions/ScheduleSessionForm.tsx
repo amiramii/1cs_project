@@ -72,6 +72,8 @@ export type ScheduleSessionFormProps = {
   onSessionStartChange: (v: Dayjs | null) => void;
   sessionEnd: Dayjs;
   onSessionEndChange: (v: Dayjs | null) => void;
+  /** When true, the date picker allows today (direct session). When false, minimum is tomorrow (extra-session request). */
+  allowToday?: boolean;
 };
 
 /**
@@ -88,6 +90,7 @@ export default function ScheduleSessionForm({
   onSessionStartChange,
   sessionEnd,
   onSessionEndChange,
+  allowToday = false,
 }: ScheduleSessionFormProps) {
   React.useEffect(() => {
     dayjs.locale(isAr ? "ar" : "en");
@@ -96,7 +99,9 @@ export default function ScheduleSessionForm({
   const dateStr = sessionStart.isValid() ? sessionStart.format("YYYY-MM-DD") : "";
   const startTimeStr = sessionStart.isValid() ? sessionStart.format("HH:mm") : "08:00";
   const endTimeStr = sessionEnd.isValid() ? sessionEnd.format("HH:mm") : "10:00";
-  const minDate = dayjs().add(1, "day").format("YYYY-MM-DD");
+  const minDate = (allowToday ? dayjs() : dayjs().add(1, "day")).format(
+    "YYYY-MM-DD"
+  );
 
   const applyDate = (yMd: string) => {
     if (!yMd) return;

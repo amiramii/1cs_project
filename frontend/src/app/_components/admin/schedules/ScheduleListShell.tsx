@@ -20,9 +20,9 @@ import { useRouter } from "next/navigation"
 import SearchBar from "../SearchBar"
 import { useLanguage } from "@/app/_components/language-provider"
 import { getAccessToken } from "@/lib/tokenStorage"
+import { getScheduleFileFetchUrl } from "@/lib/scheduleMediaUrl"
 import { getApiBaseUrl } from "@/lib/apiBase"
 import { deleteDocument, fetchDocumentsByAudience } from "@/lib/checkinClient"
-import { getScheduleFileFetchUrl } from "@/lib/scheduleMediaUrl"
 import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors"
 import { notifyUser } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -242,16 +242,10 @@ export default function ScheduleListShell({
   const apiBase = getApiBaseUrl()
   const isStudentBrowse = studentBrowse && audience === "student"
   const pageSize = isStudentBrowse ? 1 : SCHEDULE_PAGE_SIZE
-
-  const normalizePdfUrl = useCallback(
-    (rawUrl: string) => {
-      if (!rawUrl) return rawUrl
-      if (/^https?:\/\//i.test(rawUrl)) return rawUrl
-      if (rawUrl.startsWith("/")) return `${apiBase}${rawUrl}`
-      return `${apiBase}/${rawUrl}`
-    },
-    [apiBase]
-  )
+  const normalizePdfUrl = useCallback((rawUrl: string) => {
+    if (!rawUrl) return rawUrl
+    return getScheduleFileFetchUrl(rawUrl)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -366,8 +360,11 @@ export default function ScheduleListShell({
       setHeaderDownloading(true)
       const token = getAccessToken()
       const rawUrl = item.pdf
-      const isLocalAsset = rawUrl.startsWith("/")
-      const fetchUrl = isLocalAsset
+      const isPublicAsset =
+        rawUrl.startsWith("/") &&
+        !rawUrl.startsWith("/api/media/") &&
+        !rawUrl.startsWith("/media/")
+      const fetchUrl = isPublicAsset
         ? `${typeof window !== "undefined" ? window.location.origin : ""}${rawUrl}`
         : getScheduleFileFetchUrl(rawUrl)
       const res = await fetch(fetchUrl, {

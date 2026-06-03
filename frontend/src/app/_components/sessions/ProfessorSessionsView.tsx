@@ -10,6 +10,7 @@ import {
   Info,
   Pencil,
   Play,
+  RefreshCw,
   Save,
   Search,
   Star,
@@ -39,7 +40,9 @@ import {
 import { cn, notifyUser } from "@/lib/utils";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
-import ScheduleSessionForm from "@/app/_components/sessions/ScheduleSessionForm";
+import ScheduleSessionForm, {
+  buildSessionCreateBody,
+} from "@/app/_components/sessions/ScheduleSessionForm";
 import {
   loadProfessorSessionData,
   type AssignmentApi,
@@ -55,6 +58,8 @@ import {
   patchAttendanceRow,
   postExtraSessionOpenSession,
   postExtraSessionRequest,
+  postSessionAiSync,
+  type AiSyncResponse,
   type ExtraSessionRequestRow,
 } from "@/lib/checkinClient";
 import { hydrateAttendanceRowsStudentInfo } from "@/lib/attendanceStudentHydrate";
@@ -260,6 +265,7 @@ export default function ProfessorSessionsView() {
   const [rowModal, setRowModal] = useState<AttendanceRow | null>(null);
   const [modalDraft, setModalDraft] = useState<RowDraft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [aiSyncing, setAiSyncing] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
   const [sheetShowAll, setSheetShowAll] = useState(false);
@@ -270,10 +276,10 @@ export default function ProfessorSessionsView() {
   const [professors, setProfessors] = useState<ProfessorOption[]>([]);
   const [requestedProfessorId, setRequestedProfessorId] = useState("");
   const [sessionStart, setSessionStart] = useState<Dayjs>(() =>
-    dayjs(`${todayLocalIso()}T08:00:00`).add(1, "day")
+    dayjs(`${todayLocalIso()}T08:00:00`)
   );
   const [sessionEnd, setSessionEnd] = useState<Dayjs>(() =>
-    dayjs(`${todayLocalIso()}T08:00:00`).add(1, "day").add(2, "hour")
+    dayjs(`${todayLocalIso()}T08:00:00`).add(2, "hour")
   );
   const [creating, setCreating] = useState(false);
   const [todayTimetable, setTodayTimetable] =
@@ -734,6 +740,46 @@ export default function ProfessorSessionsView() {
     URL.revokeObjectURL(url);
   };
 
+  const syncAiAttendance = async () => {
+    if (!workingSession) return;
+    setAiSyncing(true);
+    setSaveMsg(null);
+    try {
+      const res = await postSessionAiSync(workingSession.id);
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(text || "AI sync failed");
+      }
+      let data: AiSyncResponse = {
+        status: "success",
+        scanned_count: 0,
+        marked_present: 0,
+        message: "",
+      };
+      try {
+        data = JSON.parse(text) as AiSyncResponse;
+      } catch {
+        /* use defaults */
+      }
+      const msg =
+        data.message ||
+        (isAr
+          ? `اكتملت المزامنة: ${data.marked_present} طالب حاضر.`
+          : `AI sync complete: ${data.marked_present} students marked present.`);
+      toast.success(msg);
+      setSaveMsg(msg);
+      await refreshData();
+      await startWorking(workingSession, { resetFeedback: false });
+    } catch (e) {
+      console.error(e);
+      toast.error(
+        isAr ? "فشلت مزامنة الحضور بالذكاء الاصطناعي." : "AI attendance sync failed."
+      );
+    } finally {
+      setAiSyncing(false);
+    }
+  };
+
   const openUpcomingExtraSession = async (req: ExtraSessionRequestRow) => {
     setOpeningRequestId(req.id);
     try {
@@ -784,19 +830,76 @@ export default function ProfessorSessionsView() {
     }
   };
 
-  const submitExtraSessionRequest = async () => {
+  const submitScheduleForm = async () => {
     if (newAssignmentId === "") return;
-    if (!sessionStart.isAfter(dayjs(), "day")) {
+
+    const isToday =
+      sessionStart.isValid() &&
+      sessionStart.format("YYYY-MM-DD") === todayLocalIso();
+    const isFuture = sessionStart.isAfter(dayjs(), "day");
+
+    if (!isToday && !isFuture) {
       toast.error(
         isAr
-          ? "لا يمكن طلب حصة بتاريخ اليوم أو تاريخ سابق."
-          : "You can only request sessions for a future date."
+          ? "لا يمكن جدولة حصة بتاريخ سابق."
+          : "You cannot schedule a session in the past."
+      );
+      return;
+    }
+
+    if (!sessionEnd.isAfter(sessionStart)) {
+      toast.error(
+        isAr
+          ? "وقت النهاية يجب أن يكون بعد وقت البداية."
+          : "End time must be after start time."
       );
       return;
     }
 
     setCreating(true);
     try {
+      if (isToday) {
+        const body = buildSessionCreateBody(
+          newAssignmentId,
+          sessionStart,
+          sessionEnd,
+          classRoom
+        );
+        const res = await createAttendanceSession(body);
+        const text = await res.text();
+        if (!res.ok) {
+          const duplicate =
+            text.includes("Session already exists") ||
+            text.includes("already exists");
+          if (duplicate) {
+            throw new Error(
+              isAr
+                ? "حصة موجودة بالفعل لهذا التوقيت. افتحها من «حصص مسجّلة اليوم»."
+                : "A session already exists for this time. Open it under “Recorded sessions today”."
+            );
+          }
+          throw new Error(text || "create failed");
+        }
+        await refreshData();
+        let session: SessionApi | null = null;
+        try {
+          session = text ? (JSON.parse(text) as SessionApi) : null;
+        } catch {
+          session = null;
+        }
+        if (!session?.id) {
+          throw new Error("session missing after create");
+        }
+        setShowScheduleForm(false);
+        await startWorking(session, { resetFeedback: true });
+        toast.success(
+          isAr
+            ? "تم إنشاء حصة اليوم وفتح سجل الحضور."
+            : "Today's session created and attendance sheet opened."
+        );
+        return;
+      }
+
       const res = await postExtraSessionRequest({
         teaching_assignment: newAssignmentId,
         date: sessionStart.format("YYYY-MM-DD"),
@@ -815,9 +918,13 @@ export default function ProfessorSessionsView() {
       );
     } catch (e) {
       console.error(e);
-      toast.error(
-        isAr ? "تعذر إرسال طلب الحصة." : "Could not submit the session request."
-      );
+      const msg =
+        e instanceof Error
+          ? e.message
+          : isAr
+            ? "تعذر إكمال العملية."
+            : "Could not complete this action.";
+      toast.error(msg);
     } finally {
       setCreating(false);
     }
@@ -919,7 +1026,25 @@ export default function ProfessorSessionsView() {
                 </p>
               </div>
             </div>
-            <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:justify-end sm:gap-2">
+            <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap sm:justify-end sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="col-span-2 h-10 min-w-0 rounded-lg border-2 border-[#51689A]/40 bg-card px-3 text-sm text-[#51689A] shadow-md hover:bg-[#51689A]/5 sm:col-span-1 sm:px-4"
+                onClick={() => void syncAiAttendance()}
+                disabled={aiSyncing || saving}
+              >
+                <RefreshCw
+                  className={cn("size-4 shrink-0", aiSyncing && "animate-spin")}
+                />
+                {aiSyncing
+                  ? isAr
+                    ? "جارٍ المزامنة…"
+                    : "Syncing…"
+                  : isAr
+                    ? "مزامنة مسح الوجه"
+                    : "Sync Face Scans"}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -1756,7 +1881,7 @@ export default function ProfessorSessionsView() {
         onOpenChange={(open) => {
           setShowScheduleForm(open);
           if (open) {
-            const s = dayjs(`${todayLocalIso()}T08:00:00`).add(1, "day");
+            const s = dayjs(`${todayLocalIso()}T08:00:00`);
             setSessionStart(s);
             setSessionEnd(s.add(2, "hour"));
             setClassRoom("");
@@ -1784,8 +1909,8 @@ export default function ProfessorSessionsView() {
             </DialogTitle>
             <DialogDescription className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
               {isAr
-                ? "يُرسل الطلب إلى الشؤون التعليمية. بعد الموافقة، تظهر الحصة في «upcoming» في يومها لفتح سجل الحضور."
-                : "This sends a request to schooling. After approval, it appears under upcoming on that day so you can open the attendance sheet."}
+                ? "اختر اليوم لإنشاء حصة وفتح الحضور مباشرة. للتواريخ القادمة يُرسل الطلب إلى الشؤون التعليمية للموافقة."
+                : "Pick today to create a session and open attendance immediately. For future dates, a request is sent to schooling for approval."}
             </DialogDescription>
             {assignments.length === 0 && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100">
@@ -1806,12 +1931,13 @@ export default function ProfessorSessionsView() {
             onSessionStartChange={(v) => v && setSessionStart(v)}
             sessionEnd={sessionEnd}
             onSessionEndChange={(v) => v && setSessionEnd(v)}
+            allowToday
           />
           <DialogFooter className="relative z-10 mt-2 flex w-full flex-col items-center justify-center gap-0 sm:justify-center">
             <Button
               type="button"
               className="h-12 w-full max-w-sm cursor-pointer self-center rounded-full bg-[#51689A] text-base font-medium text-white shadow-sm hover:bg-[#51689A]/90 disabled:cursor-not-allowed disabled:opacity-60 p-2"
-              onClick={() => void submitExtraSessionRequest()}
+              onClick={() => void submitScheduleForm()}
               disabled={creating || newAssignmentId === ""}
             >
               <span className="inline-flex items-center gap-2">
@@ -1820,11 +1946,16 @@ export default function ProfessorSessionsView() {
                 </span>
                 {creating
                   ? isAr
-                    ? "جارٍ الإرسال…"
-                    : "Sending…"
-                  : isAr
-                    ? "إرسال الطلب"
-                    : "Submit request"}
+                    ? "جارٍ…"
+                    : "Working…"
+                  : sessionStart.isValid() &&
+                      sessionStart.format("YYYY-MM-DD") === todayLocalIso()
+                    ? isAr
+                      ? "إنشاء حصة اليوم"
+                      : "Create today's session"
+                    : isAr
+                      ? "إرسال الطلب"
+                      : "Submit request"}
               </span>
             </Button>
           </DialogFooter>
