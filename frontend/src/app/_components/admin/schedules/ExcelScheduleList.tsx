@@ -27,6 +27,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { SCHEDULE_LIST_EMPTY_CLASS } from "@/lib/scheduleUiClasses"
 import {
   loadAllAcademicYears,
@@ -120,6 +127,12 @@ export default function ExcelScheduleList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<ExcelScheduleRow | null>(
+    null
+  )
+
+  const navy = "#1B2065"
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -157,12 +170,6 @@ export default function ExcelScheduleList() {
   const deleteExcelItem = useCallback(
     async (item: ExcelScheduleRow) => {
       if (!allowDelete) return
-      const confirmed = window.confirm(
-        isArabic
-          ? `حذف «${item.title}»؟`
-          : `Delete «${item.title}»?`
-      )
-      if (!confirmed) return
       setDeletingId(item.id)
       try {
         const res = await deleteExcelSchedule(item.id)
@@ -186,6 +193,22 @@ export default function ExcelScheduleList() {
     },
     [allowDelete, isArabic]
   )
+
+  const requestDeleteExcelItem = useCallback(
+    (item: ExcelScheduleRow) => {
+      if (!allowDelete) return
+      setPendingDeleteItem(item)
+      setDeleteConfirmOpen(true)
+    },
+    [allowDelete]
+  )
+
+  const confirmDeleteExcelItem = useCallback(async () => {
+    if (!pendingDeleteItem) return
+    await deleteExcelItem(pendingDeleteItem)
+    setDeleteConfirmOpen(false)
+    setPendingDeleteItem(null)
+  }, [deleteExcelItem, pendingDeleteItem])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -250,13 +273,13 @@ export default function ExcelScheduleList() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/Scheduals/Student-Schedules")}
+          onClick={() => router.push("/Scheduals/Replacement-Schedules")}
           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border-border bg-card px-3 text-sm text-foreground hover:bg-accent"
-          aria-label={isArabic ? "الطلاب" : "Students"}
+          aria-label={isArabic ? "ملفات Remplacement" : "Replacement files"}
         >
           {dir === "rtl" ? <MoveRight size={18} /> : <MoveLeft size={18} />}
           <span className="hidden sm:inline">
-            {isArabic ? "الطلاب" : "Students"}
+            {isArabic ? "Remplacement" : "Replacement"}
           </span>
         </Button>
         <h1 className="min-w-0 flex-1 text-center font-montserrat text-sm font-semibold text-foreground sm:text-xl xl:text-2xl">
@@ -265,12 +288,12 @@ export default function ExcelScheduleList() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/Scheduals")}
+          onClick={() => router.push("/Scheduals/Exam-Schedules")}
           className="inline-flex h-10 items-center justify-center gap-2 rounded-md border-border bg-card px-3 text-sm text-foreground hover:bg-accent"
-          aria-label={isArabic ? "العودة للتحميل" : "Back to Upload"}
+          aria-label={isArabic ? "الامتحانات" : "Exams"}
         >
           <span className="hidden sm:inline">
-            {isArabic ? "العودة للتحميل" : "Back to Upload"}
+            {isArabic ? "الامتحانات" : "Exams"}
           </span>
           {dir === "rtl" ? <MoveLeft size={18} /> : <MoveRight size={18} />}
         </Button>
@@ -457,7 +480,7 @@ export default function ExcelScheduleList() {
                             type="button"
                             variant="outline"
                             disabled={deletingId === item.id}
-                            onClick={() => void deleteExcelItem(item)}
+                            onClick={() => requestDeleteExcelItem(item)}
                             className="w-full border-destructive/40 text-destructive hover:bg-destructive/10"
                           >
                             <Trash2 className="me-2 size-4" />
@@ -478,6 +501,49 @@ export default function ExcelScheduleList() {
           </div>
         ) : null}
       </div>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent
+          className="max-w-md border-slate-200 bg-card/80 shadow-lg backdrop-blur-3xl"
+          showCloseButton
+        >
+          <DialogHeader className="space-y-2 text-center sm:text-center">
+            <DialogTitle
+              className="text-lg font-bold sm:text-xl"
+              style={{ color: navy }}
+            >
+              {isArabic ? "تأكيد حذف هذا الملف" : "Confirm deleting this file"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {isArabic
+                ? "سيُزال الملف نهائياً من القائمة."
+                : "This file will be permanently removed."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-center sm:gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 flex-1 rounded-lg border-2 border-[#1B2065] font-semibold text-[#1B2065]"
+              onClick={() => {
+                setDeleteConfirmOpen(false)
+                setPendingDeleteItem(null)
+              }}
+            >
+              {isArabic ? "إلغاء" : "Cancel"}
+            </Button>
+            <Button
+              type="button"
+              disabled={deletingId != null}
+              className="h-11 flex-1 rounded-lg border-0 font-semibold text-white"
+              style={{ backgroundColor: navy }}
+              onClick={() => void confirmDeleteExcelItem()}
+            >
+              {isArabic ? "تأكيد" : "Confirm"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

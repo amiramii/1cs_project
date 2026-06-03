@@ -48,6 +48,7 @@ import { loadDrfListAll } from "@/lib/drfPaginatedList"
 import { deleteTeacherById } from "@/lib/checkinClient"
 import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
 import { createTeacherManual } from "@/lib/manualUserCreate"
+import { updateProfessorEmailManual } from "@/lib/manualUserUpdate"
 import { isNetworkFailure, apiUnreachableMessage } from "@/lib/fetchErrors"
 
 type Semester = "S1" | "S2"
@@ -162,6 +163,7 @@ export default function DataTable() {
     section: "",
     year: "",
   })
+  const [editPreviousEmail, setEditPreviousEmail] = useState("")
 
   const mapTeacherToRow = useCallback(
     (
@@ -386,30 +388,32 @@ export default function DataTable() {
       section: "",
       year: "",
     })
+    setEditPreviousEmail(selectedTeacher.email)
     setDrawerMode("edit")
   }
 
   const submitTeacherDrawer = async () => {
-    if (drawerMode !== "add") {
-      setLoadError(
-        isArabic
-          ? "تعديل الأستاذ يحتاج مسار تحديث مناسب في الخادم."
-          : "Professor edit needs a proper backend update endpoint for nested user and assignment fields."
-      )
-      return
-    }
     setSavingDrawer(true)
     setLoadError(null)
     try {
-      await createTeacherManual({
-        full_name: teacherForm.full_name,
-        email: teacherForm.email,
-        module: teacherForm.module,
-        groups: teacherForm.groups,
-        semester: teacherForm.semester,
-        section: teacherForm.section,
-        year: teacherForm.year,
-      })
+      if (drawerMode === "add") {
+        await createTeacherManual({
+          full_name: teacherForm.full_name,
+          email: teacherForm.email,
+          module: teacherForm.module,
+          groups: teacherForm.groups,
+          semester: teacherForm.semester,
+          section: teacherForm.section,
+          year: teacherForm.year,
+        })
+      } else if (drawerMode === "edit" && selectedTeacher) {
+        await updateProfessorEmailManual({
+          previousEmail: editPreviousEmail,
+          email: teacherForm.email,
+        })
+      } else {
+        return
+      }
       setDrawerMode(null)
       await loadProfessors()
     } catch (error) {
@@ -808,7 +812,6 @@ export default function DataTable() {
                 {label}
                 <Input
                   value={teacherForm[key as keyof typeof teacherForm]}
-                  disabled={drawerMode === "edit"}
                   placeholder={placeholder}
                   onChange={(e) =>
                     setTeacherForm((prev) => ({ ...prev, [key]: e.target.value }))

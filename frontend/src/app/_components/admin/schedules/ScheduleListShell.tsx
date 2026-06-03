@@ -520,26 +520,36 @@ export default function ScheduleListShell({
               </p>
             ) : null}
           </div>
-          <Button
-            type="button"
-            disabled={
-              headerDownloading || loading || !!error || !visibleSchedules[0]
-            }
-            className={cn(
-              "inline-flex h-fit shrink-0 items-center justify-center gap-2 self-end rounded-lg border-0 bg-[#51689A] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#51689A]/90 disabled:opacity-50 sm:self-auto",
-              dir === "rtl" && "sm:ms-0"
-            )}
-            onClick={() => void downloadScheduleItem(visibleSchedules[0])}
-          >
-            <ArrowDownToLine className="size-4 shrink-0" aria-hidden />
-            {headerDownloading
-              ? isArabic
-                ? "جارٍ التحميل..."
-                : "Downloading..."
-              : isArabic
-                ? "تحميل"
-                : "Download"}
-          </Button>
+          <div className="flex shrink-0 flex-col gap-2 self-end sm:flex-row sm:self-auto">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/Scheduals/Replacement-Schedules")}
+              className="inline-flex h-fit items-center justify-center gap-2 rounded-lg border-[#51689A]/35 px-3 py-2 text-sm font-semibold text-[#1B2065] hover:bg-[#51689A]/5 dark:text-[#EEF4F7]"
+            >
+              {isArabic ? "جداول Remplacement" : "Replacement schedules"}
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                headerDownloading || loading || !!error || !visibleSchedules[0]
+              }
+              className={cn(
+                "inline-flex h-fit shrink-0 items-center justify-center gap-2 rounded-lg border-0 bg-[#51689A] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#51689A]/90 disabled:opacity-50",
+                dir === "rtl" && "sm:ms-0"
+              )}
+              onClick={() => void downloadScheduleItem(visibleSchedules[0])}
+            >
+              <ArrowDownToLine className="size-4 shrink-0" aria-hidden />
+              {headerDownloading
+                ? isArabic
+                  ? "جارٍ التحميل..."
+                  : "Downloading..."
+                : isArabic
+                  ? "تحميل"
+                  : "Download"}
+            </Button>
+          </div>
         </header>
       ) : hideTopNavigation ? (
         <h1 className="text-start text-2xl font-bold tracking-tight text-[#1B2065] sm:text-3xl dark:text-[#EEF4F7]">

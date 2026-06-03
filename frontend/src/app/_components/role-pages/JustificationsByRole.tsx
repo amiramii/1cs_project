@@ -43,8 +43,8 @@ export default function JustificationsByRole({
       void notifyUser({
         title: isAr ? "الشؤون التعليمية" : "Schooling office",
         body: isAr
-          ? "ستصلك إشعارات عند وصول طلبات مبررات جديدة (عند ربط الـ API)."
-          : "You will get alerts for new justification requests (once the API is connected).",
+          ? "ستصلك إشعارات عند وصول طلبات مبررات جديدة."
+          : "You will get alerts when new justification requests arrive.",
         tag: "welcome-schooling-justifications",
       })
       return
@@ -72,10 +72,9 @@ export default function JustificationsByRole({
         </h1>
         <p className="text-lg text-[#51689AF2] dark:text-[#9BA8C4]">
           {isAr
-            ? "عرض الطلبات المرتبطة بالخادم وقبولها أو رفضها."
-            : "Review justification requests from the server — accept or refuse."}
+            ? "مراجعة وقبول/رفض المبررات مخصّصة لحسابات الشؤون التعليمية (SCHOOLING) على الخادم. سجّل الدخول بحساب الشؤون لمعالجة الطلبات."
+            : "Reviewing and accepting/refusing justifications is handled by schooling office accounts (SCHOOLING role) on the server. Sign in as schooling staff to process requests."}
         </p>
-        <SchoolingJustificationsTable studentDetailHrefMode="backendReview" />
       </div>
     )
   }

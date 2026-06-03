@@ -25,6 +25,7 @@ type RawJustification = {
   file?: string | null;
   created_at?: string;
   attendances?: { module?: string; date?: string }[];
+  exam_attendances?: { module?: string; date?: string }[];
 };
 
 function isoDate(dateStr?: string): string {
@@ -82,12 +83,16 @@ export default function SchoolJustificationDetailsPanel() {
     rows[0]?.student_name ?? (studentEmail !== "" ? studentEmail : "");
 
   async function respond(
-    method: typeof patchJustificationAccept,
-    id: number
+    method: typeof patchJustificationAccept | typeof patchJustificationRefuse,
+    id: number,
+    note?: string
   ) {
     setBusyId(id);
     try {
-      const res = await method(id);
+      const res =
+        method === patchJustificationRefuse
+          ? await patchJustificationRefuse(id, note)
+          : await method(id);
       if (!res.ok) {
         const t = await res.text().catch(() => "");
         toast.error(
@@ -198,7 +203,18 @@ export default function SchoolJustificationDetailsPanel() {
                     size="sm"
                     disabled={!pending || busyId === row.id}
                     className="border-[#DF2D3E]/35 text-[#DF2D3E]"
-                    onClick={() => void respond(patchJustificationRefuse, row.id)}
+                    onClick={() => {
+                      const note =
+                        typeof window !== "undefined"
+                          ? window.prompt(
+                              isAr
+                                ? "سبب الرفض (اختياري):"
+                                : "Refusal note (optional):"
+                            )
+                          : null;
+                      if (note === null) return;
+                      void respond(patchJustificationRefuse, row.id, note);
+                    }}
                   >
                     {isAr ? "رفض" : "Refuse"}
                   </Button>
@@ -211,13 +227,13 @@ export default function SchoolJustificationDetailsPanel() {
                 </p>
               ) : null}
 
-              {(row.attendances ?? []).length > 0 ? (
+              {([...(row.attendances ?? []), ...(row.exam_attendances ?? [])]).length > 0 ? (
                 <div className="mt-3 text-sm text-[#51689A] dark:text-[#9BA8C4]">
                   <span className="font-semibold text-[#1B2065] dark:text-[#EEF4F7]">
                     {isAr ? "التوقيتات" : "slots"}
                     {": "}
                   </span>
-                  {(row.attendances ?? []).map((a, i) => (
+                  {([...(row.attendances ?? []), ...(row.exam_attendances ?? [])]).map((a, i) => (
                     <span key={i}>
                       {i > 0 ? ", " : ""}
                       {a.module ?? "—"}

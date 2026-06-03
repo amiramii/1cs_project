@@ -8,6 +8,7 @@ import { useLanguage } from "@/app/_components/language-provider";
 import JustifyAbsenceDialog from "@/app/_components/absences/JustifyAbsenceDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Pagination,
   PaginationContent,
@@ -80,6 +81,7 @@ type AttendanceByDateApiEntry = {
 
 type RawJustification = {
   attendances?: { module?: string; status?: string }[];
+  exam_attendances?: { module?: string; status?: string }[];
 };
 
 const PAGE_SIZE = 6;
@@ -115,6 +117,10 @@ function formatClock(t?: string | null): string {
   return `${h}:${mi.slice(0, 2)}`;
 }
 
+function allJustificationAttendanceRows(j: RawJustification) {
+  return [...(j.attendances ?? []), ...(j.exam_attendances ?? [])];
+}
+
 function justificationRequestsTouchingModule(
   list: RawJustification[],
   moduleName: string
@@ -122,7 +128,7 @@ function justificationRequestsTouchingModule(
   const target = normalizeModule(moduleName).toLowerCase();
   let n = 0;
   for (const j of list) {
-    const atts = j.attendances ?? [];
+    const atts = allJustificationAttendanceRows(j);
     if (
       atts.some(
         (a) => normalizeModule(a.module).toLowerCase() === target && target
@@ -139,8 +145,7 @@ function justifiedAbsencesByModuleFromJustifications(
 ): Map<string, number> {
   const out = new Map<string, number>();
   for (const j of list) {
-    const atts = j.attendances ?? [];
-    for (const a of atts) {
+    for (const a of allJustificationAttendanceRows(j)) {
       const moduleName = normalizeModule(a.module).toLowerCase();
       if (!moduleName || a.status !== "justified") continue;
       out.set(moduleName, (out.get(moduleName) ?? 0) + 1);
@@ -197,6 +202,8 @@ export default function StudentAbsencesView() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDayIds, setSelectedDayIds] = useState<Set<string>>(new Set());
   const [justifyOpen, setJustifyOpen] = useState(false);
+  const [examJustifyDate, setExamJustifyDate] = useState("");
+  const [examJustifyOpen, setExamJustifyOpen] = useState(false);
 
   const [moduleRows, setModuleRows] = useState<AbsenceRow[]>([]);
   const [dayCards, setDayCards] = useState<AbsenceDayCard[]>([]);
@@ -704,8 +711,8 @@ export default function StudentAbsencesView() {
           </h2>
           <p className="text-[15px] text-[#51689A] dark:text-[#9BA8C4]">
             {isAr
-              ? "راجع تواريخ الغياب، ثم اختر اليوم وأرسل طلبًا للشؤون عبر الواجهة."
-              : "Select dates (absent slots from the API), then justify with file upload."}
+              ? "اختر تواريخ غياب الحصص من القائمة، ثم اضغط «تبرير» (TP/TD)."
+              : "Select session absence dates from the list, then click Justify (TP/TD)."}
           </p>
         </header>
 
@@ -784,6 +791,41 @@ export default function StudentAbsencesView() {
         </div>
       </section>
 
+      <section className="space-y-4 rounded-2xl border border-[#51689A]/25 bg-[#F6F7FE]/80 p-5 dark:border-[#383F58] dark:bg-[#242A40]/50">
+        <header className="space-y-2">
+          <h2 className="text-xl font-bold tracking-tight text-[#1B2065] md:text-2xl dark:text-[#EEF4F7]">
+            {isAr ? "غياب امتحان" : "Exam absence"}
+          </h2>
+          <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
+            {isAr
+              ? "غيابات الامتحان لا تظهر في قائمة الحصص. أدخل تاريخ الامتحان ثم أرسل المبرر."
+              : "Exam absences are not listed with sessions. Enter the exam date and submit your justification."}
+          </p>
+        </header>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="grid flex-1 gap-1.5">
+            <Label htmlFor="exam-absence-date" className="text-sm font-medium text-[#1B2065] dark:text-[#EEF4F7]">
+              {isAr ? "تاريخ الامتحان" : "Exam date"}
+            </Label>
+            <Input
+              id="exam-absence-date"
+              type="date"
+              value={examJustifyDate}
+              onChange={(e) => setExamJustifyDate(e.target.value)}
+              className="h-10 max-w-xs rounded-xl border border-slate-200/80 bg-white dark:border-[#383F58] dark:bg-[#1A2036]"
+            />
+          </div>
+          <Button
+            type="button"
+            disabled={!examJustifyDate.trim()}
+            onClick={() => setExamJustifyOpen(true)}
+            className="h-12 min-w-[200px] rounded-xl bg-[#51689A] px-8 text-base font-semibold text-white hover:bg-[#40547F]"
+          >
+            {isAr ? "تبرير غياب امتحان" : "Justify exam absence"}
+          </Button>
+        </div>
+      </section>
+
       <JustifyAbsenceDialog
         open={justifyOpen}
         onOpenChange={setJustifyOpen}
@@ -791,6 +833,19 @@ export default function StudentAbsencesView() {
         isAr={isAr}
         onSubmitted={() => {
           setSelectedDayIds(new Set());
+          refetchLists();
+        }}
+      />
+
+      <JustifyAbsenceDialog
+        open={examJustifyOpen}
+        onOpenChange={setExamJustifyOpen}
+        selectedDays={[]}
+        examDate={examJustifyDate}
+        examOnly
+        isAr={isAr}
+        onSubmitted={() => {
+          setExamJustifyDate("");
           refetchLists();
         }}
       />

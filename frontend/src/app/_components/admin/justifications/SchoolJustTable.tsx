@@ -61,7 +61,12 @@ type RawJustificationRow = {
   student_name?: string;
   student_email?: string;
   attendances?: { group?: string; module?: string }[];
+  exam_attendances?: { group?: string; module?: string }[];
 };
+
+function attendanceRowsFromJustification(j: RawJustificationRow) {
+  return [...(j.attendances ?? []), ...(j.exam_attendances ?? [])];
+}
 
 function aggregateByStudent(
   rows: RawJustificationRow[],
@@ -88,12 +93,9 @@ function aggregateByStudent(
         ? j.student_name.trim()
         : email;
 
-    const firstGroup = Array.isArray(j.attendances)
-      ? j.attendances[0]?.group
-      : undefined;
-    const firstModule = Array.isArray(j.attendances)
-      ? j.attendances[0]?.module
-      : undefined;
+    const slots = attendanceRowsFromJustification(j);
+    const firstGroup = slots[0]?.group;
+    const firstModule = slots[0]?.module;
     const group =
       typeof firstGroup === "string" && firstGroup.trim()
         ? firstGroup.trim()
@@ -155,9 +157,9 @@ function collectYears(rows: JustificationRow[]) {
 }
 
 export function SchoolingJustificationsTable({
-  studentDetailHrefMode = "schoolingMock",
+  studentDetailHrefMode = "backendReview",
 }: {
-  /** Schooling uses the mock detail page; admins use the API-backed review screen. */
+  /** Schooling uses the API-backed review screen; legacy mock detail kept as fallback. */
   studentDetailHrefMode?: "schoolingMock" | "backendReview"
 } = {}) {
   const { language } = useLanguage();

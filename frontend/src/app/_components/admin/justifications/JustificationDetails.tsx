@@ -50,6 +50,11 @@ interface RawJustification {
   status: string;
   created_at: string;
   attendances: Attendance[];
+  exam_attendances?: Attendance[];
+}
+
+function allAttendanceRows(r: RawJustification): Attendance[] {
+  return [...(r.attendances ?? []), ...(r.exam_attendances ?? [])];
 }
 
 // Replace the custom fetchJustification function with this:
@@ -219,22 +224,26 @@ export default function JustificationDetails() {
         // Extract student info from first result
         const first = results[0];
         if (first) {
+          const slots = allAttendanceRows(first);
           setStudentInfo({
             name: first.student_name,
             email: first.student_email,
-            group: first.attendances?.[0]?.group ?? "—",
-            year: "—", // enrich from your year map if needed
+            group: slots[0]?.group ?? "—",
+            year: "—",
           });
         }
 
-        const mapped: Justification[] = results.map((r) => ({
+        const mapped: Justification[] = results.map((r) => {
+          const slots = allAttendanceRows(r);
+          return {
           id: r.id,
-          startDate: r.attendances?.[0]?.date ?? r.created_at.split("T")[0],
-          endDate: r.attendances?.at(-1)?.date ?? r.created_at.split("T")[0],
+          startDate: slots[0]?.date ?? r.created_at.split("T")[0],
+          endDate: slots.at(-1)?.date ?? r.created_at.split("T")[0],
           cause: r.cause,
-          pdfPath: r.file,   // e.g. "/media/teacher_absence/justmed.pdf"
+          pdfPath: r.file,
           status: r.status,
-        }));
+        };
+        });
 
         setJustifications(mapped);
       } catch (e) {
@@ -249,13 +258,13 @@ export default function JustificationDetails() {
     try {
       const res = action === "accept"
         ? await patchJustificationAccept(id)
-        : await patchJustificationRefuse(id);
+        : await patchJustificationRefuse(id, note);
   
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
   
       setJustifications(prev =>
         prev.map(j => j.id === id
-          ? { ...j, status: action === "accept" ? "accepted" : "rejected" }
+          ? { ...j, status: action === "accept" ? "accepted" : "refused" }
           : j
         )
       );

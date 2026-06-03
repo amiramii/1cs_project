@@ -35,6 +35,7 @@ type RawJustification = {
   id?: number;
   status?: string;
   attendances?: ApiAttendanceMini[];
+  exam_attendances?: ApiAttendanceMini[];
   created_at?: string;
 };
 
@@ -74,7 +75,10 @@ function justificationRowsFromApi(
     const submitted =
       typeof j.created_at === "string" ? j.created_at : new Date(createdFallback).toISOString();
 
-    const atts = Array.isArray(j.attendances) ? j.attendances : [];
+    const atts = [
+      ...(Array.isArray(j.attendances) ? j.attendances : []),
+      ...(Array.isArray(j.exam_attendances) ? j.exam_attendances : []),
+    ];
 
     if (atts.length === 0) {
       rows.push({

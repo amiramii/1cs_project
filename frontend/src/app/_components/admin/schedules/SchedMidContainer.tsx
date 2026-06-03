@@ -35,6 +35,7 @@ import { useLanguage } from "@/app/_components/language-provider";
 import { apiUnreachableMessage, isNetworkFailure } from "@/lib/fetchErrors";
 import StudScheduleList from "@/app/_components/admin/schedules/StudScheduleList";
 import ScheduleYearCombobox from "@/app/_components/admin/schedules/ScheduleYearCombobox";
+import { appendReplacementScheduleCache } from "@/lib/replacementScheduleCache";
 
 type UploadMode = "pdf" | "excel" | "remplacement" | "exams";
 
@@ -136,6 +137,14 @@ export default function SchedulsMiddleContainer({
   };
   const ExcelSchedulesPath = () => {
     router.push("/Scheduals/Excel-Schedules");
+  };
+
+  const ReplacementSchedulesPath = () => {
+    router.push("/Scheduals/Replacement-Schedules");
+  };
+
+  const ExamSchedulesPath = () => {
+    router.push("/Scheduals/Exam-Schedules");
   };
   const { language } = useLanguage();
   const isArabic = language === "ar";
@@ -247,12 +256,22 @@ export default function SchedulsMiddleContainer({
 
       let yearPk: number | null = null;
       if (needsYear) {
-        const ensured = await resolveOrEnsureAcademicYearPk(year, academicYears);
-        yearPk = ensured.pk;
+        let ensuredYears: AcademicYearRow[] = academicYears;
+        if (uploadMode === "remplacement") {
+          const directYearId = Number.parseInt(year, 10);
+          if (Number.isFinite(directYearId) && directYearId > 0) {
+            yearPk = directYearId;
+          }
+        }
+        if (yearPk == null) {
+          const ensured = await resolveOrEnsureAcademicYearPk(year, academicYears);
+          yearPk = ensured.pk;
+          ensuredYears = ensured.years;
+        }
         if (yearPk == null) {
           const message = academicYearResolveHint(
             year,
-            ensured.years,
+            ensuredYears,
             isArabic
           );
           setUploadError(message);
@@ -300,15 +319,35 @@ export default function SchedulsMiddleContainer({
         formData.append("file", effectivePdf);
       
         const res = await postReplacementSchedule(formData);
+        const bodyText = await res.text();
+        const parsed = parseJsonSafe(bodyText) as {
+          year?: string;
+          file_url?: string;
+        } | null;
         if (res.ok) {
+          if (parsed?.file_url) {
+            const yearLabel =
+              parsed.year ??
+              examYears.find((y) => y.value === year)?.label ??
+              year;
+            appendReplacementScheduleCache({
+              title: `Replacement - ${yearLabel}`,
+              year: yearLabel,
+              file: parsed.file_url,
+            });
+          }
+          toast.success(
+            isArabic
+              ? "تم رفع جدول Remplacement بنجاح."
+              : "Replacement schedule uploaded successfully."
+          );
           setSuccessMsg(true);
           setTimeout(() => setSuccessMsg(false), 1000);
           setYear("default");
           setDroppedFile(null);
           onStagedPdfChange?.(null);
+          router.push("/Scheduals/Replacement-Schedules");
         } else {
-          const bodyText = await res.text();
-          const parsed = parseJsonSafe(bodyText);
           const message = formatDocumentUploadError(res.status, bodyText, parsed, isArabic);
           setUploadError(message);
           toast.error(message);
@@ -650,7 +689,7 @@ export default function SchedulsMiddleContainer({
       </div>
 
       {variant === "admin" && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <Button
             type="button"
             onClick={ProfessorSchedulesPath}
@@ -674,6 +713,22 @@ export default function SchedulsMiddleContainer({
           >
             <CalendarCheck className="text-[#FEF9F9]" size={22} />
             {isArabic ? "ملفات Excel" : "Excel Files"}
+          </Button>
+          <Button
+            type="button"
+            onClick={ReplacementSchedulesPath}
+            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#40547F] py-4 text-center text-[#FEF9F9] hover:bg-[#40547F]/90"
+          >
+            <CalendarCheck className="text-[#FEF9F9]" size={22} />
+            {isArabic ? "Remplacement" : "Replacement"}
+          </Button>
+          <Button
+            type="button"
+            onClick={ExamSchedulesPath}
+            className="h-auto min-h-16 justify-center gap-2 rounded-lg border border-transparent bg-[#2A3558] py-4 text-center text-[#FEF9F9] hover:bg-[#2A3558]/90 sm:col-span-2 lg:col-span-1"
+          >
+            <CalendarCheck className="text-[#FEF9F9]" size={22} />
+            {isArabic ? "جلسات الامتحان" : "Exam sessions"}
           </Button>
         </div>
       )}

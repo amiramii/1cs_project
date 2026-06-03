@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowUpFromLine,
@@ -43,6 +44,7 @@ import type { Dayjs } from "dayjs";
 import ScheduleSessionForm, {
   buildSessionCreateBody,
 } from "@/app/_components/sessions/ScheduleSessionForm";
+import SessionShareAcceptDialog from "@/app/_components/sessions/SessionShareAcceptDialog";
 import {
   loadProfessorSessionData,
   type AssignmentApi,
@@ -59,9 +61,14 @@ import {
   postExtraSessionOpenSession,
   postExtraSessionRequest,
   postSessionAiSync,
+  postSessionShareRequest,
+  loadSessionShareIncoming,
+  loadSessionShareBorrowedToday,
   type AiSyncResponse,
   type ExtraSessionRequestRow,
+  type SessionShareRequestRow,
 } from "@/lib/checkinClient";
+import { formatDrfError } from "@/lib/drfError";
 import { hydrateAttendanceRowsStudentInfo } from "@/lib/attendanceStudentHydrate";
 import { checkinPath } from "@/lib/checkinApi";
 import { loadDrfListAll } from "@/lib/drfPaginatedList";
@@ -238,6 +245,7 @@ function isScheduleFormPortaledLayerTarget(
  *   teachers get OS-level feedback when the dashboard tab is in the background.
  */
 export default function ProfessorSessionsView() {
+  const searchParams = useSearchParams();
   const { language } = useLanguage();
   const isAr = language === "ar";
   /** Avoid refetch races when language flips on hydrate (keeps initial load single-flight). */
@@ -295,6 +303,16 @@ export default function ProfessorSessionsView() {
   const [savedSessionIds, setSavedSessionIds] = useState<Set<number>>(
     () => new Set()
   );
+  const [requestingProfessorShare, setRequestingProfessorShare] =
+    useState(false);
+  const [incomingShareRequests, setIncomingShareRequests] = useState<
+    SessionShareRequestRow[]
+  >([]);
+  const [shareDialogRequest, setShareDialogRequest] =
+    useState<SessionShareRequestRow | null>(null);
+  const [borrowedTodaySessionIds, setBorrowedTodaySessionIds] = useState<
+    Set<number>
+  >(() => new Set());
 
   const getRowDraft = useCallback(
     (row: AttendanceRow): RowDraft =>
@@ -311,12 +329,43 @@ export default function ProfessorSessionsView() {
     }
   }, []);
 
+  const refreshSessionSharing = useCallback(async () => {
+    try {
+      const [incoming, borrowedRaw] = await Promise.all([
+        loadSessionShareIncoming(),
+        loadSessionShareBorrowedToday().catch(() => [] as unknown[]),
+      ]);
+      setIncomingShareRequests(incoming);
+      const borrowed = borrowedRaw as SessionApi[];
+      const borrowedIds = new Set<number>();
+      for (const s of borrowed) {
+        if (typeof s.id === "number") borrowedIds.add(s.id);
+      }
+      setBorrowedTodaySessionIds(borrowedIds);
+      if (borrowed.length > 0) {
+        setSessions((prev) => {
+          const byId = new Map(prev.map((s) => [s.id, s]));
+          for (const s of borrowed) {
+            if (typeof s.id === "number" && !byId.has(s.id)) {
+              byId.set(s.id, s);
+            }
+          }
+          return [...byId.values()];
+        });
+      }
+    } catch {
+      setIncomingShareRequests([]);
+      setBorrowedTodaySessionIds(new Set());
+    }
+  }, []);
+
   const refreshData = useCallback(async () => {
     const ar = isArRef.current;
     try {
       const [bundle] = await Promise.all([
         loadProfessorSessionData(ar, { cacheBust: true }),
         refreshUpcomingExtraSessions(),
+        refreshSessionSharing(),
       ]);
       setSessions(bundle.sessions);
       setTeacherAttendanceRows(bundle.teacherAttendanceRows);
@@ -334,7 +383,7 @@ export default function ProfessorSessionsView() {
       }
       throw e;
     }
-  }, [apiBase, refreshUpcomingExtraSessions]);
+  }, [apiBase, refreshUpcomingExtraSessions, refreshSessionSharing]);
 
   useEffect(() => {
     let alive = true;
@@ -636,6 +685,63 @@ export default function ProfessorSessionsView() {
       `Professor #${selected.id}`
     );
   }, [professors, requestedProfessorId, isAr]);
+
+  useEffect(() => {
+    if (searchParams.get("shareIncoming") !== "1") return;
+    if (incomingShareRequests.length === 0) return;
+    const reqIdRaw = searchParams.get("shareRequestId");
+    const reqId = reqIdRaw ? Number(reqIdRaw) : NaN;
+    const target =
+      Number.isFinite(reqId)
+        ? incomingShareRequests.find((r) => r.id === reqId)
+        : incomingShareRequests[0];
+    if (target) setShareDialogRequest(target);
+  }, [searchParams, incomingShareRequests]);
+
+  const submitProfessorShareRequest = async () => {
+    const selected = professors.find(
+      (professor) => String(professor.id) === requestedProfessorId
+    );
+    const ownerEmail = selected?.email?.trim().toLowerCase();
+    if (!ownerEmail) {
+      toast.error(
+        isAr ? "اختر أستاذًا ببريد صالح." : "Select a professor with a valid email."
+      );
+      return;
+    }
+    setRequestingProfessorShare(true);
+    try {
+      const res = await postSessionShareRequest({ owner_email: ownerEmail });
+      const text = await res.text();
+      if (!res.ok) {
+        let payload: unknown = text;
+        try {
+          payload = text ? JSON.parse(text) : text;
+        } catch {
+          /* keep text */
+        }
+        throw new Error(formatDrfError(payload, text));
+      }
+      setRequestedProfessorId("");
+      await refreshSessionSharing();
+      window.dispatchEvent(new CustomEvent("chekin-notifications-refresh"));
+      toast.success(
+        isAr
+          ? "تم إرسال الطلب. سيصل إشعار إلى الأستاذ."
+          : "Request sent. The professor will receive a notification."
+      );
+    } catch (e) {
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : isAr
+            ? "تعذر إرسال الطلب."
+            : "Could not send the request."
+      );
+    } finally {
+      setRequestingProfessorShare(false);
+    }
+  };
 
   const sheetRowsVisible = useMemo(() => {
     if (sheetShowAll) return filteredRows;
@@ -1713,6 +1819,7 @@ export default function ProfessorSessionsView() {
             {todaySessionsNotOnTimetable.map((session) => {
               const busySess = startingSlotKey === `sess-${session.id}`;
               const isClosed = savedSessionIds.has(session.id);
+              const isBorrowed = borrowedTodaySessionIds.has(session.id);
               return (
                 <li
                   key={`today-sess-${session.id}`}
@@ -1727,6 +1834,11 @@ export default function ProfessorSessionsView() {
                           isAr ? "اليوم" : "Today"
                         )}
                       </p>
+                      {isBorrowed ? (
+                        <span className="rounded-md bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                          {isAr ? "حصة مشتركة" : "Shared session"}
+                        </span>
+                      ) : null}
                       {isClosed ? (
                         <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
                           {isAr ? "محفوظة" : "Saved"}
@@ -1809,10 +1921,36 @@ export default function ProfessorSessionsView() {
           </h2>
           <p className="text-sm text-[#51689A] dark:text-[#9BA8C4]">
             {isAr
-              ? "اطلب حصة من أستاذ آخر"
-              : "Request a session from a fellow professor"}
+              ? "اطلب حصة من أستاذ آخر — يصل إشعار إلى بريده"
+              : "Request a session from a fellow professor — they get a notification"}
           </p>
         </div>
+        {incomingShareRequests.length > 0 ? (
+          <Alert className="border-amber-200/80 bg-amber-50/90 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <Info className="size-4" />
+            <AlertTitle>
+              {isAr
+                ? `${incomingShareRequests.length} طلب(ات) واردة`
+                : `${incomingShareRequests.length} incoming request(s)`}
+            </AlertTitle>
+            <AlertDescription className="flex flex-wrap items-center gap-2">
+              <span>
+                {isAr
+                  ? "اضغط لمراجعة تفاصيل الطلب وقبوله أو رفضه."
+                  : "Review the request details and accept or refuse."}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => setShareDialogRequest(incomingShareRequests[0]!)}
+              >
+                {isAr ? "فتح الطلب" : "Open request"}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-3">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1853,6 +1991,11 @@ export default function ProfessorSessionsView() {
                       {professor.full_name?.trim() ||
                         professor.email?.trim() ||
                         `Professor #${professor.id}`}
+                      {professor.email ? (
+                        <span className="ms-1 text-xs text-muted-foreground">
+                          ({professor.email})
+                        </span>
+                      ) : null}
                     </span>
                   </DropdownMenuItem>
                 ))
@@ -1862,19 +2005,36 @@ export default function ProfessorSessionsView() {
           <Button
             type="button"
             variant="outline"
-            disabled
-            className="h-10 w-11/12 rounded-md border border-[#1B2065]/70 bg-[#FEF9F9] text-sm font-medium text-[#1B2065] opacity-80 shadow-sm disabled:cursor-not-allowed dark:border-[#74A7BD]/70 dark:bg-[#1A2036] dark:text-[#EEF4F7]"
-            title={
-              isAr
-                ? "واجهة فقط إلى أن يصبح المسار الخلفي جاهزًا"
-                : "UI only until the backend endpoint is ready"
-            }
+            disabled={!requestedProfessorId || requestingProfessorShare}
+            className="h-10 w-11/12 rounded-md border border-[#1B2065]/70 bg-[#FEF9F9] text-sm font-medium text-[#1B2065] shadow-sm hover:bg-[#F6F7FE] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#74A7BD]/70 dark:bg-[#1A2036] dark:text-[#EEF4F7]"
+            onClick={() => void submitProfessorShareRequest()}
           >
             <CirclePlay className="me-3 size-4" />
-            {isAr ? "طلب حصة" : "Request Session"}
+            {requestingProfessorShare
+              ? isAr
+                ? "جارٍ الإرسال…"
+                : "Sending…"
+              : isAr
+                ? "طلب حصة"
+                : "Request Session"}
           </Button>
         </div>
       </section>
+
+      <SessionShareAcceptDialog
+        open={shareDialogRequest != null}
+        onOpenChange={(open) => {
+          if (!open) setShareDialogRequest(null);
+        }}
+        request={shareDialogRequest}
+        isAr={isAr}
+        assignments={assignments}
+        todaySlots={todayTimetable?.sessions ?? []}
+        onResolved={async () => {
+          setShareDialogRequest(null);
+          await refreshData();
+        }}
+      />
 
       <Dialog
         open={showScheduleForm}

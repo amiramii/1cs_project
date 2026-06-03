@@ -5,6 +5,7 @@
  * Students use Schedules (`/Scheduals`) and Absences only — no Sessions tab.
  */
 
+import { Suspense } from "react"
 import Link from "next/link"
 import { CalendarCheck, ClipboardClock, Info } from "lucide-react"
 
@@ -72,7 +73,15 @@ export default function Page() {
   if (role === "prof") {
     return (
       <div className="mx-auto w-full min-w-0 space-y-4 xl:p-5">
-        <ProfessorSessionsView />
+        <Suspense
+          fallback={
+            <p className="text-sm text-muted-foreground">
+              {isAr ? "جارٍ تحميل الحصص…" : "Loading sessions…"}
+            </p>
+          }
+        >
+          <ProfessorSessionsView />
+        </Suspense>
       </div>
     )
   }

@@ -34,9 +34,10 @@ import { getAccessToken } from "@/lib/tokenStorage"
 import { getApiBaseUrl } from "@/lib/apiBase"
 import { checkinPath } from "@/lib/checkinApi"
 import { loadDrfListAll } from "@/lib/drfPaginatedList"
-import { deleteSchoolingById, patchSchooling } from "@/lib/checkinClient"
+import { deleteSchoolingById } from "@/lib/checkinClient"
 import { subscribeAdminCsvUploadSuccess } from "@/lib/adminCsvUploadRefresh"
 import { createSchoolingManual } from "@/lib/manualUserCreate"
+import { updateSchoolingManual } from "@/lib/manualUserUpdate"
 import { isNetworkFailure, apiUnreachableMessage } from "@/lib/fetchErrors"
 
 type StaffRow = {
@@ -76,6 +77,7 @@ export default function DataTable() {
     email: "",
     department: "CP",
   })
+  const [editPreviousEmail, setEditPreviousEmail] = useState("")
 
   const loadStaff = useCallback(async () => {
     setLoading(true)
@@ -247,6 +249,7 @@ export default function DataTable() {
       email: selectedStaff.email,
       department: selectedStaff.department === "CS" ? "CS" : "CP",
     })
+    setEditPreviousEmail(selectedStaff.email)
     setDrawerMode("edit")
   }
 
@@ -260,14 +263,13 @@ export default function DataTable() {
           email: staffForm.email,
           department: staffForm.department,
         })
-      } else {
-        const res = await patchSchooling(selectedStaff?.id ?? "", {
+      } else if (selectedStaff) {
+        await updateSchoolingManual({
+          schoolingId: selectedStaff.id,
+          previousEmail: editPreviousEmail,
+          email: staffForm.email,
           department: staffForm.department,
         })
-        if (!res.ok) {
-          const text = await res.text()
-          throw new Error(text.trim() || "Could not update staff member.")
-        }
       }
       setDrawerMode(null)
       setSelectedIds(new Set())
@@ -569,7 +571,6 @@ export default function DataTable() {
                 {label}
                 <Input
                   value={staffForm[key as keyof typeof staffForm]}
-                  disabled={drawerMode === "edit"}
                   placeholder={placeholder}
                   onChange={(e) =>
                     setStaffForm((prev) => ({ ...prev, [key]: e.target.value }))

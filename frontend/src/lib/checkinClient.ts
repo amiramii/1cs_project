@@ -160,6 +160,16 @@ export async function getStudentById(id: string | number): Promise<Response> {
   return api(checkinPath.student(id), { method: "GET" })
 }
 
+export async function patchStudent(
+  id: string | number,
+  body: Record<string, unknown>
+): Promise<Response> {
+  return api(checkinPath.student(id), {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  })
+}
+
 export async function getTeacherById(id: string | number): Promise<Response> {
   return api(checkinPath.teacher(id), { method: "GET" })
 }
@@ -486,6 +496,15 @@ export async function loadExamsToday(): Promise<ExamSessionTodayRow[]> {
   return res.json()
 }
 
+export async function loadAllExamSessions(): Promise<ExamSessionDetail[]> {
+  return loadDrfListAll<ExamSessionDetail>(
+    getApiBaseUrl(),
+    `${checkinPath.exams.collection}/`,
+    listAuthHeaders(),
+    {}
+  )
+}
+
 export async function postExamOpen(
   examId: string | number
 ): Promise<Response> {
@@ -692,6 +711,113 @@ export async function deleteExtraSessionById(
   id: string | number
 ): Promise<Response> {
   return api(checkinPath.extraSessions.detail(id), { method: "DELETE" })
+}
+
+// --- session sharing (`session_sharing` app at `/api/session-sharing/`) ---
+
+export type SessionShareRequestRow = {
+  id: number
+  requester_name?: string
+  requester_email?: string
+  owner_name?: string
+  owner_email?: string
+  status?: "pending" | "accepted" | "refused"
+  module_name?: string | null
+  group_name?: string | null
+  time_slot?: string | null
+  room?: string | null
+  session?: number | null
+  created_at?: string
+}
+
+function parseSessionShareList(raw: unknown): SessionShareRequestRow[] {
+  return unwrapList<SessionShareRequestRow>(raw)
+}
+
+async function authorizedFetchSessionShareList(
+  href: string
+): Promise<SessionShareRequestRow[]> {
+  const res = await authorizedFetchBare(href, { method: "GET" })
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(summarizeUpstreamError(text, res.status))
+  }
+  let raw: unknown = null
+  try {
+    raw = text ? JSON.parse(text) : null
+  } catch {
+    throw new Error("Invalid response from session-sharing endpoint")
+  }
+  return parseSessionShareList(raw)
+}
+
+export async function postSessionShareRequest(body: {
+  owner_email: string
+}): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.sessionSharing.collection), {
+    method: "POST",
+    headers: jsonAuthHeaders(),
+    body: JSON.stringify(body),
+  })
+}
+
+export async function loadSessionShareIncoming(): Promise<
+  SessionShareRequestRow[]
+> {
+  return authorizedFetchSessionShareList(
+    checkinUrl(checkinPath.sessionSharing.incoming)
+  )
+}
+
+export async function loadSessionShareSent(): Promise<
+  SessionShareRequestRow[]
+> {
+  return authorizedFetchSessionShareList(
+    checkinUrl(checkinPath.sessionSharing.sent)
+  )
+}
+
+export async function patchSessionShareAccept(
+  id: string | number,
+  body: {
+    module_name: string
+    group_name: string
+    time_slot: string
+    room: string
+  }
+): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.sessionSharing.accept(id)), {
+    method: "PATCH",
+    headers: jsonAuthHeaders(),
+    body: JSON.stringify(body),
+  })
+}
+
+export async function patchSessionShareRefuse(
+  id: string | number
+): Promise<Response> {
+  return fetch(checkinUrl(checkinPath.sessionSharing.refuse(id)), {
+    method: "PATCH",
+    headers: jsonAuthHeaders(),
+    body: JSON.stringify({}),
+  })
+}
+
+export async function loadSessionShareBorrowedToday(): Promise<unknown[]> {
+  const res = await authorizedFetchBare(
+    checkinUrl(checkinPath.sessionSharing.borrowedToday),
+    { method: "GET" }
+  )
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(summarizeUpstreamError(text, res.status))
+  }
+  try {
+    const raw = text ? JSON.parse(text) : []
+    return unwrapList(raw)
+  } catch {
+    throw new Error("Invalid response from borrowed_today endpoint")
+  }
 }
 
 // --- users (`UserViewSet`, admin) ---
@@ -1052,7 +1178,11 @@ export async function getExamYearsWithJustified(): Promise<{ value: string; labe
     res = await fetch(href, { headers: listAuthHeaders() })
   }
   if (!res.ok) return []
-  return res.json()
+  const rows = (await res.json()) as { id?: number; name?: string }[]
+  if (!Array.isArray(rows)) return []
+  return rows
+    .filter((y) => typeof y.id === "number" && typeof y.name === "string")
+    .map((y) => ({ value: String(y.id), label: y.name as string }))
 }
 
 export async function loadAllExcelSchedules(): Promise<ExcelScheduleRow[]> {
@@ -1201,15 +1331,21 @@ export async function fetchJustificationCount(): Promise<Response> {
  * @see `JustificationCreateSerializer` in Django.
  */
 export async function postJustificationCreate(body: {
-  attendance_ids: number[]
+  attendance_ids?: number[]
+  date?: string
   absence_type: string
   cause: string
   file: File
 }): Promise<Response> {
   const buildFd = () => {
     const fd = new FormData()
-    for (const id of body.attendance_ids) {
-      fd.append("attendance_ids", String(id))
+    if (body.attendance_ids?.length) {
+      for (const id of body.attendance_ids) {
+        fd.append("attendance_ids", String(id))
+      }
+    }
+    if (body.date?.trim()) {
+      fd.append("date", body.date.trim())
     }
     fd.append("absence_type", body.absence_type)
     fd.append("cause", body.cause)
@@ -1245,11 +1381,14 @@ export async function patchJustificationAccept(
 }
 
 export async function patchJustificationRefuse(
-  id: string | number
+  id: string | number,
+  note?: string
 ): Promise<Response> {
+  const trimmed = note?.trim()
+  const body = trimmed ? JSON.stringify({ note: trimmed }) : "{}"
   return api(checkinPath.justifications.refuse(id), {
     method: "PATCH",
-    body: "{}",
+    body,
   })
 }
 

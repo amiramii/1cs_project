@@ -147,6 +147,17 @@ export const checkinPath = {
     unreadCount: "api/notifications/unread_count",
     broadcast: "api/notifications/broadcast",
   },
+  /** `session_sharing` app — router at `/api/session-sharing/` */
+  sessionSharing: {
+    collection: "api/session-sharing",
+    incoming: "api/session-sharing/incoming",
+    sent: "api/session-sharing/sent",
+    borrowedToday: "api/session-sharing/borrowed_today",
+    accept: (id: string | number) =>
+      `api/session-sharing/${id}/accept` as const,
+    refuse: (id: string | number) =>
+      `api/session-sharing/${id}/refuse` as const,
+  },
 } as const;
 
 /** `http(s)://host[:port]/api/.../` with an optional `?` query (DRF-style). */

@@ -58,6 +58,10 @@ import {
   subscribeAdminCsvUploadSuccess,
 } from "@/lib/adminCsvUploadRefresh"
 import { createStudentManual } from "@/lib/manualUserCreate"
+import {
+  clearStudentPkCache,
+  updateStudentManual,
+} from "@/lib/manualUserUpdate"
 import { isNetworkFailure, apiUnreachableMessage } from "@/lib/fetchErrors"
 import { EXCLUSIONS_RECALCULATED_EVENT } from "@/lib/moduleExclusionPolicy"
 import { PROF_SESSION_SAVED_EVENT } from "@/lib/professorSessionEvents"
@@ -122,6 +126,7 @@ export default function StudTable() {
     section: "",
     group: "",
   })
+  const [editPreviousEmail, setEditPreviousEmail] = useState("")
 
   const mapStudents = useCallback(
     (
@@ -359,10 +364,11 @@ export default function StudTable() {
       n_inscript: selectedStudent.id,
       full_name: selectedStudent.name,
       email: selectedStudent.email,
-      year: "",
-      section: "",
-      group: "",
+      year: selectedStudent.year === "—" ? "" : selectedStudent.year,
+      section: selectedStudent.section === "—" ? "" : selectedStudent.section,
+      group: selectedStudent.group === "—" ? "" : selectedStudent.group,
     })
+    setEditPreviousEmail(selectedStudent.email)
     setDrawerMode("edit")
   }
 
@@ -370,25 +376,32 @@ export default function StudTable() {
     setSavingDrawer(true)
     setLoadError(null)
     try {
-      if (drawerMode !== "add") {
-        setLoadError(
-          isArabic
-            ? "تعديل الطالب الكامل يحتاج مسار تحديث مناسب في الخادم."
-            : "Student edit needs a proper backend update endpoint for profile and user fields."
-        )
+      if (drawerMode === "add") {
+        await createStudentManual({
+          full_name: studentForm.full_name,
+          email: studentForm.email,
+          n_inscript: studentForm.n_inscript,
+          year: studentForm.year,
+          section: studentForm.section,
+          group: studentForm.group,
+        })
+        clearStudentPkCache()
+        notifyAdminCsvUploadSuccess("student")
+      } else if (drawerMode === "edit" && selectedStudent) {
+        await updateStudentManual({
+          userId: selectedStudent.id,
+          previousEmail: editPreviousEmail,
+          email: studentForm.email,
+          year: studentForm.year,
+          section: studentForm.section,
+          group: studentForm.group,
+        })
+        clearStudentPkCache()
+      } else {
         return
       }
-      await createStudentManual({
-        full_name: studentForm.full_name,
-        email: studentForm.email,
-        n_inscript: studentForm.n_inscript,
-        year: studentForm.year,
-        section: studentForm.section,
-        group: studentForm.group,
-      })
       setDrawerMode(null)
       setSelectedIds(new Set())
-      notifyAdminCsvUploadSuccess("student")
       await loadStudents()
     } catch (error) {
       setLoadError(
@@ -824,7 +837,7 @@ export default function StudTable() {
                 {label}
                 <Input
                   value={studentForm[key as keyof typeof studentForm]}
-                  disabled={drawerMode === "edit"}
+                  disabled={drawerMode === "edit" && key === "n_inscript"}
                   placeholder={placeholder}
                   onChange={(e) =>
                     setStudentForm((prev) => ({ ...prev, [key]: e.target.value }))

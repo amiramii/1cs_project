@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +52,10 @@ type Props = {
   selectedDays: AbsenceDaySelection[];
   isAr: boolean;
   onSubmitted?: () => void;
+  /** Pre-filled exam date (`YYYY-MM-DD`) from the exam-absence section. */
+  examDate?: string;
+  /** When true, opens focused on exam justification (uses `examDate` or date field). */
+  examOnly?: boolean;
 };
 
 export default function JustifyAbsenceDialog({
@@ -60,18 +64,30 @@ export default function JustifyAbsenceDialog({
   selectedDays,
   isAr,
   onSubmitted,
+  examDate: examDateProp = "",
+  examOnly = false,
 }: Props) {
   const router = useRouter();
   const formId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [absenceType, setAbsenceType] = useState<AbsenceTypeValue | "">("");
+  const [examDateInput, setExamDateInput] = useState("");
   const [cause, setCause] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!open) return;
+    if (examOnly) {
+      setAbsenceType("exam");
+      setExamDateInput(examDateProp);
+    }
+  }, [open, examOnly, examDateProp]);
+
   const reset = useCallback(() => {
     setAbsenceType("");
+    setExamDateInput("");
     setCause("");
     setFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -84,6 +100,14 @@ export default function JustifyAbsenceDialog({
 
   const onPickFile = (f: File | null) => {
     setFile(f);
+  };
+
+  const resolveExamDate = (): string => {
+    const fromField = examDateInput.trim();
+    if (fromField) return fromField;
+    if (examDateProp.trim()) return examDateProp.trim();
+    if (selectedDays.length === 1) return selectedDays[0]!.id;
+    return "";
   };
 
   const submit = async () => {
@@ -102,10 +126,58 @@ export default function JustifyAbsenceDialog({
       return;
     }
 
+    const isExamJustification = absenceType === "exam";
+
+    if (isExamJustification) {
+      const examDate = resolveExamDate();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(examDate)) {
+        toast.error(
+          isAr
+            ? "أدخل تاريخ الامتحان (YYYY-MM-DD)."
+            : "Enter the exam date (YYYY-MM-DD)."
+        );
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const res = await postJustificationCreate({
+          absence_type: "Exam",
+          date: examDate,
+          cause: cause.trim(),
+          file,
+        });
+        const rawText = await res.text().catch(() => "");
+        if (!res.ok) {
+          toast.error(
+            rawText.trim().slice(0, 280) ||
+              (isAr
+                ? "فشل إرسال مبرر الامتحان. تحقق من التاريخ (غياب امتحان مسجّل في هذا اليوم)."
+                : "Exam justification failed. Check the date matches a recorded exam absence.")
+          );
+          return;
+        }
+
+        toast.success(
+          isAr
+            ? "تم إرسال مبرر الامتحان إلى الشؤون الأكاديمية."
+            : "Your exam justification was sent to the schooling office."
+        );
+        onSubmitted?.();
+        handleOpen(false);
+        router.push("/Justifications");
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     const attendanceIds = [
       ...new Set(
         selectedDays.flatMap((d) =>
-          d.slots.map((s) => s.attendanceId).filter((id): id is number => typeof id === "number")
+          d.slots
+            .map((s) => s.attendanceId)
+            .filter((id): id is number => typeof id === "number")
         )
       ),
     ];
@@ -113,8 +185,8 @@ export default function JustifyAbsenceDialog({
     if (attendanceIds.length === 0) {
       toast.error(
         isAr
-          ? "لا توجد سجلات غياب مختارة أو الخادم لم يعرِض معرف الحضور. أعد تحميل الصفحة."
-          : "No attendance IDs for the selected slots. Reload absences from the server and try again."
+          ? "اختر تواريخ غياب من القائمة أعلاه (حصص)."
+          : "Select session absence dates from the list above."
       );
       return;
     }
@@ -151,7 +223,9 @@ export default function JustifyAbsenceDialog({
       });
 
       toast.success(
-        isAr ? "تم إرسال المبرر إلى الشؤون الأكاديمية." : "Your justification was sent to the schooling office."
+        isAr
+          ? "تم إرسال المبرر إلى الشؤون الأكاديمية."
+          : "Your justification was sent to the schooling office."
       );
       onSubmitted?.();
       handleOpen(false);
@@ -160,6 +234,8 @@ export default function JustifyAbsenceDialog({
       setIsSubmitting(false);
     }
   };
+
+  const showExamDateField = absenceType === "exam";
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -170,12 +246,22 @@ export default function JustifyAbsenceDialog({
       >
         <DialogHeader className="space-y-2 text-start">
           <DialogTitle className="text-xl font-bold text-[#1B2065] dark:text-[#EEF4F7]">
-            {isAr ? "مبرّر غيابك" : "Justify Your Absence"}
+            {examOnly
+              ? isAr
+                ? "مبرّر غياب امتحان"
+                : "Justify Exam Absence"
+              : isAr
+                ? "مبرّر غيابك"
+                : "Justify Your Absence"}
           </DialogTitle>
           <DialogDescription className="text-[15px] text-[#51689A] dark:text-[#9BA8C4]">
-            {isAr
-              ? "أكمل تفاصيل طلب التبرير."
-              : "Fill in the details for your justification"}
+            {examOnly
+              ? isAr
+                ? "ارفع المبرر مع تاريخ الامتحان. الخادم يربط غيابات الامتحان في ذلك اليوم تلقائياً."
+                : "Upload your file with the exam date. The server links exam absences for that day."
+              : isAr
+                ? "أكمل تفاصيل طلب التبرير."
+                : "Fill in the details for your justification"}
           </DialogDescription>
         </DialogHeader>
 
@@ -192,43 +278,36 @@ export default function JustifyAbsenceDialog({
               <Label htmlFor={`${formId}-type`} className="text-[#1B2065] dark:text-[#EEF4F7]">
                 {isAr ? "نوع الغياب" : "Type of absence"}
               </Label>
-              <div className="relative w-full">
-                
-                <Select
-                  value={absenceType || undefined}
-                  onValueChange={(v) =>
-                    setAbsenceType(v as AbsenceTypeValue)
-                  }
+              <Select
+                value={absenceType || undefined}
+                onValueChange={(v) => setAbsenceType(v as AbsenceTypeValue)}
+                disabled={examOnly}
+              >
+                <SelectTrigger
+                  id={`${formId}-type`}
+                  className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-4 pe-2 text-sm font-medium text-[#1B2065] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]"
                 >
-                  <SelectTrigger
-                    id={`${formId}-type`}
-                    className="h-10 w-full rounded-xl border border-slate-200/80 bg-[#FEF9F9] ps-4 pe-2 text-sm font-medium text-[#1B2065] shadow-sm data-placeholder:text-[#51689A] dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7] dark:data-placeholder:text-[#9BA8C4]"
-                  >
-                    <SelectValue
-                      placeholder={isAr ? "اختر النوع" : "Select type"}
-                    />
-                  </SelectTrigger>
-                  <SelectContent
-                    position="popper"
-                    side="bottom"
-                    align="start"
-                    sideOffset={6}
-                    /* Dialog content is z-[100]; default select z-50 stays behind the panel */
-                    className="z-[200] min-w-[var(--radix-select-trigger-width)] border border-slate-200/40 bg-popover shadow-lg backdrop-blur-xl dark:border-border/50 dark:bg-popover"
-                  >
-                    <SelectGroup>
-                      <SelectLabel className="px-2 font-semibold text-[#51689A]">
-                        {isAr ? "نوع الغياب" : "Absence type"}
-                      </SelectLabel>
-                      {ABSENCE_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {isAr ? t.labelAr : t.labelEn}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <SelectValue placeholder={isAr ? "اختر النوع" : "Select type"} />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  side="bottom"
+                  align="start"
+                  sideOffset={6}
+                  className="z-[200] min-w-[var(--radix-select-trigger-width)] border border-slate-200/40 bg-popover shadow-lg backdrop-blur-xl dark:border-border/50 dark:bg-popover"
+                >
+                  <SelectGroup>
+                    <SelectLabel className="px-2 font-semibold text-[#51689A]">
+                      {isAr ? "نوع الغياب" : "Absence type"}
+                    </SelectLabel>
+                    {ABSENCE_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {isAr ? t.labelAr : t.labelEn}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor={`${formId}-cause`} className="text-[#1B2065] dark:text-[#EEF4F7]">
@@ -243,6 +322,26 @@ export default function JustifyAbsenceDialog({
               />
             </div>
           </div>
+
+          {showExamDateField ? (
+            <div className="space-y-2">
+              <Label htmlFor={`${formId}-exam-date`} className="text-[#1B2065] dark:text-[#EEF4F7]">
+                {isAr ? "تاريخ الامتحان" : "Exam date"}
+              </Label>
+              <Input
+                id={`${formId}-exam-date`}
+                type="date"
+                value={examDateInput}
+                onChange={(e) => setExamDateInput(e.target.value)}
+                className="h-10 rounded-xl border border-slate-200/80 bg-[#FEF9F9] shadow-sm dark:border-[#383F58] dark:bg-[#242A40] dark:text-[#EEF4F7]"
+              />
+              <p className="text-xs text-[#51689A] dark:text-[#9BA8C4]">
+                {isAr
+                  ? "يجب أن يطابق يوم غيابك في الامتحان المسجّل في النظام."
+                  : "Must match the day you were marked absent on an exam."}
+              </p>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label className="text-[#1B2065] dark:text-[#EEF4F7]">

@@ -61,9 +61,17 @@ function authHeaders(): HeadersInit {
   };
 }
 
-function normalizeNotificationLink(link: string | undefined): string | undefined {
+function normalizeNotificationLink(
+  link: string | undefined,
+  type?: string
+): string | undefined {
   if (!link?.trim()) return undefined;
   const raw = link.trim();
+
+  if (type === "exam_replacement") {
+    return "/Scheduals/Replacement-Schedules";
+  }
+
   const map: Record<string, string> = {
     "/justifications/": "/Justifications",
     "/justifications/my_justifications": "/Justifications/Student-Justifications",
@@ -92,7 +100,7 @@ function mapApiNotification(n: ApiNotification): NotificationDto {
     created_at: n.created_at,
     read: n.read,
     type: n.type,
-    link: normalizeNotificationLink(n.link),
+    link: normalizeNotificationLink(n.link, n.type),
     source: "server",
   };
 }
